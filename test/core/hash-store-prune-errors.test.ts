@@ -94,7 +94,7 @@ describe("hash-store - pruneMissing error handling", () => {
     expect(state.statPaths).not.toContain(undoOnly);
   });
 
-  it("waits for startup maintenance before closing the store", async () => {
+  it("invalidates publication immediately but waits for startup maintenance before closing", async () => {
     const hashStore = await import("../../src/hash-store");
     await hashStore.shutdownHashStore();
     const store = await hashStore.loadHashStore();
@@ -107,14 +107,19 @@ describe("hash-store - pruneMissing error handling", () => {
     });
     const maintenance = hashStore.runHashStoreStartupMaintenance(store);
     await vi.waitFor(() => expect(state.statPaths).toContain(missing));
+    const closesBeforeShutdown = hashStore.getHashStoreDiagnostics().closes;
     const closing = hashStore.shutdownHashStore();
 
     try {
-      expect(() => hashStore.withStore(() => {})).not.toThrow();
+      expect(hashStore.getHashStoreDiagnostics()).toMatchObject({ phase: "closing", closes: closesBeforeShutdown });
+      expect(() => hashStore.withStore(() => {})).toThrow(hashStore.STORE_NOT_OPEN_MESSAGE);
+      await Promise.resolve();
+      expect(hashStore.getHashStoreDiagnostics().closes).toBe(closesBeforeShutdown);
       releaseStat();
       await maintenance;
       await closing;
       expect(hashStore.getHashStoreDiagnostics().phase).toBe("closed");
+      expect(hashStore.getHashStoreDiagnostics().closes).toBe(closesBeforeShutdown + 1);
     } finally {
       releaseStat();
       await Promise.allSettled([maintenance, closing]);

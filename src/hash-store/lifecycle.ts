@@ -122,6 +122,7 @@ type OpeningState<T> = {
   readonly generation: number;
   readonly path: string;
   readonly promise: Promise<OpenedStoreResource<T>>;
+  readonly setCloseWait: (waitFor: Promise<void>) => void;
 };
 
 type OpenState<T> = {
@@ -173,14 +174,15 @@ export class HashStoreLifecycle<T> {
     return this.state.kind === "open" ? this.state.resource.value : undefined;
   }
 
-  shutdown(): Promise<void> {
+  shutdown(waitFor?: Promise<unknown>): Promise<void> {
     const state = this.state;
     if (state.kind === "closed") return Promise.resolve();
     if (state.kind === "closing") return state.promise;
 
+    const closeWait = this.normalizeCloseWait(waitFor);
     const generation = state.generation + 1;
     if (state.kind === "open") {
-      const closing = Promise.resolve()
+      const closing = closeWait
         .then(() => this.closeResource(state.resource))
         .finally(() => {
           if (this.state.kind === "closing" && this.state.generation === generation) {
@@ -191,6 +193,7 @@ export class HashStoreLifecycle<T> {
       return closing;
     }
 
+    state.setCloseWait(closeWait);
     const closing = state.promise
       .then(
         () => undefined,
@@ -220,6 +223,10 @@ export class HashStoreLifecycle<T> {
 
   private startOpen(path: string): Promise<T> {
     const generation = this.state.generation + 1;
+    let closeWait = Promise.resolve();
+    const setCloseWait = (waitFor: Promise<void>): void => {
+      closeWait = waitFor;
+    };
     const promise = Promise.resolve().then(() => this.openResource(path)).then(
       (resource) => {
         this.opens++;
@@ -227,12 +234,14 @@ export class HashStoreLifecycle<T> {
           this.state = { kind: "open", generation, path, resource };
           return resource;
         }
-        try {
-          this.closeResource(resource);
-        } catch (error) {
-          throw new StoreResourceCloseError(error);
-        }
-        throw new Error(STORE_CLOSED_DURING_OPEN_MESSAGE);
+        return closeWait.then(() => {
+          try {
+            this.closeResource(resource);
+          } catch (error) {
+            throw new StoreResourceCloseError(error);
+          }
+          throw new Error(STORE_CLOSED_DURING_OPEN_MESSAGE);
+        });
       },
       (error: unknown) => {
         if (this.state.kind === "opening" && this.state.generation === generation) {
@@ -241,7 +250,7 @@ export class HashStoreLifecycle<T> {
         throw error;
       },
     );
-    this.state = { kind: "opening", generation, path, promise };
+    this.state = { kind: "opening", generation, path, promise, setCloseWait };
     return this.resourceValue(promise);
   }
 
@@ -253,6 +262,10 @@ export class HashStoreLifecycle<T> {
         throw error;
       },
     );
+  }
+
+  private normalizeCloseWait(waitFor?: Promise<unknown>): Promise<void> {
+    return waitFor ? waitFor.then(() => undefined, () => undefined) : Promise.resolve();
   }
 
   private closeResource(resource: OpenedStoreResource<T>): void {

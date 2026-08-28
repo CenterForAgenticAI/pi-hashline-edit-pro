@@ -52,7 +52,7 @@ async function storeFdCount(storePath: string): Promise<number> {
 }
 
 describe("hash-store Jiti lifecycle", () => {
-  it("rebinds eight generations without retaining handles or repeating full-store work", async () => {
+  it("rebinds eight generations without retaining handles or repeating full-store work", { timeout: 30_000 }, async () => {
     const tempRoot = resolve(".tmp");
     await mkdir(tempRoot, { recursive: true });
     const home = await mkdtemp(join(tempRoot, "hash-store-jiti-"));

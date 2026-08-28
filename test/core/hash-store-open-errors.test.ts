@@ -10,6 +10,7 @@ const state = vi.hoisted(() => ({
   runCalls: 0,
   quickCheckCalls: 0,
   quickCheckResults: [] as string[],
+  quickCheckError: null as Error | null,
   rename: vi.fn(async () => undefined),
   mkdir: vi.fn(async () => { await state.mkdirGate; }),
   mkdirGate: null as Promise<void> | null,
@@ -49,6 +50,7 @@ vi.mock("node:sqlite", () => ({
         return {
           get: () => {
             state.quickCheckCalls++;
+            if (state.quickCheckError) throw state.quickCheckError;
             return { quick_check: state.quickCheckResults.shift() ?? "ok" };
           },
         };
@@ -107,6 +109,7 @@ beforeEach(() => {
   state.runCalls = 0;
   state.quickCheckCalls = 0;
   state.quickCheckResults.length = 0;
+  state.quickCheckError = null;
   vi.clearAllMocks();
 });
 
@@ -176,6 +179,26 @@ describe("hash store open error handling", () => {
       await hashStore.shutdownHashStore();
       await hashStore.loadHashStore();
       expect(state.quickCheckCalls).toBe(1);
+    } finally {
+      await hashStore.shutdownHashStore();
+      if (priorHome === undefined) delete process.env.HOME;
+      else process.env.HOME = priorHome;
+    }
+  });
+
+  it("propagates non-corruption quick_check errors and retries immediately", async () => {
+    const hashStore = await import("../../src/hash-store");
+    await hashStore.shutdownHashStore();
+    const priorHome = process.env.HOME;
+    process.env.HOME = join(tmpHome, "health-check-error");
+    const quickCheckError = new Error("quick check unavailable");
+    state.quickCheckError = quickCheckError;
+    try {
+      await expect(hashStore.loadHashStore()).rejects.toBe(quickCheckError);
+      expect(state.rename).not.toHaveBeenCalled();
+      state.quickCheckError = null;
+      await expect(hashStore.loadHashStore()).resolves.toBeDefined();
+      expect(state.quickCheckCalls).toBe(2);
     } finally {
       await hashStore.shutdownHashStore();
       if (priorHome === undefined) delete process.env.HOME;

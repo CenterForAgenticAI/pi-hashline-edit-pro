@@ -115,6 +115,8 @@ interface StoreConnection {
   readonly store: HashStore;
 }
 
+const storeConnections = new WeakMap<HashStore, RawDb>();
+
 export interface HashStoreDiagnostics extends StoreLifecycleDiagnostics, StoreMaintenanceDiagnostics {}
 
 export interface UndoRecord {
@@ -127,7 +129,17 @@ export interface UndoRecord {
 
 const storeLifecycle = new HashStoreLifecycle<StoreConnection>(async (storePath) => {
   const value = await openStoreConnection(storePath);
-  return { value, close: () => shutdownDb(value.db) };
+  storeConnections.set(value.store, value.db);
+  return {
+    value,
+    close: () => {
+      try {
+        shutdownDb(value.db);
+      } finally {
+        storeConnections.delete(value.store);
+      }
+    },
+  };
 });
 let startupMaintenance: Promise<void> | null = null;
 
@@ -245,7 +257,7 @@ function isHealthy(db: RawDb): boolean {
     return row?.quick_check === "ok";
   } catch (error) {
     if (isCorruptionError(error)) return false;
-    return true;
+    throw error;
   }
 }
 
@@ -357,7 +369,7 @@ export function loadHashStore(): Promise<HashStore> {
 
 export function shutdownHashStore(): Promise<void> {
   snapshotCache.clear();
-  return afterStartupMaintenance(() => storeLifecycle.shutdown());
+  return storeLifecycle.shutdown(startupMaintenance ?? undefined);
 }
 
 export function getHashStoreDiagnostics(): HashStoreDiagnostics {
@@ -373,21 +385,28 @@ export function runHashStoreStartupMaintenance(store: HashStore): Promise<void> 
   return tracked;
 }
 
-export function withStore(fn: () => void): void {
-  const connection = storeLifecycle.current();
-  if (!connection || !connection.db.isOpen) {
+function withStoreConnection(db: RawDb, fn: () => void): void {
+  if (!db.isOpen) {
     throw new Error(STORE_NOT_OPEN_MESSAGE);
   }
   withBusyRetry(() => {
-    connection.db.exec("BEGIN IMMEDIATE");
+    db.exec("BEGIN IMMEDIATE");
     try {
       fn();
-      connection.db.exec("COMMIT");
+      db.exec("COMMIT");
     } catch (error) {
-      try { connection.db.exec("ROLLBACK"); } catch {}
+      try { db.exec("ROLLBACK"); } catch {}
       throw error;
     }
   });
+}
+
+export function withStore(fn: () => void): void {
+  const connection = storeLifecycle.current();
+  if (!connection) {
+    throw new Error(STORE_NOT_OPEN_MESSAGE);
+  }
+  withStoreConnection(connection.db, fn);
 }
 
 async function migrateLegacy(db: RawDb): Promise<void> {
@@ -560,7 +579,9 @@ export async function pruneMissing(store: HashStore): Promise<void> {
   const rows = store.stmts.allPaths() as { path: string }[];
   const missing = await statMissing(rows);
   if (missing.length === 0) return;
-  withStore(() => {
+  const db = storeConnections.get(store);
+  if (!db) throw new Error(STORE_NOT_OPEN_MESSAGE);
+  withStoreConnection(db, () => {
     for (const path of missing) {
       store.stmts.deleteOne(path);
       store.stmts.servedDelete(path);
