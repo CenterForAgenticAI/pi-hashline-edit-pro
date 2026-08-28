@@ -1,6 +1,7 @@
 import { existsSync } from "fs";
 import { chmod, readFile, rename, mkdir, stat } from "fs/promises";
-import { hashStorePath, hashStoreDir, legacyHashStorePath } from "./paths";
+import { dirname, resolve } from "node:path";
+import { hashStorePath, legacyHashStorePath } from "./paths";
 import { errCode, isRec, splitLines } from "./utils";
 import { initHasher, contentChecksum } from "./hashline/hasher";
 import { HASH_STORE_VERSION, HASH_STORE_BUSY_TIMEOUT } from "./constants";
@@ -21,6 +22,13 @@ import {
   cacheSnapshot,
   SNAPSHOT_CACHE_LIMIT,
 } from "./hash-store/cache";
+import {
+  HashStoreLifecycle,
+  getStoreMaintenanceDiagnostics,
+  runStoreMaintenanceOnce,
+  type StoreLifecycleDiagnostics,
+  type StoreMaintenanceDiagnostics,
+} from "./hash-store/lifecycle";
 
 export { isValidHashList, parseHashList, parseStoredHashes, isCorruptionError };
 export { SNAPSHOT_CACHE_LIMIT };
@@ -102,6 +110,13 @@ export interface HashStore {
   readonly engine: SqliteEngine;
 }
 
+interface StoreConnection {
+  readonly db: RawDb;
+  readonly store: HashStore;
+}
+
+export interface HashStoreDiagnostics extends StoreLifecycleDiagnostics, StoreMaintenanceDiagnostics {}
+
 export interface UndoRecord {
   content: string;
   bom: string;
@@ -110,9 +125,21 @@ export interface UndoRecord {
   resultContent: string;
 }
 
-let cachedDb: { path: string; db: RawDb; stmts: Prepared } | null = null;
-let opening: { path: string; promise: Promise<HashStore> } | null = null;
-let exitHandlerRegistered = false;
+const storeLifecycle = new HashStoreLifecycle<StoreConnection>(async (storePath) => {
+  const value = await openStoreConnection(storePath);
+  return { value, close: () => shutdownDb(value.db) };
+});
+let startupMaintenance: Promise<void> | null = null;
+
+function canonicalStorePath(): string {
+  return resolve(hashStorePath());
+}
+
+function afterStartupMaintenance<T>(task: () => Promise<T>): Promise<T> {
+  const maintenance = startupMaintenance;
+  if (!maintenance) return task();
+  return maintenance.then(task, task);
+}
 
 function openDb(storePath: string): { db: RawDb; stmts: Prepared } {
   const db = openDbFn(storePath);
@@ -173,7 +200,7 @@ function buildStore(db: RawDb): { db: RawDb; stmts: Prepared } {
     "ON CONFLICT(key) DO UPDATE SET value = excluded.value"
   ).run(String(HASH_STORE_VERSION));
   const getStmt = db.prepare("SELECT hashes FROM snapshots WHERE path = ? AND checksum = ? AND line_count = ?");
-  const allStmt = db.prepare("SELECT path FROM snapshots UNION SELECT path FROM undo UNION SELECT path FROM served");
+  const allStmt = db.prepare("SELECT path FROM snapshots UNION SELECT path FROM served");
   const allHashesStmt = db.prepare("SELECT path, hashes FROM snapshots");
   const allServedStmt = db.prepare("SELECT path, hashes FROM served");
   const delStmt = db.prepare("DELETE FROM snapshots WHERE path = ?");
@@ -222,6 +249,22 @@ function isHealthy(db: RawDb): boolean {
   }
 }
 
+const HASH_STORE_HEALTH_CHECK_FAILED = "HASH_STORE_HEALTH_CHECK_FAILED";
+
+class HashStoreHealthCheckFailed extends Error {
+  readonly code = HASH_STORE_HEALTH_CHECK_FAILED;
+}
+
+function isHashStoreHealthCheckFailed(error: unknown): boolean {
+  return isRec(error) && error.code === HASH_STORE_HEALTH_CHECK_FAILED;
+}
+
+function ensureStoreHealthy(storePath: string, db: RawDb): Promise<void> {
+  return runStoreMaintenanceOnce("health", storePath, () => {
+    if (!isHealthy(db)) throw new HashStoreHealthCheckFailed();
+  });
+}
+
 async function quarantineStore(storePath: string): Promise<void> {
   const suffix = `.corrupt-${Date.now()}`;
   for (const candidate of [storePath, `${storePath}-wal`, `${storePath}-shm`]) {
@@ -243,15 +286,12 @@ function shutdownDb(db: RawDb): void {
   db.close();
 }
 
-async function openStore(storePath: string): Promise<HashStore> {
-  if (cachedDb && cachedDb.path === storePath && cachedDb.db.isOpen) {
-    return { stmts: cachedDb.stmts, engine: sqliteEngine };
-  }
-  if (cachedDb) shutdownHashStore();
+async function openStoreConnection(storePath: string): Promise<StoreConnection> {
   await initHasher();
-  await mkdir(hashStoreDir(), { recursive: true, mode: 0o700 });
+  const storeDir = dirname(storePath);
+  await mkdir(storeDir, { recursive: true, mode: 0o700 });
   if (process.platform !== "win32") {
-    await chmod(hashStoreDir(), 0o700);
+    await chmod(storeDir, 0o700);
   }
 
   let existed = existsSync(storePath);
@@ -265,88 +305,93 @@ async function openStore(storePath: string): Promise<HashStore> {
     existed = false;
     opened = await openDbWithBusyRetryAsync(() => openDb(storePath));
   }
-  if (!isHealthy(opened.db)) {
-    shutdownDb(opened.db);
-    await quarantineStore(storePath);
-    existed = false;
-    opened = await openDbWithBusyRetryAsync(() => openDb(storePath));
-  }
-  const { db, stmts } = opened;
+  let ownsOpened = true;
+  try {
+    try {
+      await ensureStoreHealthy(storePath, opened.db);
+    } catch (error) {
+      if (!isHashStoreHealthCheckFailed(error)) throw error;
+      ownsOpened = false;
+      shutdownDb(opened.db);
+      await quarantineStore(storePath);
+      existed = false;
+      opened = await openDbWithBusyRetryAsync(() => openDb(storePath));
+      ownsOpened = true;
+      await ensureStoreHealthy(storePath, opened.db);
+    }
+    const { db, stmts } = opened;
 
-  if (process.platform !== "win32") {
-    for (const candidate of [storePath, `${storePath}-wal`, `${storePath}-shm`]) {
-      try {
-        await chmod(candidate, 0o600);
-      } catch (error) {
-        if (errCode(error) !== "ENOENT") throw error;
+    if (process.platform !== "win32") {
+      for (const candidate of [storePath, `${storePath}-wal`, `${storePath}-shm`]) {
+        try {
+          await chmod(candidate, 0o600);
+        } catch (error) {
+          if (errCode(error) !== "ENOENT") throw error;
+        }
       }
     }
-  }
 
-  if (!existed) {
-    try {
-      await migrateLegacy(db);
-    } catch (error) {
-      console.error("Hash store migration failed; continuing without legacy import:", error);
+    if (!existed) {
+      try {
+        await migrateLegacy(db);
+      } catch (error) {
+        console.error("Hash store migration failed; continuing without legacy import:", error);
+      }
+    }
+
+    ownsOpened = false;
+    return { db, store: { stmts, engine: sqliteEngine } };
+  } finally {
+    if (ownsOpened && opened.db.isOpen) {
+      ownsOpened = false;
+      shutdownDb(opened.db);
     }
   }
-  cachedDb = { path: storePath, db, stmts };
-
-  if (!exitHandlerRegistered) {
-    exitHandlerRegistered = true;
-    process.once("exit", () => shutdownHashStore());
-    for (const sig of ["SIGINT", "SIGTERM"] as const) {
-      process.once(sig, () => {
-        shutdownHashStore();
-        process.kill(process.pid, sig);
-      });
-    }
-  }
-
-  return { stmts, engine: sqliteEngine };
 }
 
 export function loadHashStore(): Promise<HashStore> {
-  const storePath = hashStorePath();
-  if (cachedDb && cachedDb.path === storePath && cachedDb.db.isOpen) {
-    return Promise.resolve({ stmts: cachedDb.stmts, engine: sqliteEngine });
-  }
-  if (opening && opening.path === storePath) {
-    return opening.promise;
-  }
-  const promise = openStore(storePath).finally(() => {
-    if (opening?.path === storePath) opening = null;
-  });
-  opening = { path: storePath, promise };
-  return promise;
+  return afterStartupMaintenance(() =>
+    storeLifecycle.load(canonicalStorePath()).then((connection) => connection.store),
+  );
 }
 
-export function shutdownHashStore(): void {
-  if (cachedDb) {
-    shutdownDb(cachedDb.db);
-    cachedDb = null;
-  }
+export function shutdownHashStore(): Promise<void> {
   snapshotCache.clear();
+  return afterStartupMaintenance(() => storeLifecycle.shutdown());
+}
+
+export function getHashStoreDiagnostics(): HashStoreDiagnostics {
+  return { ...storeLifecycle.diagnostics(), ...getStoreMaintenanceDiagnostics() };
+}
+
+export function runHashStoreStartupMaintenance(store: HashStore): Promise<void> {
+  const tracked = runStoreMaintenanceOnce("prune", canonicalStorePath(), () => pruneMissing(store))
+    .finally(() => {
+      if (startupMaintenance === tracked) startupMaintenance = null;
+    });
+  startupMaintenance = tracked;
+  return tracked;
 }
 
 export function withStore(fn: () => void): void {
-  if (!cachedDb || !cachedDb.db.isOpen) {
+  const connection = storeLifecycle.current();
+  if (!connection || !connection.db.isOpen) {
     throw new Error(STORE_NOT_OPEN_MESSAGE);
   }
   withBusyRetry(() => {
-    cachedDb!.db.exec("BEGIN IMMEDIATE");
+    connection.db.exec("BEGIN IMMEDIATE");
     try {
       fn();
-      cachedDb!.db.exec("COMMIT");
-    } catch (e) {
-      try { cachedDb!.db.exec("ROLLBACK"); } catch {}
-      throw e;
+      connection.db.exec("COMMIT");
+    } catch (error) {
+      try { connection.db.exec("ROLLBACK"); } catch {}
+      throw error;
     }
   });
 }
 
 async function migrateLegacy(db: RawDb): Promise<void> {
-  const legacyPath = legacyHashStorePath();
+  const legacyPath = resolve(legacyHashStorePath());
   let content: string;
   try {
     content = await readFile(legacyPath, "utf-8");

@@ -6,7 +6,7 @@ import { shutdownHashStore } from "../../src/hash-store";
 import { makeTempDir, withHome } from "../support/fixtures";
 
 async function cleanupCwd(cwd: string): Promise<void> {
-  shutdownHashStore();
+  await shutdownHashStore();
   await rm(cwd, { recursive: true, force: true });
 }
 

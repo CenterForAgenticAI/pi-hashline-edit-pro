@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { readConfig } from "../../src/config";
 import { withTempDir } from "../support/fixtures";
+import { getHashStoreDiagnostics, STORE_NOT_OPEN_MESSAGE, withStore } from "../../src/hash-store";
 
 function makeLifecyclePi() {
   const handlers = new Map<string, (...args: unknown[]) => unknown>();
@@ -49,7 +50,12 @@ describe("session_start lifecycle", () => {
         await registerExtension(pi);
         const sessionStart = handlers.get("session_start")!;
         await sessionStart({}, { cwd: dir, ui: { notify } });
-        expect(notify).toHaveBeenCalledWith("Hashline Edit mode active", "info");
+        expect(notify).toHaveBeenCalledWith(
+          expect.stringMatching(
+            /^Hashline Edit mode active — store=open opens=\d+ closes=\d+ health=\d+ prune=\d+$/,
+          ),
+          "info",
+        );
       });
     } finally {
       vi.unstubAllEnvs();
@@ -92,6 +98,42 @@ describe("session_start lifecycle", () => {
     } finally {
       vi.unstubAllEnvs();
     }
+  });
+
+  it("closes the hash store when the session shuts down", async () => {
+    await withTempDir("lifecycle-shutdown-", async (dir) => {
+      const { pi, handlers } = makeLifecyclePi();
+      await registerExtension(pi);
+      await handlers.get("session_start")!({}, { cwd: dir, ui: { notify: vi.fn() } });
+      expect(() => withStore(() => {})).not.toThrow();
+
+      const sessionShutdown = handlers.get("session_shutdown");
+      expect(sessionShutdown).toBeDefined();
+      await sessionShutdown!({ reason: "reload" });
+
+      expect(() => withStore(() => {})).toThrow(STORE_NOT_OPEN_MESSAGE);
+    });
+  });
+
+  it("closes exactly once across 50 session replacements", async () => {
+    await withTempDir("lifecycle-replacements-", async (dir) => {
+      const { pi, handlers } = makeLifecyclePi();
+      await registerExtension(pi);
+      const sessionStart = handlers.get("session_start")!;
+      const sessionShutdown = handlers.get("session_shutdown")!;
+      const before = getHashStoreDiagnostics();
+
+      for (let generation = 0; generation < 50; generation++) {
+        await sessionStart({}, { cwd: dir, ui: { notify: vi.fn() } });
+        await sessionShutdown({ reason: "reload" });
+      }
+
+      const after = getHashStoreDiagnostics();
+      expect(after.opens - before.opens).toBe(50);
+      expect(after.closes - before.closes).toBe(50);
+      expect(after.phase).toBe("closed");
+      expect(() => withStore(() => {})).toThrow(STORE_NOT_OPEN_MESSAGE);
+    });
   });
 });
 

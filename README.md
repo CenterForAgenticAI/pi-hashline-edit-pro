@@ -164,7 +164,7 @@ Notes:
 - A successful `write` clears the history for that file.
 - If the file was modified since the last replace or insert, the undo is refused rather than overwriting those changes. The undo record is kept: once the file matches the edited state again (for example you revert the external change), `undo_last_change` succeeds.
 - If the file was deleted since the last replace or insert, `undo_last_change` restores it from the recorded pre-edit content. Nothing is overwritten, since the file no longer exists.
-- Missing-file cleanup never touches the undo record: the per-session prune of the hash store removes the snapshots and served records of files that no longer exist (both are recomputed on the next read), but the undo history survives — even when the file is temporarily absent, for example during a branch switch.
+- Missing-file cleanup never touches the undo record: the process-scoped startup prune removes the snapshots and served records of files that no longer exist (both are recomputed on the next read), but the undo history survives — even when the file is temporarily absent, for example during a branch switch.
 
 ## Auto-read
 
@@ -207,6 +207,8 @@ Anchors are unique by construction. If a line's base hash collides with an alrea
 
 Hashes live in a persistent per-file store (`~/.config/pi-hashline-edit-pro/hash-store.sqlite`) that keeps the hashes of unchanged lines across edits. When a range is replaced, the runtime maps the old content onto the new content and copies hashes for lines that survived; only genuinely new lines get fresh hashes.
 
+The current extension instance owns one SQLite connection and closes it when Pi replaces or shuts down the session. A full health check and missing-file cleanup each run once per Pi process and store path, even across `/reload`, `/new`, `/resume`, and `/fork`.
+
 On POSIX systems, the state directory is restricted to mode `0700` and the SQLite database plus its WAL/SHM sidecars to `0600`. The undo table contains the complete pre-edit and post-edit text for the latest edit to each file, so the store should still be treated as sensitive data.
 
 The store also keeps a per-file record of the hashes the model was last served (`read` rows, auto-read blocks, post-edit diff rows), pruned to the file's current hashes on every update so removed lines' hashes do not accumulate. `replace` verifies every line of the resolved range against that record before writing; a line whose hash is missing from the record means it either changed on disk after it was shown or was never shown, and the edit is refused with `[E_RANGE_STALE]`. A `write` clears the record, so edits after a write are verified against whatever the next `read` or auto-read block serves.
@@ -248,6 +250,7 @@ A no-op replace never changes the file, so anchors remain valid. On first run af
 - Range changed on disk. `[E_RANGE_STALE]` means a line inside the replaced range changed after it was last shown to you (or was never shown). Nothing was modified; the error carries the current range with fresh anchors, so retry with those without a `read`.
 - Reset the hash store. Anchors live in `~/.config/pi-hashline-edit-pro/hash-store.sqlite` (with `-wal`/`-shm` sidecars). Quit pi, delete those three files, and the store is rebuilt on the next session. Anchor history is lost, but no project files are touched.
 - Corrupt store. If the store fails its health check it is renamed to `hash-store.sqlite.corrupt-<timestamp>` and rebuilt automatically.
+- Upgrading from a version without session shutdown cleanup. Fully restart every Pi process that loaded the older extension. `/reload` alone cannot reclaim a connection retained by the old code.
 - Config directory moved. On non-Windows platforms, if `XDG_CONFIG_HOME` is set, the config directory (and the hash store inside it) lives at `$XDG_CONFIG_HOME/pi-hashline-edit-pro` instead of `~/.config/pi-hashline-edit-pro`. An existing store is not migrated automatically. To keep anchor and undo history, move the old `hash-store.sqlite` files (plus `-wal`/`-shm` sidecars) into the new directory before the first run.
 
 ## Development
@@ -261,7 +264,7 @@ npm run lint
 npm run typecheck
 ```
 
-Set `PI_HASHLINE_DEBUG=1` to show an "active" notification at session start.
+Set `PI_HASHLINE_DEBUG=1` to show the store lifecycle phase and maintenance counters at session start.
 
 ## Credits
 

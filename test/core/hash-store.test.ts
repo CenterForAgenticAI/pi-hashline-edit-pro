@@ -146,7 +146,7 @@ async function withTempHome(run: (home: string) => Promise<void>): Promise<void>
   try {
     await run(tmpHome);
   } finally {
-    shutdownHashStore();
+    await shutdownHashStore();
     vi.unstubAllEnvs();
     await rm(tmpHome, { recursive: true, force: true });
   }
@@ -279,7 +279,7 @@ describe("hash-store - corrupt row handling", () => {
       const store = await loadHashStore();
       await put(store, "/p.ts", "x\n", ["AAA"]);
       await corruptHashes(home, "/p.ts", "not json");
-      shutdownHashStore();
+      await shutdownHashStore();
       const reloaded = await loadHashStore();
       expect(getSnapshot(reloaded, "/p.ts", "x\n")).toBeUndefined();
       upsertSnapshot(reloaded, "/p.ts", contentChecksum("x\n"), 1, ["BBB"]);
@@ -292,7 +292,7 @@ describe("hash-store - corrupt row handling", () => {
       const store = await loadHashStore();
       await put(store, "/p.ts", "x\n", ["AAA"]);
       await corruptHashes(home, "/p.ts", "[1,2]");
-      shutdownHashStore();
+      await shutdownHashStore();
       const reloaded = await loadHashStore();
       expect(getSnapshot(reloaded, "/p.ts", "x\n")).toBeUndefined();
     });
@@ -303,7 +303,7 @@ describe("hash-store - corrupt row handling", () => {
       const store = await loadHashStore();
       await put(store, "/p.ts", "x\n", ["AAA"]);
       await corruptHashes(home, "/p.ts", '["ZZ", "ZZZZ", "a!b"]');
-      shutdownHashStore();
+      await shutdownHashStore();
       const reloaded = await loadHashStore();
       expect(getSnapshot(reloaded, "/p.ts", "x\n")).toBeUndefined();
       const db = new DatabaseSync(sqlitePath(home), { defensive: false } as any);
@@ -558,7 +558,7 @@ describe("hash-store - concurrency (issue #10)", () => {
       ins.run("/b.ts", contentChecksum("beta\n"), splitLines("beta\n").length, JSON.stringify(["BBC"]), Date.now());
       second.exec("COMMIT");
       second.close();
-      shutdownHashStore();
+      await shutdownHashStore();
       const reloaded = await loadHashStore();
       expect(getSnapshot(reloaded, "/a.ts", "alpha\n")).toEqual(["AAB"]);
       expect(getSnapshot(reloaded, "/b.ts", "beta\n")).toEqual(["BBC"]);
@@ -569,11 +569,11 @@ describe("hash-store - concurrency (issue #10)", () => {
     await withTempHome(async () => {
       const a = await loadHashStore();
       await put(a, "/first.ts", "one\n", ["111"]);
-      shutdownHashStore();
+      await shutdownHashStore();
 
       const b = await loadHashStore();
       await put(b, "/second.ts", "two\n", ["222"]);
-      shutdownHashStore();
+      await shutdownHashStore();
 
       const c = await loadHashStore();
       expect(getSnapshot(c, "/first.ts", "one\n")).toEqual(["111"]);
@@ -607,7 +607,7 @@ describe("hash-store - WAL checkpoint on shutdown", () => {
       const walPath = sqlitePath(home) + "-wal";
       expect(existsSync(walPath)).toBe(true);
 
-      shutdownHashStore();
+      await shutdownHashStore();
 
       expect(existsSync(walPath)).toBe(false);
     });
@@ -657,7 +657,7 @@ describe("hash-store - schema versioning", () => {
     await withTempHome(async (home) => {
       const store = await loadHashStore();
       await put(store, "/p.ts", "x\n", ["XYZ"]);
-      shutdownHashStore();
+      await shutdownHashStore();
 
       const db = new DatabaseSync(sqlitePath(home), { defensive: false } as any);
       const row = db.prepare("SELECT value FROM meta WHERE key = 'version'").get() as { value?: string } | undefined;
@@ -671,7 +671,7 @@ describe("hash-store - schema versioning", () => {
     await withTempHome(async () => {
       const store = await loadHashStore();
       await put(store, "/p.ts", "x\n", ["XYZ"]);
-      shutdownHashStore();
+      await shutdownHashStore();
 
       const reloaded = await loadHashStore();
       expect(getSnapshot(reloaded, "/p.ts", "x\n")).toEqual(["XYZ"]);
@@ -690,7 +690,7 @@ describe("hash-store - schema versioning", () => {
         resultContent: "new",
       });
       recordServed(store, "/s.ts", ["SER"]);
-      shutdownHashStore();
+      await shutdownHashStore();
 
       const db = new DatabaseSync(sqlitePath(home), { defensive: false } as any);
       db.prepare("UPDATE meta SET value = '999' WHERE key = 'version'").run();
@@ -712,7 +712,7 @@ describe("hash-store - schema versioning", () => {
     await withTempHome(async (home) => {
       const store = await loadHashStore();
       await put(store, "/p.ts", "x\n", ["XYZ"]);
-      shutdownHashStore();
+      await shutdownHashStore();
 
       const db = new DatabaseSync(sqlitePath(home), { defensive: false } as any);
       db.exec("DROP TABLE meta");
@@ -791,7 +791,7 @@ describe("hash-store - snapshot cache", () => {
       cachedHit[0] = "ZZZ";
       expect(getSnapshot(store, "/mutable.ts", "a\nb\n")).toEqual(["AAA", "BBB"]);
 
-      shutdownHashStore();
+      await shutdownHashStore();
       store = await loadHashStore();
       const dbHit = getSnapshot(store, "/mutable.ts", "a\nb\n")!;
       dbHit[1] = "YYY";

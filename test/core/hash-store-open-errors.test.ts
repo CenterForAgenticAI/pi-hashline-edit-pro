@@ -8,9 +8,16 @@ const state = vi.hoisted(() => ({
   busyOnce: null as Error | null,
   persistentBusy: false,
   runCalls: 0,
+  quickCheckCalls: 0,
+  quickCheckResults: [] as string[],
   rename: vi.fn(async () => undefined),
-  mkdir: vi.fn(async () => undefined),
-  chmod: vi.fn(async () => undefined),
+  mkdir: vi.fn(async () => { await state.mkdirGate; }),
+  mkdirGate: null as Promise<void> | null,
+  chmodError: null as Error | null,
+  chmod: vi.fn(async (path: string) => {
+    if (state.chmodError && path.endsWith("hash-store.sqlite")) throw state.chmodError;
+  }),
+  closeCalls: 0,
   readFile: vi.fn(async () => {
     const err = new Error("no such file") as NodeJS.ErrnoException;
     err.code = "ENOENT";
@@ -39,7 +46,12 @@ vi.mock("node:sqlite", () => ({
         return { get: () => ({ value: "4" }) };
       }
       if (sql.includes("PRAGMA quick_check")) {
-        return { get: () => ({ quick_check: "ok" }) };
+        return {
+          get: () => {
+            state.quickCheckCalls++;
+            return { quick_check: state.quickCheckResults.shift() ?? "ok" };
+          },
+        };
       }
       return {
         get: () => undefined,
@@ -54,7 +66,7 @@ vi.mock("node:sqlite", () => ({
         },
       };
     }
-    close() {}
+    close() { state.closeCalls++; }
   },
 }));
 
@@ -87,9 +99,14 @@ afterAll(async () => {
 
 beforeEach(() => {
   state.openError = null;
+  state.chmodError = null;
+  state.closeCalls = 0;
+  state.mkdirGate = null;
   state.busyOnce = null;
   state.persistentBusy = false;
   state.runCalls = 0;
+  state.quickCheckCalls = 0;
+  state.quickCheckResults.length = 0;
   vi.clearAllMocks();
 });
 
@@ -97,7 +114,7 @@ describe("hash store open error handling", () => {
   it("does not quarantine the store on a busy open error", async () => {
     state.openError = busyError("database is locked");
     const { loadHashStore, shutdownHashStore } = await import("../../src/hash-store");
-    shutdownHashStore();
+    await shutdownHashStore();
     await expect(loadHashStore()).rejects.toThrow(/locked/);
     expect(state.rename).not.toHaveBeenCalled();
   });
@@ -107,9 +124,83 @@ describe("hash store open error handling", () => {
       code: "EACCES",
     }) as Error;
     const { loadHashStore, shutdownHashStore } = await import("../../src/hash-store");
-    shutdownHashStore();
+    await shutdownHashStore();
     await expect(loadHashStore()).rejects.toThrow(/permission denied/);
     expect(state.rename).not.toHaveBeenCalled();
+  });
+
+  it("closes a database when setup fails after opening", async () => {
+    const hashStore = await import("../../src/hash-store");
+    await hashStore.shutdownHashStore();
+    state.closeCalls = 0;
+    state.chmodError = Object.assign(new Error("permission denied after open"), {
+      code: "EACCES",
+    });
+
+    await expect(hashStore.loadHashStore()).rejects.toThrow("permission denied after open");
+
+    expect(state.closeCalls).toBe(1);
+    expect(hashStore.getHashStoreDiagnostics().phase).toBe("closed");
+  });
+
+  it("does not publish a connection that finishes opening after shutdown", async () => {
+    const hashStore = await import("../../src/hash-store");
+    await hashStore.shutdownHashStore();
+
+    let releaseMkdir!: () => void;
+    state.mkdirGate = new Promise<void>((resolve) => {
+      releaseMkdir = resolve;
+    });
+    const loading = hashStore.loadHashStore();
+    await vi.waitFor(() => expect(state.mkdir).toHaveBeenCalled());
+
+    const closing = hashStore.shutdownHashStore();
+    releaseMkdir();
+    try {
+      await expect(loading).rejects.toThrow("Hash store closed while opening");
+      await closing;
+      expect(() => hashStore.withStore(() => {})).toThrow(hashStore.STORE_NOT_OPEN_MESSAGE);
+    } finally {
+      await loading.catch(() => undefined);
+      await hashStore.shutdownHashStore();
+    }
+  });
+
+  it("runs the full health check once per process and store path", async () => {
+    const hashStore = await import("../../src/hash-store");
+    await hashStore.shutdownHashStore();
+    const priorHome = process.env.HOME;
+    process.env.HOME = join(tmpHome, "health-check-once");
+    try {
+      await hashStore.loadHashStore();
+      await hashStore.shutdownHashStore();
+      await hashStore.loadHashStore();
+      expect(state.quickCheckCalls).toBe(1);
+    } finally {
+      await hashStore.shutdownHashStore();
+      if (priorHome === undefined) delete process.env.HOME;
+      else process.env.HOME = priorHome;
+    }
+  });
+
+  it("rebuilds and rechecks when the full health check reports corruption", async () => {
+    const hashStore = await import("../../src/hash-store");
+    await hashStore.shutdownHashStore();
+    const priorHome = process.env.HOME;
+    process.env.HOME = join(tmpHome, "health-check-rebuild");
+    state.quickCheckResults.push("database disk image is malformed", "ok");
+    try {
+      await expect(hashStore.loadHashStore()).resolves.toBeDefined();
+      expect(state.quickCheckCalls).toBe(2);
+      expect(state.rename).toHaveBeenCalledWith(
+        expect.stringMatching(/hash-store\.sqlite$/),
+        expect.stringMatching(/\.corrupt-/),
+      );
+    } finally {
+      await hashStore.shutdownHashStore();
+      if (priorHome === undefined) delete process.env.HOME;
+      else process.env.HOME = priorHome;
+    }
   });
 
   it("quarantines and rebuilds on a NOTADB open error", async () => {
@@ -118,7 +209,7 @@ describe("hash store open error handling", () => {
       errcode: 26,
     }) as Error;
     const { loadHashStore, shutdownHashStore } = await import("../../src/hash-store");
-    shutdownHashStore();
+    await shutdownHashStore();
     await expect(loadHashStore()).rejects.toThrow(/not a database/);
     expect(state.rename).toHaveBeenCalledWith(
       expect.stringMatching(/hash-store\.sqlite$/),
@@ -128,7 +219,7 @@ describe("hash store open error handling", () => {
 
   it("retries a transient busy error on statement execution", async () => {
     const { loadHashStore, shutdownHashStore, upsertSnapshot } = await import("../../src/hash-store");
-    shutdownHashStore();
+    await shutdownHashStore();
     const store = await loadHashStore();
     state.busyOnce = busyError("database is locked");
     expect(() => {
@@ -139,7 +230,7 @@ describe("hash store open error handling", () => {
 
   it("propagates a persistent busy error after exhausting retries", async () => {
     const { loadHashStore, shutdownHashStore, upsertSnapshot } = await import("../../src/hash-store");
-    shutdownHashStore();
+    await shutdownHashStore();
     const store = await loadHashStore();
     state.busyOnce = busyError("database is locked");
     state.persistentBusy = true;

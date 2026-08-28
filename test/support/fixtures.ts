@@ -25,7 +25,7 @@ export async function setupTestHome(): Promise<{
     home: tmpHome,
     testPath,
     cleanup: async () => {
-      shutdownHashStore();
+      await shutdownHashStore();
       vi.unstubAllEnvs();
       await rm(tmpHome, { recursive: true, force: true });
     },
@@ -78,7 +78,7 @@ export async function withTempFile(
     await writeFile(path, content, "utf-8");
     await run({ cwd, path });
   } finally {
-    shutdownHashStore();
+    await shutdownHashStore();
     await rm(cwd, { recursive: true, force: true });
     restoreHome();
   }
@@ -95,7 +95,7 @@ export async function withTempBytes(
     await writeFile(path, bytes);
     await run({ cwd, path });
   } finally {
-    shutdownHashStore();
+    await shutdownHashStore();
     await rm(cwd, { recursive: true, force: true });
     restoreHome();
   }
@@ -111,7 +111,7 @@ export async function withTempSubdir(
     await mkdir(path, { recursive: true });
     await run({ cwd, path });
   } finally {
-    shutdownHashStore();
+    await shutdownHashStore();
     await rm(cwd, { recursive: true, force: true });
     restoreHome();
   }
@@ -126,7 +126,7 @@ export async function withTempDir(
   try {
     await run(dir);
   } finally {
-    shutdownHashStore();
+    await shutdownHashStore();
     await rm(dir, { recursive: true, force: true });
     restoreHome();
   }
