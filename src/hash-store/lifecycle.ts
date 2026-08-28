@@ -151,6 +151,7 @@ export class HashStoreLifecycle<T> {
   private state: StoreLifecycleState<T> = { kind: "closed", generation: 0 };
   private opens = 0;
   private closes = 0;
+  private shutdownEpoch = 0;
 
   constructor(private readonly openResource: (path: string) => Promise<OpenedStoreResource<T>>) {}
 
@@ -158,11 +159,11 @@ export class HashStoreLifecycle<T> {
     const state = this.state;
     if (state.kind === "open") {
       if (state.path === path) return Promise.resolve(state.resource.value);
-      return this.shutdown().then(() => this.load(path));
+      return this.loadAfterPathSwitch(path);
     }
     if (state.kind === "opening") {
       if (state.path === path) return this.resourceValue(state.promise);
-      return this.shutdown().then(() => this.load(path));
+      return this.loadAfterPathSwitch(path);
     }
     if (state.kind === "closing") {
       return Promise.reject(new Error(STORE_CLOSED_DURING_OPEN_MESSAGE));
@@ -175,6 +176,25 @@ export class HashStoreLifecycle<T> {
   }
 
   shutdown(waitFor?: Promise<unknown>): Promise<void> {
+    this.shutdownEpoch++;
+    return this.close(waitFor);
+  }
+
+  private loadAfterPathSwitch(path: string): Promise<T> {
+    const requestedShutdownEpoch = this.shutdownEpoch;
+    return this.closeForPathSwitch().then(() => {
+      if (requestedShutdownEpoch !== this.shutdownEpoch) {
+        throw new Error(STORE_CLOSED_DURING_OPEN_MESSAGE);
+      }
+      return this.load(path);
+    });
+  }
+
+  private closeForPathSwitch(): Promise<void> {
+    return this.close();
+  }
+
+  private close(waitFor?: Promise<unknown>): Promise<void> {
     const state = this.state;
     if (state.kind === "closed") return Promise.resolve();
     if (state.kind === "closing") return state.promise;

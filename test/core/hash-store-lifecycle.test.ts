@@ -2,12 +2,18 @@ import { describe, expect, it, vi } from "vitest";
 import type { EventEmitter } from "node:events";
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import { HashStoreLifecycle, runStoreMaintenanceOnce } from "../../src/hash-store/lifecycle";
+import {
+  HashStoreLifecycle,
+  runStoreMaintenanceOnce,
+  STORE_CLOSED_DURING_OPEN_MESSAGE,
+} from "../../src/hash-store/lifecycle";
 import {
   getHashStoreDiagnostics,
   loadHashStore,
   runHashStoreStartupMaintenance,
   shutdownHashStore,
+  STORE_NOT_OPEN_MESSAGE,
+  withStore,
 } from "../../src/hash-store";
 import { withTempDir } from "../support/fixtures";
 
@@ -194,4 +200,32 @@ describe("hash-store lifecycle", () => {
     expect(firstTask).toHaveBeenCalledTimes(1);
     expect(secondTask).not.toHaveBeenCalled();
   });
+  it("rejects a path switch when external shutdown joins its close", async () => {
+    await withTempDir("hash-store-path-switch-shutdown-", async (root) => {
+      const previousHome = process.env.HOME;
+      process.env.HOME = join(root, "path-a");
+      try {
+        await loadHashStore();
+        const before = getHashStoreDiagnostics();
+        process.env.HOME = join(root, "path-b");
+        const pathSwitch = loadHashStore();
+        let shutdownPhase;
+        const externalShutdown = shutdownHashStore().then(() => {
+          shutdownPhase = getHashStoreDiagnostics().phase;
+        });
+
+        await expect(pathSwitch).rejects.toThrow(STORE_CLOSED_DURING_OPEN_MESSAGE);
+        await expect(externalShutdown).resolves.toBeUndefined();
+        expect(shutdownPhase).toBe("closed");
+        expect(getHashStoreDiagnostics()).toMatchObject({ phase: "closed", opens: before.opens });
+        expect(() => withStore(() => {})).toThrow(STORE_NOT_OPEN_MESSAGE);
+        await Promise.resolve();
+        expect(getHashStoreDiagnostics()).toMatchObject({ phase: "closed", opens: before.opens });
+      } finally {
+        if (previousHome === undefined) delete process.env.HOME;
+        else process.env.HOME = previousHome;
+      }
+    });
+  });
+
 });
