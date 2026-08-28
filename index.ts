@@ -13,7 +13,12 @@ import {
   readConfig,
   toggleAutoRead,
 } from "./src/config";
-import { loadHashStore, pruneMissing } from "./src/hash-store";
+import {
+  getHashStoreDiagnostics,
+  loadHashStore,
+  runHashStoreStartupMaintenance,
+  shutdownHashStore,
+} from "./src/hash-store";
 import { recordServedSafe, clearServed } from "./src/served";
 import { clearBoundaryBypass } from "./src/boundary-bypass";
 import { registerWriteHook } from "./src/write-hook";
@@ -39,7 +44,7 @@ export default function (pi: ExtensionAPI): void {
     await initHasher();
     try {
       const store = await loadHashStore();
-      await pruneMissing(store);
+      await runHashStoreStartupMaintenance(store);
     } catch (err) {
       console.error("Failed to load or prune hash store:", err);
     }
@@ -47,8 +52,16 @@ export default function (pi: ExtensionAPI): void {
     autoRead = config.autoRead;
     const debugValue = process.env.PI_HASHLINE_DEBUG;
     if (debugValue === "1" || debugValue === "true") {
-      ctx.ui.notify(`Hashline Edit mode active`, "info");
+      const store = getHashStoreDiagnostics();
+      ctx.ui.notify(
+        `Hashline Edit mode active — store=${store.phase} opens=${store.opens} closes=${store.closes} health=${store.fullHealthChecks} prune=${store.pruneRuns}`,
+        "info",
+      );
     }
+  });
+
+  pi.on("session_shutdown", async () => {
+    await shutdownHashStore();
   });
 
   pi.registerCommand("toggle-auto-read", {

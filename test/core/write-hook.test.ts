@@ -18,7 +18,7 @@ async function withTempHome(run: (home: string) => Promise<void>): Promise<void>
   try {
     await run(home);
   } finally {
-    shutdownHashStore();
+    await shutdownHashStore();
     vi.unstubAllEnvs();
     await rm(home, { recursive: true, force: true });
   }

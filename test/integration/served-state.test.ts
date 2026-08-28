@@ -408,7 +408,7 @@ describe("served-state range verification", () => {
         const match = row.match(/^([A-Za-z0-9]{3})│/);
         if (match) expect(servedAfterWrite!.has(match[1]!)).toBe(true);
       }
-      shutdownHashStore();
+      await shutdownHashStore();
     });
   });
 

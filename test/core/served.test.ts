@@ -19,7 +19,7 @@ async function withTempHome(run: (home: string) => Promise<void>): Promise<void>
   try {
     await run(home);
   } finally {
-    shutdownHashStore();
+    await shutdownHashStore();
     vi.unstubAllEnvs();
     await rm(home, { recursive: true, force: true });
   }
@@ -117,7 +117,7 @@ describe("served store", () => {
     await withTempHome(async () => {
       const store = await loadHashStore();
       recordServed(store, "/a.ts", ["aB3", "cD4"]);
-      shutdownHashStore();
+      await shutdownHashStore();
       const reopened = await loadHashStore();
       expect(getServed(reopened, "/a.ts")).toEqual(new Set(["aB3", "cD4"]));
     });

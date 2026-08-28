@@ -95,7 +95,7 @@ describe("undo-store", () => {
       hashes: ["abc", "def"],
       resultContent: "new",
     });
-    shutdownHashStore();
+    await shutdownHashStore();
     const entry = await getUndo(home.testPath);
     expect(entry).toBeDefined();
     expect(entry!.content).toBe("old");

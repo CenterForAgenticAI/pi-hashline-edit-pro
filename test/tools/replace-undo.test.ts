@@ -324,7 +324,7 @@ describe("undo_last_change", () => {
         ctx,
       );
 
-      shutdownHashStore();
+      await shutdownHashStore();
 
       const undoResult = await undo.execute(
         "u1",

@@ -21,8 +21,8 @@ describe.skipIf(isRoot || isWindows)("permission errors", () => {
     restoreHome = withHome(tempDir);
   });
 
-  afterAll(() => {
-    shutdownHashStore();
+  afterAll(async () => {
+    await shutdownHashStore();
     rmSync(tempDir, { recursive: true, force: true });
     restoreHome?.();
   });

@@ -6,6 +6,8 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vites
 
 const state = vi.hoisted(() => ({
   statErrors: new Map<string, Error>(),
+  statPaths: [] as string[],
+  statGate: null as Promise<void> | null,
 }));
 
 function statError(code: string, message: string): Error {
@@ -17,6 +19,8 @@ vi.mock("fs/promises", async (importOriginal) => {
   return {
     ...actual,
     stat: vi.fn(async (path: string) => {
+      state.statPaths.push(path);
+      await state.statGate;
       const err = state.statErrors.get(path);
       if (err) throw err;
       return actual.stat(path);
@@ -37,13 +41,15 @@ beforeAll(async () => {
 
 afterAll(async () => {
   const { shutdownHashStore } = await import("../../src/hash-store");
-  shutdownHashStore();
+  await shutdownHashStore();
   vi.unstubAllEnvs();
   await rm(tmpHome, { recursive: true, force: true });
 });
 
 beforeEach(() => {
   state.statErrors.clear();
+  state.statPaths.length = 0;
+  state.statGate = null;
 });
 
 async function putSnapshot(store: HashStore, path: string, content: string, hashes: string[]): Promise<void> {
@@ -57,7 +63,7 @@ describe("hash-store - pruneMissing error handling", () => {
   it("keeps the snapshot and served record when stat fails with EACCES", async () => {
     const { loadHashStore, shutdownHashStore, pruneMissing, getSnapshot } = await import("../../src/hash-store");
     const { recordServed, getServed } = await import("../../src/served");
-    shutdownHashStore();
+    await shutdownHashStore();
     const store = await loadHashStore();
     const locked = join(tmpHome, "locked.ts");
     await putSnapshot(store, locked, "locked\n", ["AAA"]);
@@ -70,9 +76,106 @@ describe("hash-store - pruneMissing error handling", () => {
     expect(getServed(store, locked)).toEqual(new Set(["AAA"]));
   });
 
+  it("does not stat paths retained only for undo", async () => {
+    const { loadHashStore, shutdownHashStore, pruneMissing, upsertUndo } = await import("../../src/hash-store");
+    await shutdownHashStore();
+    const store = await loadHashStore();
+    const undoOnly = join(tmpHome, "undo-only.ts");
+    upsertUndo(store, undoOnly, {
+      content: "before",
+      bom: "",
+      ending: "\n",
+      hashes: ["UND"],
+      resultContent: "after",
+    });
+
+    await pruneMissing(store);
+
+    expect(state.statPaths).not.toContain(undoOnly);
+  });
+
+  it("waits for startup maintenance before closing the store", async () => {
+    const hashStore = await import("../../src/hash-store");
+    await hashStore.shutdownHashStore();
+    const store = await hashStore.loadHashStore();
+    const missing = join(tmpHome, "maintenance-missing.ts");
+    await putSnapshot(store, missing, "gone\n", ["MNT"]);
+
+    let releaseStat!: () => void;
+    state.statGate = new Promise<void>((resolve) => {
+      releaseStat = resolve;
+    });
+    const maintenance = hashStore.runHashStoreStartupMaintenance(store);
+    await vi.waitFor(() => expect(state.statPaths).toContain(missing));
+    const closing = hashStore.shutdownHashStore();
+
+    try {
+      expect(() => hashStore.withStore(() => {})).not.toThrow();
+      releaseStat();
+      await maintenance;
+      await closing;
+      expect(hashStore.getHashStoreDiagnostics().phase).toBe("closed");
+    } finally {
+      releaseStat();
+      await Promise.allSettled([maintenance, closing]);
+      await hashStore.shutdownHashStore();
+    }
+  });
+
+  it("finishes maintenance before switching to another store path", async () => {
+    const hashStore = await import("../../src/hash-store");
+    await hashStore.shutdownHashStore();
+    const priorHome = process.env.HOME;
+    const oldHome = join(tmpHome, "path-switch-old");
+    const newHome = join(tmpHome, "path-switch-new");
+    process.env.HOME = oldHome;
+    const store = await hashStore.loadHashStore();
+    const missing = join(oldHome, "missing.ts");
+    await putSnapshot(store, missing, "gone\n", ["OLD"]);
+
+    let releaseStat!: () => void;
+    state.statGate = new Promise<void>((resolve) => {
+      releaseStat = resolve;
+    });
+    const maintenance = hashStore.runHashStoreStartupMaintenance(store);
+    await vi.waitFor(() => expect(state.statPaths).toContain(missing));
+
+    process.env.HOME = newHome;
+    const nextLoad = hashStore.loadHashStore();
+    let nextSettled = false;
+    void nextLoad.then(
+      () => { nextSettled = true; },
+      () => { nextSettled = true; },
+    );
+
+    try {
+      await Promise.resolve();
+      expect(hashStore.getHashStoreDiagnostics()).toMatchObject({
+        phase: "open",
+        activePath: expect.stringContaining("path-switch-old"),
+      });
+      expect(nextSettled).toBe(false);
+      expect(() => hashStore.withStore(() => {})).not.toThrow();
+
+      releaseStat();
+      await maintenance;
+      await nextLoad;
+      expect(hashStore.getHashStoreDiagnostics()).toMatchObject({
+        phase: "open",
+        activePath: expect.stringContaining("path-switch-new"),
+      });
+    } finally {
+      releaseStat();
+      await Promise.allSettled([maintenance, nextLoad]);
+      await hashStore.shutdownHashStore();
+      if (priorHome === undefined) delete process.env.HOME;
+      else process.env.HOME = priorHome;
+    }
+  });
+
   it("keeps the snapshot when stat fails with ELOOP", async () => {
     const { loadHashStore, shutdownHashStore, pruneMissing, getSnapshot } = await import("../../src/hash-store");
-    shutdownHashStore();
+    await shutdownHashStore();
     const store = await loadHashStore();
     const loop = join(tmpHome, "loop.ts");
     await putSnapshot(store, loop, "loop\n", ["BBB"]);
@@ -85,7 +188,7 @@ describe("hash-store - pruneMissing error handling", () => {
 
   it("still prunes paths that stat reports as ENOENT", async () => {
     const { loadHashStore, shutdownHashStore, pruneMissing, getSnapshot } = await import("../../src/hash-store");
-    shutdownHashStore();
+    await shutdownHashStore();
     const store = await loadHashStore();
     const gone = join(tmpHome, "gone.ts");
     await putSnapshot(store, gone, "gone\n", ["CCC"]);
