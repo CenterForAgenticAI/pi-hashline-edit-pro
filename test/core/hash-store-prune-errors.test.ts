@@ -127,6 +127,24 @@ describe("hash-store - pruneMissing error handling", () => {
     }
   });
 
+  it("rejects a same-path load settled after shutdown request", async () => {
+    const hashStore = await import("../../src/hash-store");
+    await hashStore.shutdownHashStore();
+    await hashStore.loadHashStore();
+
+    const pendingLoad = hashStore.loadHashStore();
+    const closing = hashStore.shutdownHashStore();
+
+    try {
+      await expect(pendingLoad).rejects.toThrow("Hash store closed while opening");
+      await closing;
+      expect(hashStore.getHashStoreDiagnostics().phase).toBe("closed");
+    } finally {
+      await Promise.allSettled([pendingLoad, closing]);
+      await hashStore.shutdownHashStore();
+    }
+  });
+
   it("rejects a load queued before shutdown after maintenance drains", async () => {
     const hashStore = await import("../../src/hash-store");
     await hashStore.shutdownHashStore();

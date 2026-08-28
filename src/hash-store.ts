@@ -369,7 +369,12 @@ export function loadHashStore(): Promise<HashStore> {
     if (requestedShutdownEpoch !== shutdownEpoch) {
       return Promise.reject(new Error(STORE_CLOSED_DURING_OPEN_MESSAGE));
     }
-    return storeLifecycle.load(canonicalStorePath()).then((connection) => connection.store);
+    return storeLifecycle.load(canonicalStorePath()).then((connection) => {
+      if (requestedShutdownEpoch !== shutdownEpoch) {
+        throw new Error(STORE_CLOSED_DURING_OPEN_MESSAGE);
+      }
+      return connection.store;
+    });
   });
 }
 
