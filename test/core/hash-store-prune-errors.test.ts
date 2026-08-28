@@ -145,6 +145,30 @@ describe("hash-store - pruneMissing error handling", () => {
     }
   });
 
+  it("rejects a same-path load called during shutdown and permits a post-shutdown load", async () => {
+    const hashStore = await import("../../src/hash-store");
+    await hashStore.shutdownHashStore();
+    await hashStore.loadHashStore();
+    const opensBeforeShutdown = hashStore.getHashStoreDiagnostics().opens;
+
+    const closing = hashStore.shutdownHashStore();
+    const duringShutdown = hashStore.loadHashStore();
+
+    try {
+      expect(hashStore.getHashStoreDiagnostics().phase).toBe("closing");
+      await expect(duringShutdown).rejects.toThrow("Hash store closed while opening");
+      await closing;
+      expect(hashStore.getHashStoreDiagnostics()).toMatchObject({ phase: "closed", opens: opensBeforeShutdown });
+      expect(() => hashStore.withStore(() => {})).toThrow(hashStore.STORE_NOT_OPEN_MESSAGE);
+
+      await expect(hashStore.loadHashStore()).resolves.toBeDefined();
+      expect(hashStore.getHashStoreDiagnostics().opens).toBe(opensBeforeShutdown + 1);
+    } finally {
+      await Promise.allSettled([duringShutdown, closing]);
+      await hashStore.shutdownHashStore();
+    }
+  });
+
   it("rejects a load queued before shutdown after maintenance drains", async () => {
     const hashStore = await import("../../src/hash-store");
     await hashStore.shutdownHashStore();

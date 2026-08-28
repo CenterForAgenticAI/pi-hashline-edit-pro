@@ -165,7 +165,7 @@ export class HashStoreLifecycle<T> {
       return this.shutdown().then(() => this.load(path));
     }
     if (state.kind === "closing") {
-      return state.promise.then(() => this.load(path));
+      return Promise.reject(new Error(STORE_CLOSED_DURING_OPEN_MESSAGE));
     }
     return this.startOpen(path);
   }
