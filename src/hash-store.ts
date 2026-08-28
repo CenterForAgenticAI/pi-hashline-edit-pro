@@ -24,6 +24,7 @@ import {
 } from "./hash-store/cache";
 import {
   HashStoreLifecycle,
+  STORE_CLOSED_DURING_OPEN_MESSAGE,
   getStoreMaintenanceDiagnostics,
   runStoreMaintenanceOnce,
   type StoreLifecycleDiagnostics,
@@ -142,6 +143,7 @@ const storeLifecycle = new HashStoreLifecycle<StoreConnection>(async (storePath)
   };
 });
 let startupMaintenance: Promise<void> | null = null;
+let shutdownEpoch = 0;
 
 function canonicalStorePath(): string {
   return resolve(hashStorePath());
@@ -362,12 +364,17 @@ async function openStoreConnection(storePath: string): Promise<StoreConnection> 
 }
 
 export function loadHashStore(): Promise<HashStore> {
-  return afterStartupMaintenance(() =>
-    storeLifecycle.load(canonicalStorePath()).then((connection) => connection.store),
-  );
+  const requestedShutdownEpoch = shutdownEpoch;
+  return afterStartupMaintenance(() => {
+    if (requestedShutdownEpoch !== shutdownEpoch) {
+      return Promise.reject(new Error(STORE_CLOSED_DURING_OPEN_MESSAGE));
+    }
+    return storeLifecycle.load(canonicalStorePath()).then((connection) => connection.store);
+  });
 }
 
 export function shutdownHashStore(): Promise<void> {
+  shutdownEpoch++;
   snapshotCache.clear();
   return storeLifecycle.shutdown(startupMaintenance ?? undefined);
 }

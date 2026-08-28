@@ -127,6 +127,46 @@ describe("hash-store - pruneMissing error handling", () => {
     }
   });
 
+  it("rejects a load queued before shutdown after maintenance drains", async () => {
+    const hashStore = await import("../../src/hash-store");
+    await hashStore.shutdownHashStore();
+    const priorHome = process.env.HOME;
+    process.env.HOME = join(tmpHome, "queued-load");
+    const store = await hashStore.loadHashStore();
+    const missing = join(tmpHome, "queued-load-missing.ts");
+    await putSnapshot(store, missing, "gone\n", ["QUE"]);
+
+    let releaseStat!: () => void;
+    state.statGate = new Promise<void>((resolve) => {
+      releaseStat = resolve;
+    });
+    const maintenance = hashStore.runHashStoreStartupMaintenance(store);
+    await vi.waitFor(() => expect(state.statPaths).toContain(missing));
+    const queuedLoad = hashStore.loadHashStore();
+    let queuedSettled = false;
+    void queuedLoad.then(
+      () => { queuedSettled = true; },
+      () => { queuedSettled = true; },
+    );
+    const closing = hashStore.shutdownHashStore();
+
+    try {
+      expect(hashStore.getHashStoreDiagnostics().phase).toBe("closing");
+      await Promise.resolve();
+      expect(queuedSettled).toBe(false);
+      releaseStat();
+      await maintenance;
+      await closing;
+      await expect(queuedLoad).rejects.toThrow("Hash store closed while opening");
+    } finally {
+      releaseStat();
+      await Promise.allSettled([maintenance, closing, queuedLoad]);
+      await hashStore.shutdownHashStore();
+      if (priorHome === undefined) delete process.env.HOME;
+      else process.env.HOME = priorHome;
+    }
+  });
+
   it("finishes maintenance before switching to another store path", async () => {
     const hashStore = await import("../../src/hash-store");
     await hashStore.shutdownHashStore();
