@@ -588,7 +588,7 @@ async function statMissing(rows: { path: string }[]): Promise<string[]> {
         } catch (error: unknown) {
           const code = errCode(error);
           if (code !== "ENOENT" && code !== "ENOTDIR") {
-            console.error("Failed to stat hash store path:", row.path, error);
+            if (code !== "EPERM" && code !== "EACCES") console.error("Failed to stat hash store path:", row.path, error);
             return undefined;
           }
           return row.path;

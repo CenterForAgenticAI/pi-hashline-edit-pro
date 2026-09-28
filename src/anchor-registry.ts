@@ -967,12 +967,17 @@ function isClaimedSidecar(sidecar: string): boolean {
   return false;
 }
 
+function isExpectedAccessError(error: unknown): boolean {
+  const code = errCode(error);
+  return code === "EPERM" || code === "EACCES";
+}
+
 export async function gcRegistrySidecars(): Promise<void> {
   let names: string[];
   try {
     names = await readdir(sessionClaimsDir());
   } catch (error) {
-    if (errCode(error) !== "ENOENT") console.error("Failed to list registry sidecars:", error);
+    if (errCode(error) !== "ENOENT" && !isExpectedAccessError(error)) console.error("Failed to list registry sidecars:", error);
     return;
   }
   for (const name of names) {
@@ -982,7 +987,7 @@ export async function gcRegistrySidecars(): Promise<void> {
         const tmpStat = await stat(tmpPath);
         if (Date.now() - tmpStat.mtimeMs > 60 * 60 * 1000) await rm(tmpPath, { force: true });
       } catch (error) {
-        if (errCode(error) !== "ENOENT") console.error("Failed to inspect registry sidecar:", error);
+        if (errCode(error) !== "ENOENT" && !isExpectedAccessError(error)) console.error("Failed to inspect registry sidecar:", error);
       }
       continue;
     }
@@ -995,8 +1000,12 @@ export async function gcRegistrySidecars(): Promise<void> {
       await stat(sessionFile);
     } catch (error) {
       if (errCode(error) === "ENOENT") {
-        await rm(sidecar, { force: true });
-      } else {
+        try {
+          await rm(sidecar, { force: true });
+        } catch (removeError) {
+          if (!isExpectedAccessError(removeError)) throw removeError;
+        }
+      } else if (!isExpectedAccessError(error)) {
         console.error("Failed to inspect registry sidecar:", error);
       }
     }

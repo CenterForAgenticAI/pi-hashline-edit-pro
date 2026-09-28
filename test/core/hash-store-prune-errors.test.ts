@@ -2,7 +2,7 @@ import { mkdirSync } from "node:fs";
 import type { HashStore } from "../../src/hash-store";
 import { mkdtemp, rm } from "fs/promises";
 import { join } from "path";
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 const state = vi.hoisted(() => ({
   statErrors: new Map<string, Error>(),
@@ -31,6 +31,7 @@ beforeAll(async () => {
   tmpHome = await mkdtemp(join(process.cwd(), ".tmp", "hash-store-prune-errors-"));
   vi.stubEnv("HOME", tmpHome);
   vi.stubEnv("XDG_CONFIG_HOME", "");
+  vi.stubEnv("PI_HASHLINE_DIR", "");
   const { initHasher } = await import("../../src/hashline/hasher");
   await initHasher();
 });
@@ -46,6 +47,8 @@ beforeEach(() => {
   state.statErrors.clear();
 });
 
+afterEach(() => vi.restoreAllMocks());
+
 async function putSnapshot(store: HashStore, path: string, content: string, hashes: string[]): Promise<void> {
   const { upsertSnapshot } = await import("../../src/hash-store");
   const { contentChecksum } = await import("../../src/hashline/hasher");
@@ -54,17 +57,25 @@ async function putSnapshot(store: HashStore, path: string, content: string, hash
 }
 
 describe("hash-store - pruneMissing error handling", () => {
-  it("keeps the snapshot and served record when stat fails with EACCES", async () => {
-    const { loadHashStore, shutdownHashStore, pruneMissing, getSnapshot } = await import("../../src/hash-store");
+  it.each(["EACCES", "EPERM"])("keeps snapshots and undo without logging when stat fails with %s", async (code) => {
+    const { loadHashStore, shutdownHashStore, pruneMissing, getSnapshot, upsertUndo, getUndoEntry } = await import("../../src/hash-store");
     shutdownHashStore();
     const store = await loadHashStore();
     const locked = join(tmpHome, "locked.ts");
     await putSnapshot(store, locked, "locked\n", ["ATIm"]);
+    const undo = { content: "old", bom: "", ending: "\n", hashes: ["ATIm"], resultContent: "locked\n" };
+    upsertUndo(store, locked, undo);
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    const warnings = vi.spyOn(console, "warn").mockImplementation(() => {});
 
-    state.statErrors.set(locked, statError("EACCES", "permission denied"));
-    await pruneMissing(store);
-
-    expect(getSnapshot(store, locked, "locked\n")).toEqual(["ATIm"]);
+    state.statErrors.set(locked, statError(code, "permission denied"));
+    expect(await pruneMissing(store)).not.toContain(locked);
+    expect(errors).not.toHaveBeenCalled();
+    expect(warnings).not.toHaveBeenCalled();
+    shutdownHashStore();
+    const reopened = await loadHashStore();
+    expect(getSnapshot(reopened, locked, "locked\n")).toEqual(["ATIm"]);
+    expect(getUndoEntry(reopened, locked)).toEqual(undo);
   });
 
   it("keeps the snapshot when stat fails with ELOOP", async () => {
@@ -74,10 +85,14 @@ describe("hash-store - pruneMissing error handling", () => {
     const loop = join(tmpHome, "loop.ts");
     await putSnapshot(store, loop, "loop\n", ["BeSR"]);
 
-    state.statErrors.set(loop, statError("ELOOP", "too many symbolic links"));
+    const error = statError("ELOOP", "too many symbolic links");
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    state.statErrors.set(loop, error);
     await pruneMissing(store);
 
-    expect(getSnapshot(store, loop, "loop\n")).toEqual(["BeSR"]);
+    expect(errors).toHaveBeenCalledWith("Failed to stat hash store path:", loop, error);
+    shutdownHashStore();
+    expect(getSnapshot(await loadHashStore(), loop, "loop\n")).toEqual(["BeSR"]);
   });
 
   it("still prunes paths that stat reports as ENOENT", async () => {

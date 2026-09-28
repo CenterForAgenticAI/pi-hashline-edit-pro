@@ -1,8 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { homedir } from "os";
-import { join, dirname } from "path";
-import { configDir, configPath, hashStorePath, hashStoreDir } from "../../src/paths";
+import { join, dirname, resolve } from "path";
+import { configDir, configPath, hashStorePath, hashStoreDir, legacyHashStorePath, sessionClaimsDir } from "../../src/paths";
 import { withHome } from "../support/fixtures";
+
+beforeEach(() => vi.stubEnv("PI_HASHLINE_DIR", undefined));
+afterEach(() => vi.unstubAllEnvs());
 
 describe("configDir", () => {
   it("returns the config directory under home when XDG_CONFIG_HOME is unset", () => {
@@ -39,6 +42,36 @@ describe("configDir", () => {
       if (previousXdg === undefined) delete process.env.XDG_CONFIG_HOME;
       else process.env.XDG_CONFIG_HOME = previousXdg;
       restore();
+    }
+  });
+});
+
+describe("PI_HASHLINE_DIR", () => {
+  it("overrides every state path without changing HOME or XDG_CONFIG_HOME", () => {
+    const dir = resolve(".tmp", "hashline-scope");
+    const home = process.env.HOME;
+    const xdg = process.env.XDG_CONFIG_HOME;
+    vi.stubEnv("PI_HASHLINE_DIR", dir);
+    expect(configDir()).toBe(dir);
+    expect(configPath()).toBe(join(dir, "config.json"));
+    expect(hashStorePath()).toBe(join(dir, "hash-store.sqlite"));
+    expect(hashStoreDir()).toBe(dir);
+    expect(legacyHashStorePath()).toBe(join(dir, "hash-store.json"));
+    expect(sessionClaimsDir()).toBe(join(dir, "sessions"));
+    expect(process.env.HOME).toBe(home);
+    expect(process.env.XDG_CONFIG_HOME).toBe(xdg);
+  });
+
+  it.each([undefined, ""])("preserves fallback with PI_HASHLINE_DIR=%s", (value) => {
+    const expected = configDir();
+    vi.stubEnv("PI_HASHLINE_DIR", value);
+    expect(configDir()).toBe(expected);
+  });
+
+  it.each(["relative", "./relative", "~/state", " "])("rejects nonempty relative directory %s", (value) => {
+    vi.stubEnv("PI_HASHLINE_DIR", value);
+    for (const path of [configDir, configPath, hashStorePath, hashStoreDir, legacyHashStorePath, sessionClaimsDir]) {
+      expect(path).toThrow("[E_CONFIG] PI_HASHLINE_DIR must be an absolute path");
     }
   });
 });
