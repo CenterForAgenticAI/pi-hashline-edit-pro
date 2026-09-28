@@ -1,6 +1,6 @@
 # pi-hashline-edit-pro
 
-![pi-hashline-edit-pro banner](https://raw.githubusercontent.com/YuGiMob/pi-hashline-edit-pro/master/assets/banner.jpeg)
+![pi-hashline-edit-pro banner](https://raw.githubusercontent.com/YuGiMob/pi-hashline-edit-pro/master/assets/banner.svg)
 
 [![npm version](https://img.shields.io/npm/v/pi-hashline-edit-pro.svg)](https://www.npmjs.com/package/pi-hashline-edit-pro) [![npm downloads](https://img.shields.io/npm/dm/pi-hashline-edit-pro.svg)](https://www.npmjs.com/package/pi-hashline-edit-pro) [![Explicit Edit Benchmark](https://img.shields.io/endpoint?url=https://huggingface.co/datasets/alexshpunt/explicit-edit-benchmark/resolve/main/badges/pi-hashline-edit-pro.json&style=flat-square)](https://huggingface.co/spaces/alexshpunt/benchmark-explorer?card=harness%3Api-hashline-edit-pro%40latest)
 
