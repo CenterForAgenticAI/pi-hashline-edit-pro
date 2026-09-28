@@ -1,10 +1,14 @@
 # pi-hashline-edit-pro
 
-[![npm version](https://img.shields.io/npm/v/pi-hashline-edit-pro.svg)](https://www.npmjs.com/package/pi-hashline-edit-pro) [![npm downloads](https://img.shields.io/npm/dm/pi-hashline-edit-pro.svg)](https://www.npmjs.com/package/pi-hashline-edit-pro)
+[![npm version](https://img.shields.io/npm/v/pi-hashline-edit-pro.svg)](https://www.npmjs.com/package/pi-hashline-edit-pro) [![npm downloads](https://img.shields.io/npm/dm/pi-hashline-edit-pro.svg)](https://www.npmjs.com/package/pi-hashline-edit-pro) [![Explicit Edit Benchmark](https://img.shields.io/endpoint?url=https://huggingface.co/datasets/alexshpunt/explicit-edit-benchmark/resolve/main/badges/pi-hashline-edit-pro.json&style=flat-square)](https://huggingface.co/spaces/alexshpunt/benchmark-explorer?card=harness%3Api-hashline-edit-pro%40latest)
 
 pi-hashline-edit-pro is an extension for [pi-coding-agent](https://github.com/badlogic/pi-mono/tree/main/packages/coding-agent) that edits files by anchor. Every line a tool shows you is prefixed with a unique 4-character anchor, and you edit by anchor. There are no line numbers and no fuzzy matching, so an edit lands on the line you meant.
 
 It is a fork of [pi-hashline-edit](https://github.com/RimuruW/pi-hashline-edit) by RimuruW, extended with 4-character tokenizer-friendly anchors and allocation-based anchor identity.
+
+## Benchmark
+
+pi-hashline-edit-pro is measured on the [Explicit Edit Benchmark](https://huggingface.co/datasets/alexshpunt/explicit-edit-benchmark), a suite of 226 byte-exact edit tasks run by many agents, harnesses, models, and configurations. The current release scores **98.7%** (the benchmark's family rollup across complete model-route configurations) with **99.6% or better final exactness** on every route, so a first-attempt miss is recovered from the stale-anchor and range feedback. Per-model and per-version numbers are in the [benchmark explorer](https://huggingface.co/spaces/alexshpunt/benchmark-explorer?card=harness%3Api-hashline-edit-pro%40latest).
 
 ## Installation
 
