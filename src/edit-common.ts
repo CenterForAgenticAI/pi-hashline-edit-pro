@@ -163,8 +163,9 @@ export async function resolveEditTargetWithRequirement(input: PathRequirementInp
   return anchorTarget;
 }
 
+const AUTO_FIX_WARNING_CODES = ["[W_BAD_SHAPE]", "[W_BAD_REF]", "[W_INVALID_PATCH]", "[W_BARE_HASH_PREFIX]"];
 export async function throwIfStrictInput(warnings: string[]): Promise<void> {
-  const fixes = warnings.filter((warning) => warning.startsWith("[W_"));
+  const fixes = warnings.filter((warning) => AUTO_FIX_WARNING_CODES.some((code) => warning.startsWith(code)));
   if (fixes.length === 0) return;
   const { strictInput } = await readConfig();
   if (strictInput === true) {

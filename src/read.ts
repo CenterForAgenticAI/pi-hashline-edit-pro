@@ -19,7 +19,7 @@ import { withReadPrompts, DEFAULT_EDIT_FLAGS, type EditToolFlags } from "./edit-
 import { valAccess } from "./validation";
 import { readConfig } from "./config";
 import { resolveTarget } from "./fs-write";
-import { withAnchorSession, servedForPath, sessionKeyFor } from "./anchor-registry";
+import { withAnchorSession, servedForPath, sessionKeyFor, formatAnchorReclaimNotice, takeReclaimedPaths } from "./anchor-registry";
 import { serveRows } from "./served";
 import { getAutoReadAllSnapshot } from "./auto-read-all-state";
 import { Text } from "@earendil-works/pi-tui";
@@ -258,10 +258,12 @@ export function regRead(pi: ExtensionAPI, flags: EditToolFlags = DEFAULT_EDIT_FL
 				);
 				serveRows(resolvedPath, fileHashes, fileLines, preview.servedHashes);
 				const snapshotId = await safeSnapId(absolutePath, "read");
-				const previewText =
-					hadUtf8DecodeErrors
-						? `${preview.text}\n\n[Non-UTF-8 bytes shown as U+FFFD; editing rewrites the file as UTF-8.]`
-						: preview.text;
+				const reclaimNotice = formatAnchorReclaimNotice(takeReclaimedPaths());
+				const previewText = [
+					preview.text,
+					hadUtf8DecodeErrors ? "[Non-UTF-8 bytes shown as U+FFFD; editing rewrites the file as UTF-8.]" : undefined,
+					reclaimNotice,
+				].filter((part): part is string => part !== undefined).join("\n\n");
 
 				return {
 					content: [{ type: "text", text: previewText }],

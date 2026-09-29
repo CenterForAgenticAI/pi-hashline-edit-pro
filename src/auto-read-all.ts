@@ -11,6 +11,7 @@ import {
 } from "./constants";
 import { normalizeAutoReadAllIgnoreEntry, type AutoReadAllMode } from "./config";
 import { serveRows } from "./served";
+import { formatAnchorReclaimNotice, takeReclaimedPaths } from "./anchor-registry";
 import { readNormFile, safeSnapId } from "./file-reader";
 import { resolveRgPath } from "./grep";
 import { globToRegex } from "./glob";
@@ -438,7 +439,8 @@ export async function buildAutoReadAllInjection(cwd: string, budgetBytes: number
   const coverage = `[coverage: ${completeFiles} complete]`;
   const completeNames = sections.map((section) => section.file);
   const machineList = `[files complete: ${JSON.stringify(completeNames)} omitted: ${JSON.stringify(omitted)}]`;
-  const text = `${HEADER}\n\n${coverage}\n${machineList}\n\n${sectionTexts.join("\n\n")}\n\n${buildFooter(sections.length, discovery, omitted)}`;
+  const reclaimNotice = formatAnchorReclaimNotice(takeReclaimedPaths());
+  const text = `${HEADER}\n\n${coverage}\n${machineList}\n\n${sectionTexts.join("\n\n")}\n\n${buildFooter(sections.length, discovery, omitted)}${reclaimNotice !== undefined ? `\n${reclaimNotice}` : ""}`;
   return { text, files: sections.length, bytes, omitted, completeFiles };
 }
 

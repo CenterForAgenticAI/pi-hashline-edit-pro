@@ -16,7 +16,7 @@ import {
   type HEdit,
   type PlannedEdit,
 } from "./hashline";
-import { adoptAnchors, servedForPath } from "./anchor-registry";
+import { adoptAnchors, servedForPath, formatAnchorReclaimNotice, takeReclaimedPaths } from "./anchor-registry";
 import { restoreEndings, stripBOM, toLF, type LineEnding } from "./normalize";
 import { assertInsertReq, assertReq, normReq } from "./payload-contract";
 import { saveUndo } from "./replace-undo";
@@ -638,6 +638,8 @@ async function finishBatch(member: PlannedMember, signal?: AbortSignal): Promise
     if (error instanceof Error) error.message = withAbortSuffix(error.message, runtime.display);
     throw error;
   }
+  const reclaimNotice = formatAnchorReclaimNotice(takeReclaimedPaths());
+  if (reclaimNotice !== undefined) warnings.push(reclaimNotice);
   if (composed === base.content) {
     const snapshotId = await safeSnapId(paths.absolutePath, "noop edit");
     return combinedNoop(paths.displayPath, member, runtime, snapshotId);
@@ -700,6 +702,8 @@ async function finishBatch(member: PlannedMember, signal?: AbortSignal): Promise
     const detail = error instanceof Error ? error.message : String(error);
     throw new Error(`${detail} File was written; anchor finalization failed. One undo reverts. Call read for fresh anchors.`);
   }
+  const writeReclaim = formatAnchorReclaimNotice(takeReclaimedPaths());
+  if (writeReclaim !== undefined) warnings.push(writeReclaim);
   const range = changedRange(base.content, composed);
   let added = 0;
   let removed = 0;
@@ -746,6 +750,8 @@ async function finishBatch(member: PlannedMember, signal?: AbortSignal): Promise
 async function combinedNoop(path: string, member: PlannedMember, runtime: BatchState, snapshotId: string | undefined): Promise<TResult> {
   const executed = runtime.applied + runtime.noops;
   const warnings = [...runtime.warnings];
+  const reclaimNotice = formatAnchorReclaimNotice(takeReclaimedPaths());
+  if (reclaimNotice !== undefined) warnings.push(reclaimNotice);
   const noop = buildNoop(
     {
       path,

@@ -14,7 +14,7 @@ import { toCwd, toDisplayPath } from "./paths";
 import { loadP, loadGuide } from "./prompts";
 import { normReq } from "./payload-contract";
 import { abortIf, clipLine, errCode, gutterWidth, isRec, makePrepareArguments, rejectUnknownFields, truncateToBytes, visLines } from "./utils";
-import { withAnchorSession } from "./anchor-registry";
+import { withAnchorSession, formatAnchorReclaimNotice, takeReclaimedPaths } from "./anchor-registry";
 import { serveRows } from "./served";
 import { Text } from "@earendil-works/pi-tui";
 import { expandHint, getResultText, reuseText, type CallT, type FgT } from "./replace-render";
@@ -660,6 +660,8 @@ export function regGrep(pi: ExtensionAPI): void {
           .map((hit) => `=== ${hit.displayPath} ===\n${hit.rows.join("\n")}`)
           .join("\n");
         const notes: string[] = [];
+        const reclaimNotice = formatAnchorReclaimNotice(takeReclaimedPaths());
+        if (reclaimNotice !== undefined) notes.push(reclaimNotice);
         if (rowTruncated) notes.push(`[grep: output truncated at ${DEFAULT_MAX_LINES} rows or ${formatSize(DEFAULT_MAX_BYTES)}; refine the pattern to see more.]`);
         if (limitTruncated) notes.push(`[grep: showing first ${limit} matches; increase limit to see more.]`);
         if (linesReplaced > 0) notes.push(`[grep: ${linesReplaced} line(s) exceed ${formatSize(MAX_GREP_LINE_BYTES)} and are shown as truncated fragments; use read to see the full lines.]`);

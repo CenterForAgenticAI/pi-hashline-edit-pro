@@ -6,6 +6,7 @@ import { saveUndo } from "./replace-undo";
 import { getDiffContextLines } from "./config";
 import { safeSnapId } from "./file-reader";
 import { writeAtomic } from "./fs-write";
+import { formatAnchorReclaimNotice, takeReclaimedPaths } from "./anchor-registry";
 import { servedHashesFromDiff, serveRows } from "./served";
 import { lineHashes } from "./hashline";
 import { spanForEdit } from "./replace";
@@ -27,6 +28,8 @@ export async function commitEdit(pipe: PipelineResult, meta: CommitMeta): Promis
   const { path, absolutePath, mutationTargetPath, signal } = meta;
   const warnings = [...(meta.prefixWarnings ?? []), ...pipe.warnings];
   const editsAttempted = 1;
+  const readReclaim = formatAnchorReclaimNotice(takeReclaimedPaths());
+  if (readReclaim !== undefined) warnings.push(readReclaim);
 
   if (pipe.result === pipe.originalNormalized) {
     const noopSnapshotId = await safeSnapId(absolutePath, "noop edit");
@@ -120,6 +123,8 @@ export async function commitEdit(pipe: PipelineResult, meta: CommitMeta): Promis
     const detail = error instanceof Error ? error.message : String(error);
     throw new Error(`${detail} File was written; anchor finalization failed. One undo reverts. Call read for fresh anchors.`);
   }
+  const writeReclaim = formatAnchorReclaimNotice(takeReclaimedPaths());
+  if (writeReclaim !== undefined) warnings.push(writeReclaim);
   const successInput = {
     path,
     originalNormalized: pipe.originalNormalized,

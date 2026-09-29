@@ -6,7 +6,7 @@ import { Type } from "typebox";
 import { loadHashStore, persistSnapshot, upsertUndo, getUndoEntry, deleteUndo, type UndoRecord } from "./hash-store";
 import { servedHashesFromDiff, serveRows } from "./served";
 import { lineChecksum } from "./hashline";
-import { freeAnchors, adoptAnchors, withAnchorSession } from "./anchor-registry";
+import { freeAnchors, adoptAnchors, withAnchorSession, formatAnchorReclaimNotice, takeReclaimedPaths } from "./anchor-registry";
 import { resolveInCwd, writeAtomic, type FileIdentity } from "./fs-write";
 import { toLF, stripBOM, restoreEndings, type LineEnding } from "./normalize";
 import { genDiff, genPatch, spansFromHashes } from "./replace-diff";
@@ -237,6 +237,8 @@ export function regUndo(pi: ExtensionAPI, flags: EditToolFlags = DEFAULT_EDIT_FL
           parts.push(
             "Call read for fresh anchors.",
           );
+          const reclaimNotice = formatAnchorReclaimNotice(takeReclaimedPaths());
+          if (reclaimNotice !== undefined) parts.push(reclaimNotice);
 
           const patchResult = genPatch(path, currentNormalized, undo.content);
           return {
@@ -255,7 +257,7 @@ export function regUndo(pi: ExtensionAPI, flags: EditToolFlags = DEFAULT_EDIT_FL
                 classification: "applied",
                 editsAttempted: 1,
                 noopEditsCount: 0,
-                warningsCount: 0,
+                warningsCount: reclaimNotice !== undefined ? 1 : 0,
                 firstChangedLine: restoredRange?.firstChangedLine,
                 lastChangedLine: restoredRange?.lastChangedLine,
                 addedLines: linesRemovedByReplace,

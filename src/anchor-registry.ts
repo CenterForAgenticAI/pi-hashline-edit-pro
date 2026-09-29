@@ -11,7 +11,7 @@ import { errCode, splitLines } from "./utils";
 import * as Diff from "diff";
 import { lineChecksum } from "./hashline";
 import { getAllocatedState, persistSnapshot, type HashStore } from "./hash-store";
-import { ANCHOR_POOL_EXHAUSTED_PREFIX } from "./constants";
+import { ANCHOR_POOL_EXHAUSTED_PREFIX, ANCHOR_RECLAIM_WARNING_CODE, MAX_RECLAIMED_PATHS_REPORTED } from "./constants";
 
 export type RegistryEvent =
   | { kind: "session"; sessionFile: string }
@@ -153,6 +153,10 @@ interface SessionState {
 	everMinted: AnchorMintedSet;
 	probe: number;
 	allocatedChecksum: Map<string, string>;
+	lastUsedAt: Map<string, number>;
+	usageClock: number;
+	reclaimed: string[];
+	shadow?: boolean;
 }
 
 const SIDECAR_SUFFIX = ".registry.jsonl";
@@ -176,7 +180,7 @@ function newSessionState(seed?: string): SessionState {
 			probe = (probe * 256 + byte) % ANCHOR_COUNT;
 		}
 	}
-	return { owned: new Map(), served: new Map(), everMinted: new Set(), probe, allocatedChecksum: new Map() };
+	return { owned: new Map(), served: new Map(), everMinted: new Set(), probe, allocatedChecksum: new Map(), lastUsedAt: new Map(), usageClock: 0, reclaimed: [] };
 }
 
 function seedServedFromOwned(state: SessionState): void {
@@ -195,9 +199,12 @@ export function foldRegistryEvents(events: RegistryEvent[], seed?: string): Sess
   for (const event of events) {
     if (event.kind === "clear") {
       state.owned.clear();
+      state.lastUsedAt.clear();
     } else if (event.kind === "minted") {
       for (const anchor of event.anchors) state.everMinted.add(anchor);
     } else if (event.kind === "allocate") {
+      state.usageClock += 1;
+      state.lastUsedAt.set(event.path, state.usageClock);
       for (const [anchor, checksum] of event.rows) {
         state.owned.set(anchor, { path: event.path, checksum });
         state.everMinted.add(anchor);
@@ -213,8 +220,14 @@ export function foldRegistryEvents(events: RegistryEvent[], seed?: string): Sess
             state.owned.delete(anchor);
           }
         }
+        state.lastUsedAt.delete(event.path);
       }
     }
+  }
+  const ownedPaths = new Set<string>();
+  for (const entry of state.owned.values()) ownedPaths.add(entry.path);
+  for (const path of [...state.lastUsedAt.keys()]) {
+    if (!ownedPaths.has(path)) state.lastUsedAt.delete(path);
   }
   return state;
 }
@@ -468,24 +481,88 @@ function fingerprintIndex(state: SessionState, path: string): Map<string, string
 
 export const MINT_PROBE_LIMIT = 8192;
 
-export function mintAnchor(state: SessionState): string {
-  for (let probe = 0; probe < MINT_PROBE_LIMIT; probe++) {
-    state.probe = (state.probe + HASH_PROBE_STRIDE) % ANCHOR_COUNT;
-    const candidate = anchorAt(state.probe);
-    if (!state.owned.has(candidate) && !state.everMinted.has(candidate)) {
-      return candidate;
+function touchPath(state: SessionState, path: string): void {
+	state.usageClock += 1;
+	state.lastUsedAt.set(path, state.usageClock);
+}
+
+function hasOwnedPath(state: SessionState, path: string): boolean {
+	for (const entry of state.owned.values()) {
+		if (entry.path === path) return true;
+	}
+	return false;
+}
+
+function evictPath(state: SessionState, path: string): string[] {
+	const anchors: string[] = [];
+	for (const [anchor, entry] of [...state.owned]) {
+		if (entry.path === path) {
+			anchors.push(anchor);
+			state.owned.delete(anchor);
+		}
+	}
+	state.served.delete(path);
+	state.lastUsedAt.delete(path);
+	if (anchors.length > 0 && state === current()) {
+		appendEvent({ kind: "free", path, anchors });
+	}
+	return anchors;
+}
+
+export function reclaimAnchorSpace(state: SessionState, protectPath?: string): string | undefined {
+	if (state.shadow) return undefined;
+	let victim: string | undefined;
+	let victimTime = Number.POSITIVE_INFINITY;
+	for (const [, entry] of state.owned) {
+		if (entry.path === protectPath) continue;
+		const time = state.lastUsedAt.get(entry.path) ?? -1;
+		if (time < victimTime) {
+			victimTime = time;
+			victim = entry.path;
+		}
+	}
+	if (victim === undefined) return undefined;
+	evictPath(state, victim);
+	state.reclaimed.push(victim);
+	return victim;
+}
+
+export function mintAnchor(state: SessionState, protectPath?: string): string {
+  for (;;) {
+    for (let probe = 0; probe < MINT_PROBE_LIMIT; probe++) {
+      state.probe = (state.probe + HASH_PROBE_STRIDE) % ANCHOR_COUNT;
+      const candidate = anchorAt(state.probe);
+      if (!state.owned.has(candidate) && !state.everMinted.has(candidate)) {
+        return candidate;
+      }
     }
-  }
-  for (let step = 1; step <= ANCHOR_COUNT; step++) {
-    const candidate = anchorAt((state.probe + step) % ANCHOR_COUNT);
-    if (!state.owned.has(candidate)) {
-      for (const served of state.served.values()) served.delete(candidate);
-      return candidate;
+    for (let step = 1; step <= ANCHOR_COUNT; step++) {
+      const candidate = anchorAt((state.probe + step) % ANCHOR_COUNT);
+      if (!state.owned.has(candidate)) {
+        for (const served of state.served.values()) served.delete(candidate);
+        return candidate;
+      }
     }
+    if (reclaimAnchorSpace(state, protectPath) === undefined) break;
   }
   throw new Error(
     `${ANCHOR_POOL_EXHAUSTED_PREFIX}; use write for very large files.`,
   );
+}
+
+export function takeReclaimedPaths(): string[] {
+	const state = current();
+	if (!state || state.reclaimed.length === 0) return [];
+	return state.reclaimed.splice(0, state.reclaimed.length);
+}
+
+export function formatAnchorReclaimNotice(paths: string[]): string | undefined {
+	const unique = [...new Set(paths)];
+	if (unique.length === 0) return undefined;
+	const shown = unique.slice(0, MAX_RECLAIMED_PATHS_REPORTED);
+	const more = unique.length - shown.length;
+	const list = more > 0 ? `${shown.join(", ")} (+${more} more)` : shown.join(", ");
+	return `${ANCHOR_RECLAIM_WARNING_CODE} The session's anchor quota is nearly exhausted; freed all anchors of ${list}, the files least recently read or edited. Read each freed file again before editing it; for read-heavy work, ask the user to run /clear-anchors or start a new session.`;
 }
 
 export function allocateAnchor(path: string, checksum: string): string {
@@ -493,7 +570,7 @@ export function allocateAnchor(path: string, checksum: string): string {
   if (!state) {
     throw new Error("[E_REGISTRY] The anchor registry is not initialized; call initRegistry on session_start first.");
   }
-  const anchor = mintAnchor(state);
+  const anchor = mintAnchor(state, path);
   state.everMinted.add(anchor);
   state.owned.set(anchor, { path, checksum });
   appendEvent({ kind: "allocate", path, rows: [[anchor, checksum]] });
@@ -505,26 +582,21 @@ export function allocateAnchor(path: string, checksum: string): string {
 export function freeAnchors(path: string, anchors?: string[]): void {
 	const state = current();
 	if (!state) return;
+	if (!anchors) {
+		evictPath(state, path);
+		return;
+	}
 	const freed: string[] = [];
-	if (anchors) {
-		for (const anchor of anchors) {
-			if (state.owned.has(anchor)) {
-				freed.push(anchor);
-				state.owned.delete(anchor);
-				state.served.get(path)?.delete(anchor);
-			}
+	for (const anchor of anchors) {
+		if (state.owned.has(anchor)) {
+			freed.push(anchor);
+			state.owned.delete(anchor);
+			state.served.get(path)?.delete(anchor);
 		}
-	} else {
-		for (const [anchor, entry] of [...state.owned]) {
-			if (entry.path === path) {
-				freed.push(anchor);
-				state.owned.delete(anchor);
-			}
-		}
-		state.served.delete(path);
 	}
 	if (freed.length > 0) {
-		appendEvent({ kind: "free", path, anchors: anchors ?? undefined });
+		if (!hasOwnedPath(state, path)) state.lastUsedAt.delete(path);
+		appendEvent({ kind: "free", path, anchors });
 	}
 }
 
@@ -534,6 +606,8 @@ export function clearRegistry(): void {
 	state.owned.clear();
 	state.served.clear();
 	state.allocatedChecksum.clear();
+	state.lastUsedAt.clear();
+	state.reclaimed.length = 0;
 	appendEvent({ kind: "clear" });
 }
 
@@ -609,6 +683,10 @@ export function shadowStateFrom(state: SessionState): SessionState {
 		everMinted: new ShadowMintedSet(state.everMinted),
 		probe: state.probe,
 		allocatedChecksum: state.allocatedChecksum,
+		lastUsedAt: new Map(state.lastUsedAt),
+		usageClock: state.usageClock,
+		reclaimed: [],
+		shadow: true,
 	};
 }
 
@@ -721,7 +799,7 @@ export function alignOwnershipWithSpans(
     }
     for (let k = 0; k < span.replacementCount; k++) {
       if (replacement[k] !== undefined) continue;
-      const anchor = mintAnchor(state);
+      const anchor = mintAnchor(state, path);
       const checksum = newChecksums[start + k]!;
       minted.push({ index: start + k, anchor, checksum });
       state.owned.set(anchor, { path, checksum });
@@ -769,7 +847,7 @@ export function alignOwnership(
     if (part.added) {
       for (let k = 0; k < count; k++) {
         const checksum = newChecksums[newIdx + k]!;
-        const anchor = mintAnchor(state);
+        const anchor = mintAnchor(state, path);
         state.everMinted.add(anchor);
         state.owned.set(anchor, { path, checksum });
         minted.push({ index: newIdx + k, anchor, checksum });
@@ -792,7 +870,7 @@ export function alignOwnership(
         const entry = state.owned.get(anchor);
         const checksum = newChecksums[newIdx + k]!;
         if (entry && entry.path !== path) {
-          const fresh = mintAnchor(state);
+          const fresh = mintAnchor(state, path);
           state.owned.set(fresh, { path, checksum });
           anchors[newIdx + k] = fresh;
         } else {
@@ -834,6 +912,7 @@ export async function allocateFileAnchors(
   ensureRegistry();
   const registry = current();
   const shadow = options?.shadow === true;
+  if (!shadow && registry) touchPath(registry, path);
   const lines = splitLines(content);
   const checksums = lines.map(lineChecksum);
   if (options?.previous?.spans) {
@@ -870,7 +949,7 @@ export async function allocateFileAnchors(
           const candidates = reuseIndex.get(checksum) ?? [];
           const taken = reuseTaken.get(checksum) ?? 0;
           reuseTaken.set(checksum, taken + 1);
-          const anchor = taken < candidates.length ? candidates[taken]! : mintAnchor(state);
+          const anchor = taken < candidates.length ? candidates[taken]! : mintAnchor(state, path);
           state.everMinted.add(anchor);
           state.owned.set(anchor, { path, checksum });
           return anchor;
@@ -890,6 +969,7 @@ export async function allocateFileAnchors(
 export function adoptAnchors(path: string, entries: Map<string, string>): void {
 	ensureRegistry();
 	const state = current()!;
+	touchPath(state, path);
 	let served = state.served.get(path);
 	if (!served) {
 		served = new Map();

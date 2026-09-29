@@ -24,7 +24,7 @@ import {
   setAutoReadAllIgnoreFromText,
 } from "./src/config";
 import { loadHashStore, pruneMissing } from "./src/hash-store";
-import { initRegistry, gcRegistrySidecars, clearRegistry, freeAnchors, sessionKeyFor, withAnchorSession, releaseRegistrySession } from "./src/anchor-registry";
+import { initRegistry, gcRegistrySidecars, clearRegistry, freeAnchors, sessionKeyFor, withAnchorSession, releaseRegistrySession, formatAnchorReclaimNotice, takeReclaimedPaths } from "./src/anchor-registry";
 import { serveRows } from "./src/served";
 import { finalizeTurn, planAssistantMessage } from "./src/batch";
 import { currentEditFlags } from "./src/edit-common";
@@ -217,10 +217,11 @@ export default function (pi: ExtensionAPI): void {
         );
         const fileLines = splitLines(normalized);
         serveRows(absolutePath, fileHashes, fileLines, preview.servedHashes);
+        const reclaimNotice = formatAnchorReclaimNotice(takeReclaimedPaths());
         return {
           content: [
             ...(event.content ?? []),
-            { type: "text", text: `\n\n--- Auto-read (hashline anchors) ---\n${preview.text}` },
+            { type: "text", text: `\n\n--- Auto-read (hashline anchors) ---\n${preview.text}${reclaimNotice !== undefined ? `\n\n${reclaimNotice}` : ""}` },
           ],
         };
       } catch (error) {

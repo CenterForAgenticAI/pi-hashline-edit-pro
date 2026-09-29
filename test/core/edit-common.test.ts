@@ -27,4 +27,11 @@ describe("throwIfStrictInput", () => {
       await expect(throwIfStrictInput(["plain message"])).resolves.toBeUndefined();
     });
   });
+
+  it("does not reject an anchor-reclaim notice even when strict input is on", async () => {
+    await withTempDir("pi-hashline-edit-common-test-", async () => {
+      await writeConfig({ autoRead: true, anchorGrepEnabled: true, strictInput: true });
+      await expect(throwIfStrictInput(["[W_ANCHOR_RECLAIMED] freed /a.ts"])).resolves.toBeUndefined();
+    });
+  });
 });

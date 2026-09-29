@@ -327,7 +327,7 @@ Settings live in `~/.config/pi-hashline-edit-pro/config.json`, created when a se
 | `autoReadAllIgnore` | Ignore folders/files | `[]` | Extra folder names, file names, or globs skipped by auto-read all. |
 | `anchorGrepEnabled` | Anchor grep | `true` | Register `anchor_grep` and disable the built-in grep while it is on. |
 | `requirePath` | Require path | `false` | `replace` and `insert` require a `path` argument that must match anchor ownership. |
-| `strictInput` | Strict input | `false` | Reject auto-fixable slips (the `[W_*]` warnings) with `[E_BAD_SHAPE]` instead of applying them with a warning. |
+| `strictInput` | Strict input | `false` | Reject auto-fixable slips (`[W_BAD_SHAPE]`, `[W_BAD_REF]`, `[W_INVALID_PATCH]`, `[W_BARE_HASH_PREFIX]`) with `[E_BAD_SHAPE]` instead of applying them with a warning. |
 | `diffContextLines` | Diff context | `1` | Surrounding lines in post-edit diffs, 0-10 (needs Auto-read). |
 
 When `PI_HASHLINE_DIR` is unset or empty, non-Windows platforms honor `XDG_CONFIG_HOME` when set (falling back to `~/.config`); on Windows the directory always uses `~/.config`, where `~` is `%USERPROFILE%`. To move the directory explicitly, see [Isolated state](#isolated-state).
@@ -348,6 +348,7 @@ When `PI_HASHLINE_DIR` is unset or empty, non-Windows platforms honor `XDG_CONFI
 | Auto-read all files | 500 files, 200KB per file | files larger than 200KB and files past the cap are omitted |
 | Auto-read all budget | 200KB floor, 2MB ceiling | total injection size, derived from the model context window |
 | Stale-range feedback | first 100 lines | rows returned with `[E_RANGE_STALE]` |
+| Session anchors | 1,353,139 anchors in use | all tools; the least recently read or edited files are freed when the quota is exhausted (`[W_ANCHOR_RECLAIMED]`) |
 
 `anchor_grep` uses the same 100MB file-size cutoff as `read`. Files over the line cap are skipped silently in directory searches.
 
@@ -366,7 +367,7 @@ All five tools return machine-readable metadata in `details` alongside the model
 
 ## Error and warning codes
 
-Codes starting with `E_` are errors: nothing was written, with one exception. `File was written; anchor finalization failed` means the file was written and one undo reverts it. Codes starting with `W_` are warnings: the call succeeded with an auto-fix notice; check `classification` (`applied` vs `noop`) in `details.metrics` to tell whether bytes changed. `[E_AUTO_READ_ALL]` is informational rather than a failure: the `read` was refused because the file is unchanged since the start-of-session auto-read, so the attached content is still exact.
+Codes starting with `E_` are errors: nothing was written, with one exception. `File was written; anchor finalization failed` means the file was written and one undo reverts it. Codes starting with `W_` are warnings: the call succeeded with an auto-fix notice or an anchor-reclaim notice; check `classification` (`applied` vs `noop`) in `details.metrics` to tell whether bytes changed. `[E_AUTO_READ_ALL]` is informational rather than a failure: the `read` was refused because the file is unchanged since the start-of-session auto-read, so the attached content is still exact.
 
 Most common, with the fix:
 
@@ -389,6 +390,7 @@ Full reference:
 | `[E_STALE_ANCHOR]` | An anchor is not owned in this session (it was never shown to you, or its line was edited or the file was rewritten); call `read` for fresh anchors. |
 | `[W_INVALID_PATCH]` | A `replacement_lines` element is a diff-preview row (`+anchor│`, `-anchor│`, `-    │`). The marker is stripped automatically with a warning. |
 | `[W_BARE_HASH_PREFIX]` | A `replacement_lines` element starts with an `anchor│` prefix. The prefix is stripped automatically with a warning. |
+| `[W_ANCHOR_RECLAIMED]` | The session's anchor quota was exhausted, so all anchors of the listed files (the least recently read or edited) were freed to make room. Read those files again before editing them. |
 | `[E_WOULD_EMPTY]` | An edit would empty a non-empty file; use `write` instead. |
 | `[E_NOT_FOUND]` | The path does not exist. |
 | `[E_ACCESS]` | The file is not readable or writable. |
@@ -444,7 +446,7 @@ Background snapshot pruning and registry sidecar GC skip `EPERM`/`EACCES` withou
 
 ### Allocation
 
-Anchors are allocated, never derived. Every line that is served to you, by `read`, `anchor_grep`, the auto-read block after `write`, or a post-edit diff, gets the next free anchor from the session's pool, claimed by walking the table with a stride of 836,286 entries (coprime to the 1,353,139-entry table), so consecutively minted anchors land in unrelated regions of the table instead of sharing leading characters. Each session seeds its walk from its own offset (derived from the session key and the process id), so concurrent sessions mint different sequences instead of identical ones: an anchor minted in one session is unknown in another and is rejected with `[E_STALE_ANCHOR]` rather than resolving to a different file. Ownership is exclusive: an anchor is owned by one file's line until it is freed (the line was edited, the file was written or deleted, or you ran `/clear-anchors`). Minting prefers anchors the session has never used; when a bounded fresh-anchor probe finds nothing, freed anchors are recycled after their stale served records are purged, so an anchor is never shared by two live lines. Because ownership is exclusive, an anchor resolves to exactly one file. Two byte-identical lines never share an anchor, and that guarantee sets the file size cap: the pool is the shipped table's 1,353,139 entries (not all 26⁴ letter combinations), so a file can hold at most 1,353,139 lines, beyond which `read`, `replace`, and `insert` reject with `[E_FILE_TOO_LARGE]` (use `write` for very large files).
+Anchors are allocated, never derived. Every line that is served to you, by `read`, `anchor_grep`, the auto-read block after `write`, or a post-edit diff, gets the next free anchor from the session's pool, claimed by walking the table with a stride of 836,286 entries (coprime to the 1,353,139-entry table), so consecutively minted anchors land in unrelated regions of the table instead of sharing leading characters. Each session seeds its walk from its own offset (derived from the session key and the process id), so concurrent sessions mint different sequences instead of identical ones: an anchor minted in one session is unknown in another and is rejected with `[E_STALE_ANCHOR]` rather than resolving to a different file. Ownership is exclusive: an anchor is owned by one file's line until it is freed (the line was edited, the file was written or deleted, you ran `/clear-anchors`, or the session's quota ran out and the file was the least recently read or edited, which frees all of its anchors and reports it in `[W_ANCHOR_RECLAIMED]`). Minting prefers anchors the session has never used; when a bounded fresh-anchor probe finds nothing, freed anchors are recycled after their stale served records are purged, so an anchor is never shared by two live lines. Because ownership is exclusive, an anchor resolves to exactly one file. Two byte-identical lines never share an anchor, and that guarantee sets the file size cap: the pool is the shipped table's 1,353,139 entries (not all 26⁴ letter combinations), so a file can hold at most 1,353,139 lines, beyond which `read`, `replace`, and `insert` reject with `[E_FILE_TOO_LARGE]` (use `write` for very large files).
 
 ### Ownership and mapping across edits
 
