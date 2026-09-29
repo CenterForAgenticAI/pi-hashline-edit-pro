@@ -473,7 +473,7 @@ Allocated anchors live in a persistent per-file snapshot (`~/.config/pi-hashline
 
 ## Benchmark
 
-pi-hashline-edit-pro is measured on the [Explicit Edit Benchmark](https://github.com/alexshpunt/explicit-edit-benchmark), an open third-party benchmark maintained by [alexshpunt](https://github.com/alexshpunt). The suite has 226 deterministic, byte-exact editing tasks: replacements, insertions, deletions, copies, moves, large files, several file types, and Unicode edge cases. A verifier compares the result file tree byte by byte, so nothing is graded on compilation or behavioral equivalence. Many harnesses are scored on it.
+pi-hashline-edit-pro is measured on the [Explicit Edit Benchmark](https://github.com/alexshpunt/explicit-edit-benchmark), an open third-party benchmark maintained by [alexshpunt](https://github.com/alexshpunt). The suite has 226 deterministic, byte-exact editing tasks across many edit shapes and file types. A verifier compares the result file tree byte by byte, so nothing is graded on compilation or behavioral equivalence. Many harnesses are scored on it.
 
 The current release scores 98.7% in the explorer's harness-family view for `pi-hashline-edit-pro`, with 99.6% or better final exactness on every model route.
 
