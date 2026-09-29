@@ -15,6 +15,7 @@ import {
   MAX_HASH_LINES,
   type HEdit,
   type PlannedEdit,
+  type StripWarningLocation,
 } from "./hashline";
 import { adoptAnchors, servedForPath, formatAnchorReclaimNotice, takeReclaimedPaths } from "./anchor-registry";
 import { stripBOM, toLF, type LineEnding } from "./normalize";
@@ -79,6 +80,7 @@ export interface BatchMemberInput {
   hedit: HEdit;
   extraWarnings: string[];
   foldedLines?: number;
+  stripWarning?: StripWarningLocation;
 }
 
 interface BatchFailure {
@@ -485,6 +487,7 @@ export async function executeBatchMember(input: BatchMemberInput): Promise<TResu
       servedHashes: runtime.served,
       signal: input.signal,
       baseFileLines: base.baseLines,
+      stripWarning: input.stripWarning,
     });
   } catch (error) {
     if (error instanceof RangeStaleError) adoptAnchors(base.absolutePath, error.rangeServedMap);

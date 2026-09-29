@@ -21,6 +21,7 @@ import { applyEdit,
   AnchorMismatchError,
   type HEdit,
   type NEdit,
+  type StripWarningLocation,
 } from "./hashline";
 import { type RMetrics } from "./replace-response";
 import {
@@ -79,6 +80,7 @@ export interface ExecPipelineOptions {
   preloadedNorm?: NormFile;
   served?: ReadonlyMap<string, string>;
   allowEmpty?: boolean;
+  stripWarning?: StripWarningLocation;
 }
 
 export function hashSpan(hashes: string[], from: string, to: string): [number, number] | undefined {
@@ -156,6 +158,7 @@ export async function execPipeline(
       displayPath,
       served,
       options?.allowEmpty,
+      options?.stripWarning,
     );
   } catch (error) {
     await noteAnchorError(absolutePath, error, options?.noPersist);

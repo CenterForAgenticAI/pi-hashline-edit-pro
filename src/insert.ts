@@ -5,7 +5,7 @@ import { execPipeline, type ReqParams, type ReplaceDetails, previewFromPipe, pre
 import { commitEdit } from "./commit";
 import { batchMemberFor, ensureBatchBase, executeBatchMember, noteBatchFailure } from "./batch";
 import { readNormFile, type NormFile } from "./file-reader";
-import { MAX_HASH_LINES, parseHashRef, resEdit, resolveAnchorLine, type Anchor, type HEdit } from "./hashline";
+import { MAX_HASH_LINES, parseHashRef, resEdit, resolveAnchorLine, type Anchor, type HEdit, type StripWarningLocation } from "./hashline";
 import { stripAnchorRow } from "./hashline/resolve";
 import { withAnchorSession } from "./anchor-registry";
 import { loadP, loadGuide } from "./prompts";
@@ -90,6 +90,10 @@ export function buildInsertEdit(
   return { editParams, anchorLine };
 }
 
+function insertStripWarning(anchorLine: string | undefined, direction: "before" | "after"): StripWarningLocation {
+  return { label: "lines", indexOffset: anchorLine !== undefined && direction === "after" ? -1 : 0 };
+}
+
 export async function insertPreview(request: unknown, cwd: string, signal?: AbortSignal): Promise<RPreview> {
   try {
     const normalized = normReq(request);
@@ -114,12 +118,13 @@ export async function insertPreview(request: unknown, cwd: string, signal?: Abor
       allocation: "shadow",
       signal,
     });
-    const { editParams } = buildInsertEdit(normalized, preload, ref, targetPath);
+    const { editParams, anchorLine } = buildInsertEdit(normalized, preload, ref, targetPath);
     const pipe = await execPipeline(targetPath, editParams, cwd, {
       accessMode: constants.R_OK,
       noPersist: true,
       preloadedNorm: preload,
       signal,
+      stripWarning: insertStripWarning(anchorLine, normalized.direction),
     });
     return previewFromPipe(pipe);
   } catch (error: unknown) {
@@ -224,6 +229,7 @@ export function buildInsertToolDef(flags: EditToolFlags = DEFAULT_EDIT_FLAGS): I
               hedit,
               extraWarnings: [...anchorWarnings, ...insertWarnings, ...resWarnings],
               foldedLines: built.anchorLine === undefined ? 0 : 1,
+              stripWarning: insertStripWarning(built.anchorLine, req.direction),
             });
           }
           const preload = await readNormFile(targetPath, ctx.cwd, {
@@ -236,6 +242,7 @@ export function buildInsertToolDef(flags: EditToolFlags = DEFAULT_EDIT_FLAGS): I
             accessMode: constants.R_OK | constants.W_OK,
             signal,
             preloadedNorm: preload,
+            stripWarning: insertStripWarning(anchorLine, req.direction),
           });
           return commitEdit(pipe, {
             path: pipe.path,

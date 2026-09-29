@@ -32,6 +32,7 @@ export {
 	valEdit,
 	stripBarePrefixes,
 	stripDiffPrefixes,
+	type StripWarningLocation,
 	swapReversedRanges,
 	assertRangeServed,
 	RangeStaleError,

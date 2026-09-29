@@ -180,12 +180,18 @@ function warnUnicodeEsc(
   }
 }
 
+export interface StripWarningLocation {
+	label: string;
+	indexOffset: number;
+}
+
 function stripRowPrefixes(
 	edit: HEdit,
 	warnings: string[],
 	kinds: RowPrefixKind[],
 	code: string,
 	marker: string,
+	location: StripWarningLocation,
 ): HEdit {
 	const stripped: number[] = [];
 	const contentLines = edit.content_lines.map((line, lineIndex) => {
@@ -195,17 +201,19 @@ function stripRowPrefixes(
 		return result.text;
 	});
 	if (stripped.length === 0) return edit;
-	const locations = stripped.map((i) => `replacement_lines line ${i + 1}`).join(", ");
+	const locations = stripped.map((i) => `${location.label} line ${i + 1 + location.indexOffset}`).join(", ");
 	warnings.push(`${code} Stripped ${marker} from ${locations}.`);
 	return { ...edit, content_lines: contentLines };
 }
 
-export function stripBarePrefixes(edit: HEdit, warnings: string[]): HEdit {
-	return stripRowPrefixes(edit, warnings, ["bare"], "[W_BARE_HASH_PREFIX]", '"anchor│" prefix');
+const DEFAULT_STRIP_WARNING_LOCATION: StripWarningLocation = { label: "replacement_lines", indexOffset: 0 };
+
+export function stripBarePrefixes(edit: HEdit, warnings: string[], location: StripWarningLocation = DEFAULT_STRIP_WARNING_LOCATION): HEdit {
+	return stripRowPrefixes(edit, warnings, ["bare"], "[W_BARE_HASH_PREFIX]", '"anchor│" prefix', location);
 }
 
-export function stripDiffPrefixes(edit: HEdit, warnings: string[]): HEdit {
-	return stripRowPrefixes(edit, warnings, ["plus", "minus"], "[W_INVALID_PATCH]", "diff-preview marker");
+export function stripDiffPrefixes(edit: HEdit, warnings: string[], location: StripWarningLocation = DEFAULT_STRIP_WARNING_LOCATION): HEdit {
+	return stripRowPrefixes(edit, warnings, ["plus", "minus"], "[W_INVALID_PATCH]", "diff-preview marker", location);
 }
 
 export function swapReversedRanges(

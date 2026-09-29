@@ -11,6 +11,7 @@ import {
 	type RHEdit,
 	type NEdit,
 	type HEdit,
+	type StripWarningLocation,
 } from "./resolve";
 
 type LIdx = {
@@ -160,6 +161,7 @@ export function planEdit(
     servedHashes?: ReadonlyMap<string, string>;
     signal?: AbortSignal;
     baseFileLines?: string[];
+    stripWarning?: StripWarningLocation;
   },
 ): PlannedEdit {
   const signal = options?.signal;
@@ -171,8 +173,9 @@ export function planEdit(
 
   const rangeFixed = swapReversedRanges(edit, fileHashes);
   const prefixFixed = stripDiffPrefixes(
-    stripBarePrefixes(rangeFixed, warnings),
+    stripBarePrefixes(rangeFixed, warnings, options?.stripWarning),
     warnings,
+    options?.stripWarning,
   );
 
   const { resolved: initialResolved, mismatches } = valEdit(
@@ -214,6 +217,7 @@ export function applyEdit(
 	filePath?: string,
 	servedHashes?: ReadonlyMap<string, string>,
 	allowEmpty = false,
+	stripWarning?: StripWarningLocation,
 	): {
 	content: string;
 	firstChangedLine: number | undefined;
@@ -225,7 +229,7 @@ export function applyEdit(
   if (precomputedHashes === undefined) {
     throw new Error("[E_BAD_SHAPE] applyEdit requires the file's allocated anchors; derive them via lineHashes(content, path) first.");
   }
-  const planned = planEdit(content, edit, precomputedHashes, { filePath, servedHashes, signal });
+  const planned = planEdit(content, edit, precomputedHashes, { filePath, servedHashes, signal, stripWarning });
   const lineIndex = buildIdx(content);
   const warnings = planned.warnings;
   const resolved = planned.resolved;

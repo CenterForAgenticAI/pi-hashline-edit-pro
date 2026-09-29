@@ -1097,3 +1097,28 @@ describe("same-turn edit batches", () => {
     });
   });
 });
+
+describe("batched insert strip warnings", () => {
+  it("reports the lines field with the caller's index", async () => {
+    await withTempFile("sample.txt", "one\ntwo\nthree\n", async ({ cwd, path }) => {
+      const { getTool, handlers, ctx } = await setupBatchTools(cwd);
+      const readTool = getTool("read");
+      const insertTool = getTool("insert");
+      const text = (await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx)).content[0].text as string;
+      const oneRef = anchorFor(text, "one");
+      const threeRef = anchorFor(text, "three");
+      const firstArgs = { anchor: oneRef, direction: "after", lines: [`+${oneRef}│ONE-A`] };
+      const secondArgs = { anchor: threeRef, direction: "after", lines: ["THREE-A"] };
+      const message = assistantMessage([
+        toolCall("i1", "insert", firstArgs),
+        toolCall("i2", "insert", secondArgs),
+      ]);
+      await (handlers.get("message_end")!({ type: "message_end", message }, ctx) as Promise<unknown>);
+      await insertTool.execute("i1", firstArgs, undefined, undefined, ctx);
+      const last = await insertTool.execute("i2", secondArgs, undefined, undefined, ctx);
+      expect(last.content[0].text).toContain("Stripped diff-preview marker from lines line 1.");
+      expect(last.content[0].text).not.toContain("replacement_lines");
+      expect(await readFile(path, "utf-8")).toBe("one\nONE-A\ntwo\nthree\nTHREE-A\n");
+    });
+  });
+});
