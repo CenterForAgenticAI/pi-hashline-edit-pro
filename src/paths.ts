@@ -16,7 +16,11 @@ function configBase(): string {
 }
 
 export function configDir(): string {
-  return join(configBase(), "pi-hashline-edit-pro");
+  const override = process.env.PI_HASHLINE_DIR;
+  if (override && !isAbsolute(override)) {
+    throw new Error("[E_CONFIG] PI_HASHLINE_DIR must be an absolute path");
+  }
+  return override || join(configBase(), "pi-hashline-edit-pro");
 }
 
 export function configPath(): string {

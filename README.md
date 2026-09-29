@@ -330,7 +330,7 @@ Settings live in `~/.config/pi-hashline-edit-pro/config.json`, created when a se
 | `strictInput` | Strict input | `false` | Reject auto-fixable slips (the `[W_*]` warnings) with `[E_BAD_SHAPE]` instead of applying them with a warning. |
 | `diffContextLines` | Diff context | `1` | Surrounding lines in post-edit diffs, 0-10 (needs Auto-read). |
 
-On non-Windows platforms the directory honors `XDG_CONFIG_HOME` when set (falling back to `~/.config`); on Windows it always uses `~/.config`, where `~` is `%USERPROFILE%`.
+When `PI_HASHLINE_DIR` is unset or empty, non-Windows platforms honor `XDG_CONFIG_HOME` when set (falling back to `~/.config`); on Windows the directory always uses `~/.config`, where `~` is `%USERPROFILE%`. To move the directory explicitly, see [Isolated state](#isolated-state).
 
 ## Limits
 
@@ -381,6 +381,7 @@ Full reference:
 
 | Code | Meaning |
 | --- | --- |
+| `[E_CONFIG]` | `PI_HASHLINE_DIR` is nonempty but not an absolute path. |
 | `[E_BAD_SHAPE]` | Request envelope or edit item has unknown, missing, or wrongly-typed fields (for example `replacement_lines` must be an array of strings, one element per line), content contains a NUL byte (`U+0000`), which would make the file binary, or a grep `glob` has invalid bracket or brace syntax. |
 | `[W_BAD_SHAPE]` | Auto-corrected request slip reported as a warning (for example stringified array text that could not be parsed and was kept as one literal line). |
 | `[E_BAD_REF]` | An anchor in `remove_from`/`remove_to` is not a bare 4-character anchor (the anchor table is letters only). |
@@ -430,6 +431,14 @@ All state lives under the config directory (see [Configuration](#configuration))
 | `sessions/<key>.registry.jsonl` | The session's anchor ownership log (`allocate`/`free`/`clear` events). |
 
 The undo table contains the complete pre-edit and post-edit text for the latest edit to each file, so treat the store as sensitive data. On POSIX systems the state directory is restricted to mode `0700` and the SQLite database plus its WAL/SHM sidecars to `0600`. Sidecar logs whose session file is gone are garbage-collected at startup (never the sidecar of a session that is currently loaded in this process); the in-memory ownership of a session is released when that session shuts down and rebuilt from its sidecar on next use. Served records live in memory only and are recomputed on the next read.
+
+### Isolated state
+
+Set `PI_HASHLINE_DIR` before starting pi to an absolute directory to override only this extension's state directory on all platforms. An unset or empty value preserves the XDG/home defaults; a nonempty relative value is rejected with `[E_CONFIG]`. Keep the value fixed for the lifetime of the process; the database remains a process-wide singleton.
+
+Config, SQLite (including WAL/SHM and undo history), registry sidecars, and the legacy `hash-store.json` location all follow the override. A fresh directory starts without shared config or history: no data is copied or imported from the default directory. Legacy migration, if needed, reads only `hash-store.json` inside the selected directory. Use a separate, access-restricted directory for each isolation scope; undo contains full file text.
+
+Background snapshot pruning and registry sidecar GC skip `EPERM`/`EACCES` without deleting records or logging each inaccessible path. Unexpected errors remain visible; tool file-access failures and SQLite errors are not silenced.
 
 ## How anchors work
 

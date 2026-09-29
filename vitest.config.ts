@@ -5,6 +5,7 @@ export const mockIsolatedFiles = [
   "test/core/config-lock-identity.test.ts",
   "test/core/hash-store-open-errors.test.ts",
   "test/core/hash-store-prune-errors.test.ts",
+  "test/core/anchor-registry-gc-errors.test.ts",
   "test/core/validation-access.test.ts",
   "test/tools/fs-write.cleanup.test.ts",
   "test/tools/fs-write-cleanup-on-error.test.ts",
@@ -33,6 +34,7 @@ export function buildTestConfig(extraExcludes: string[] = []) {
         {
           test: {
             name: "mock-isolated",
+            setupFiles: ["./test/support/env-isolation.ts"],
             include: mockIsolatedFiles,
             isolate: true,
             testTimeout: 15000,
@@ -41,6 +43,7 @@ export function buildTestConfig(extraExcludes: string[] = []) {
         {
           test: {
             name: "shared",
+            setupFiles: ["./test/support/env-isolation.ts"],
             include: ["test/**/*.test.ts"],
             exclude: [...mockIsolatedFiles, ...extraExcludes],
             isolate: false,
