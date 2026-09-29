@@ -131,3 +131,31 @@ export function assertInsertReq(request: unknown): asserts request is InsertReq 
   }
   assertNoNul(request.lines);
 }
+
+const TRANSFER_KEYS = new Set(["path", "source_from", "source_to", "insert_after"]);
+
+export interface TransferReq {
+  path?: string;
+  source_from: string;
+  source_to: string;
+  insert_after: string;
+}
+
+export function assertTransferReq(request: unknown): asserts request is TransferReq {
+  if (!isRec(request)) {
+    throw new Error("[E_BAD_SHAPE] Copy/move request must be an object.");
+  }
+  rejectUnknownFields(request, TRANSFER_KEYS, "Copy/move request");
+  if (request.path !== undefined && typeof request.path !== "string") {
+    throw new Error('[E_BAD_SHAPE] Copy/move request field "path" must be a string when provided.');
+  }
+  if (typeof request.source_from !== "string" || request.source_from.length === 0) {
+    throw new Error('[E_BAD_SHAPE] Copy/move request requires a "source_from" string (4-char anchor from read output).');
+  }
+  if (typeof request.source_to !== "string" || request.source_to.length === 0) {
+    throw new Error('[E_BAD_SHAPE] Copy/move request requires a "source_to" string (4-char anchor from read output).');
+  }
+  if (typeof request.insert_after !== "string" || request.insert_after.length === 0) {
+    throw new Error('[E_BAD_SHAPE] Copy/move request requires an "insert_after" string (4-char anchor from read output).');
+  }
+}

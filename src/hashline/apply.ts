@@ -213,6 +213,7 @@ export function applyEdit(
 	precomputedHashes?: string[],
 	filePath?: string,
 	servedHashes?: ReadonlyMap<string, string>,
+	allowEmpty = false,
 	): {
 	content: string;
 	firstChangedLine: number | undefined;
@@ -240,7 +241,7 @@ export function applyEdit(
 	}
 
 	const result = assemble(content, spanResult, signal);
-	assertNotEmpty(content, result);
+	if (!allowEmpty) assertNotEmpty(content, result);
 	const range = changedRange(content, result);
 
 	return {

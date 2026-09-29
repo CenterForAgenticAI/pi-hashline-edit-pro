@@ -21,7 +21,7 @@ describe("extension registration", () => {
 
     register(pi);
 
-    expect(toolNames.sort()).toEqual(["anchor_grep", "insert", "read", "replace", "undo_last_change"]);
+    expect(toolNames.sort()).toEqual(["anchor_grep", "copy", "insert", "move", "read", "replace", "undo_last_change"]);
 
     expect(commandNames.sort()).toEqual(["clear-anchors", "hashline-config"]);
     expect(eventNames.sort()).toEqual(["before_agent_start", "message_end", "session_shutdown", "session_start", "tool_call", "tool_result", "turn_end"]);

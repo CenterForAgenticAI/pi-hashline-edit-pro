@@ -3,6 +3,7 @@ import { DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES } from "@earendil-works/pi-coding-
 import { initHasher } from "./src/hashline";
 import { regReplace } from "./src/replace";
 import { regInsert } from "./src/insert";
+import { regCopy, regMove } from "./src/copy-move";
 import { regGrep } from "./src/grep";
 import { regUndo, clearUndo } from "./src/replace-undo";
 import { regRead, fmtReadPreview } from "./src/read";
@@ -42,6 +43,8 @@ export default function (pi: ExtensionAPI): void {
 
   regReplace(pi);
   regInsert(pi);
+  regCopy(pi);
+  regMove(pi);
   regGrep(pi);
   regUndo(pi);
   registerWriteHook(pi);
@@ -58,6 +61,8 @@ export default function (pi: ExtensionAPI): void {
       regRead(pi, flags);
       regReplace(pi, flags);
       regInsert(pi, flags);
+      regCopy(pi, flags);
+      regMove(pi, flags);
       regUndo(pi, flags);
     } catch (error) {
       console.error("Failed to refresh edit tools:", error);
@@ -239,6 +244,8 @@ export default function (pi: ExtensionAPI): void {
     if (
       event.toolName !== "replace" &&
       event.toolName !== "insert" &&
+      event.toolName !== "copy" &&
+      event.toolName !== "move" &&
       event.toolName !== "undo_last_change"
     ) return;
     if (!autoRead) return;

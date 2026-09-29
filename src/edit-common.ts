@@ -96,6 +96,25 @@ export function withUndoPrompts(base: { description: string; snippet: string; gu
   return { description: base.description, snippet: base.snippet, guidelines };
 }
 
+export function withTransferPrompts(base: { description: string; snippet: string; guidelines: string[] }, flags: EditToolFlags, toolName: "copy" | "move"): { description: string; snippet: string; guidelines: string[] } {
+  const descriptionParts = [base.description];
+  const snippetParts = [base.snippet];
+  const guidelines = [...base.guidelines];
+  if (flags.requirePath) {
+    descriptionParts.push("Also give `path` matching the source or destination file the anchors were served for; it is required and must match anchor ownership.");
+    snippetParts.push("; include `path` (required)");
+    guidelines.push(`\`${toolName}\`: include \`path\` matching the source or destination file the anchors were served for; it is required.`);
+  } else {
+    descriptionParts.push("Path resolution is anchor-only; do not pass `path`.");
+    guidelines.push(`\`${toolName}\`: path resolution is anchor-only; don't pass \`path\`.`);
+  }
+  if (flags.strictInput) {
+    descriptionParts.push("Strict-input mode is on: auto-fixable slips are rejected instead of fixed with warnings.");
+    guidelines.push(`\`${toolName}\`: strict-input is on: auto-fixable slips are rejected instead of fixed.`);
+  }
+  return { description: descriptionParts.join(" "), snippet: snippetParts.join(""), guidelines };
+}
+
 function staleAnchorMessage(ref: string, hash: string, owners: Array<OwnedAnchor | undefined>): string {
   const knownPaths = new Set<string>();
   for (const owner of owners) {

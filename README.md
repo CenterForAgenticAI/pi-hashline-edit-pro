@@ -31,6 +31,8 @@ the result is the post-edit diff with fresh anchors, so the next edit needs no r
   - [read](#read)
   - [replace](#replace)
   - [insert](#insert)
+  - [copy](#copy)
+  - [move](#move)
   - [anchor_grep](#anchor_grep)
   - [undo_last_change](#undo_last_change)
 - [Batching](#batching)
@@ -150,7 +152,7 @@ Nothing commits until an edit call returns: the extension validates the request 
 
 ## Tools
 
-The extension registers five tools: `read`, `replace`, `insert`, `anchor_grep`, and `undo_last_change`. The built-in `edit` tool is disabled. `replace` and `insert` take no `path` parameter by default: the file is resolved from the anchors' session ownership alone, so an edit can only land on the file the anchors were served for. Opt in with `/hashline-config` to require `path` in `replace` and `insert` for RPC visibility (for example pimacs.el); anchors still resolve the target and `path` must match.
+The extension registers seven tools: `read`, `replace`, `insert`, `copy`, `move`, `anchor_grep`, and `undo_last_change`. The built-in `edit` tool is disabled. `replace`, `insert`, `copy`, and `move` take no `path` parameter by default: the file is resolved from the anchors' session ownership alone, so an edit can only land on the file the anchors were served for. Opt in with `/hashline-config` to require `path` in `replace`, `insert`, `copy`, and `move` for RPC visibility (for example pimacs.el); anchors still resolve the target and `path` must match.
 
 ### read
 
@@ -229,6 +231,30 @@ Example: add a line after `Emno│`:
 
 The same safety machinery as `replace` applies: undo is saved before the write (a failed write restores the previous undo record), and line endings and BOMs survive.
 
+### copy
+
+`copy` duplicates a range of lines to another position without removing the source. `source_from` and `source_to` select lines in the source file; `insert_after` selects the destination line, and it may live in a different file. An empty destination file is seeded with the copied lines. It is a served-anchor edit like `replace` and `insert`: the source lines and the destination anchor line must come from rows you were shown, and the request is refused if they changed on disk or were never served. With `requirePath` on, `path` must match the source or the destination file.
+
+| Field | Description |
+| --- | --- |
+| `source_from` | 4-char anchor marking the FIRST source line to copy (inclusive). |
+| `source_to` | 4-char anchor marking the LAST source line to copy (inclusive). |
+| `insert_after` | 4-char anchor of the destination line after which the copy goes. Within one file it must sit outside the source range; passing `source_to` duplicates the range right after itself. |
+
+Example: read served `Hasu│old` in `a.ts` and `Qwer│top` in `b.ts`; to copy `old` into `b.ts` below `top`:
+
+```json
+{ "source_from": "Hasu", "source_to": "Hasu", "insert_after": "Qwer" }
+```
+
+The source lines stay in place and keep their anchors; the copied lines are minted fresh anchors in the destination's post-edit diff. A cross-file copy writes only the destination, so one `undo_last_change` on it reverts the copy.
+
+### move
+
+`move` relocates a range of lines in one call: the range is removed from the source file and written after `insert_after`, which may live in a different file. It takes the same fields as `copy`, and an empty destination file is seeded with the moved lines. Within one file, `insert_after` must sit outside the source range, and moving a range to where it already sits reports `No changes made` and leaves the anchors alone. Lines between the source and the target keep their content but may be re-anchored; a cross-file move that removes every source line leaves the source file empty.
+
+The same safety machinery as `replace` applies to both tools: undo is saved before the write (a failed write restores the previous undo record), and line endings and BOMs survive. A cross-file `move` writes two files and records one undo entry per file; undo both sides to revert the whole move, because undoing one side alone leaves the moved lines duplicated or missing.
+
 ### anchor_grep
 
 `anchor_grep` is an anchored search backed by ripgrep. It is enabled by default; disable it in `/hashline-config` (or set `anchorGrepEnabled` to `false` in the config file). While it is enabled, the built-in grep is disabled. Disabling it removes the tool and restores the built-in grep only if that was active before the extension loaded.
@@ -253,11 +279,12 @@ Output is capped at `limit` matched lines, 2000 rows, and 50KB of text, whicheve
 
 ### undo_last_change
 
-`undo_last_change` reverts the most recent successful `replace` or `insert` on a file, restoring the exact previous content, BOM and line endings included, plus the previous anchors.
+`undo_last_change` reverts the most recent successful `replace`, `insert`, `copy`, or `move` on a file, restoring the exact previous content, BOM and line endings included, plus the previous anchors.
 
-- History is per-file and single-level: only the most recent `replace` or `insert` can be reverted. A same-message batch of `replace`/`insert` calls on one file counts as one entry: one undo reverts the whole batch.
+- History is per-file and single-level: only the most recent `replace`, `insert`, `copy`, or `move` can be reverted. A same-message batch of `replace`/`insert` calls on one file counts as one entry: one undo reverts the whole batch.
 - History is persisted and survives session restarts. A failed `write` does not clear it.
-- Every applied `replace` or `insert` is undoable; the undo record is saved before the edit is written.
+- Every applied `replace`, `insert`, `copy`, or `move` is undoable; the undo record is saved before the edit is written.
+- A cross-file `move` stores one undo entry per file; `undo_last_change` reverts the file you name, so revert both sides to undo the whole move.
 - A successful `write` clears the history for that file.
 - If the file was modified since the last edit, the undo is refused with `[E_UNDO_STALE]` rather than overwriting those changes, and the record is kept. Once the file matches the edited state again, `undo_last_change` succeeds.
 - If the file was deleted since the last edit, `undo_last_change` restores it from the recorded pre-edit content.
@@ -269,6 +296,7 @@ Output is capped at `limit` matched lines, 2000 rows, and 50KB of text, whicheve
 Multiple `replace` and `insert` calls on the same file in one assistant message are grouped per file into one batch. The batch unit is the message, not the turn: calls from separate messages in the same turn run on their own, one after another.
 
 - A call outside a batch commits before its result returns.
+- A `copy` or `move` call is never grouped into a batch: it commits on its own, and a pending same-file batch aborts safely with `[E_OP_ABORTED]` if the file changed under it.
 - A batch validates every call against the pre-batch state and commits once, during the batch's last call: earlier calls reply `In batch N`, and the batch's last call shows the combined diff, with one undo reverting the whole batch.
 - If a batch aborts, an earlier member's row renders the abort message instead of the placeholder. Nothing commits until the last call succeeds.
 - A batch member accepts the same request shapes and auto-fixes as a standalone call.
@@ -283,7 +311,7 @@ The hashline tools are sequential in pi, so a message that contains one runs all
 
 Auto-read is enabled by default. After a successful `write`, the extension reads the file and appends an `--- Auto-read (hashline anchors) ---` block, so you get fresh `anchor│content` anchors without a separate `read` call.
 
-After `replace`, `insert`, and `undo_last_change`, the result shows the post-edit diff. Inside a same-message batch, only the batch's last call shows the combined diff, headed by a `batch N:` line; earlier calls reply `In batch N`. The `+anchor│` and ` anchor│` rows carry the current anchors, so follow-up edits can anchor on the diff directly. The `-anchor│` rows show removed lines with their old anchors, which are stale after the edit. When the context line next to a change is blank or whitespace-only, one more context line is shown in that direction, so the change stays anchored to visible content. Call `read` when you want the full file's anchors.
+After `replace`, `insert`, `copy`, `move`, and `undo_last_change`, the result shows the post-edit diff. Inside a same-message batch, only the batch's last call shows the combined diff, headed by a `batch N:` line; earlier calls reply `In batch N`. The `+anchor│` and ` anchor│` rows carry the current anchors, so follow-up edits can anchor on the diff directly. The `-anchor│` rows show removed lines with their old anchors, which are stale after the edit. When the context line next to a change is blank or whitespace-only, one more context line is shown in that direction, so the change stays anchored to visible content. Call `read` when you want the full file's anchors.
 
 Auto-read keeps the same 50KB and 2000-line budget as `read`. Auto-read and Diff context live in `/hashline-config` and persist across sessions. The post-edit diff shows 1 surrounding line by default; change Diff context in `/hashline-config` (0-10, needs Auto-read) to show more or fewer.
 
@@ -354,12 +382,13 @@ When `PI_HASHLINE_DIR` is unset or empty, non-Windows platforms honor `XDG_CONFI
 
 ## Tool result details
 
-All five tools return machine-readable metadata in `details` alongside the model-visible text.
+All seven tools return machine-readable metadata in `details` alongside the model-visible text.
 
 | Tool | `details` |
 | --- | --- |
 | `read` | `truncation` (set when output was truncated), `snapshotId` (a `v2\|path\|ino\|mtime\|ctime\|size` fingerprint), `nextOffset` (use as the next `offset`), and `metrics` with `truncated` and `next_offset`. |
 | `replace`, `insert` | `diff` (post-edit diff, capped, with current anchors on `+anchor│` and ` anchor│` rows; a same-message batch reports the combined diff on its last call and an empty diff on earlier calls), `patch` (a standard unified patch for external tools, capped like the diff), `patchTruncated` (true when the patch was cut or skipped for a pair over 1MB and can no longer be applied as-is), `firstChangedLine`, `snapshotId`, `classification` (`"noop"` when nothing changed), `batch` (`{ id, size, last, total }` marking same-message batch membership; earlier members also carry `aborted: true` and `abortMessage` after a batch abort), and `metrics`: `edits_attempted`, `edits_noop`, `warnings`, `classification` (`"applied"` or `"noop"`), `changed_lines` (`{ first, last }`), `added_lines`, `removed_lines`. |
+| `copy`, `move` | Same shape as `replace`: `diff` (post-edit diff with current anchors), `patch`, `patchTruncated`, `firstChangedLine`, `snapshotId`, `classification` (`"noop"` when a move changes nothing), and `metrics` with the same counters. |
 | `undo_last_change` | `diff` (the undo diff with restored anchors), `patch`, `patchTruncated`, and `metrics` in the same shape as `replace`. |
 | `anchor_grep` | `metrics` with `matches` (capped at `limit`), `files`, and `truncated`; `truncation` (the standard pi truncation report) when output was cut; and `linesTruncated` (true when long lines were shown as fragments). |
 
@@ -391,7 +420,7 @@ Full reference:
 | `[W_INVALID_PATCH]` | A `replacement_lines` element is a diff-preview row (`+anchor│`, `-anchor│`, `-    │`). The marker is stripped automatically with a warning. |
 | `[W_BARE_HASH_PREFIX]` | A `replacement_lines` element starts with an `anchor│` prefix. The prefix is stripped automatically with a warning. |
 | `[W_ANCHOR_RECLAIMED]` | The session's anchor quota was exhausted, so all anchors of the listed files (the least recently read or edited) were freed to make room. Read those files again before editing them. |
-| `[E_WOULD_EMPTY]` | An edit would empty a non-empty file; use `write` instead. |
+| `[E_WOULD_EMPTY]` | An edit would empty a non-empty file; use `write` instead. A cross-file `move` may empty its source file. |
 | `[E_NOT_FOUND]` | The path does not exist. |
 | `[E_ACCESS]` | The file is not readable or writable. |
 | `[E_NOT_TEXT]` | The path is a directory, binary file, image, or UTF-16/UTF-32 encoded text; hashline editing only supports text files. |

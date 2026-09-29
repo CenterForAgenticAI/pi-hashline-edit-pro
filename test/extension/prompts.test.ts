@@ -3,7 +3,7 @@ import { dirname, join, resolve } from "path";
 import { fileURLToPath } from "url";
 import { describe, expect, it } from "vitest";
 import { loadGuide, loadP } from "../../src/prompts";
-import { withReadPrompts, withReplacePrompts, withInsertPrompts, withUndoPrompts, DEFAULT_EDIT_FLAGS } from "../../src/edit-common";
+import { withReadPrompts, withReplacePrompts, withInsertPrompts, withTransferPrompts, withUndoPrompts, DEFAULT_EDIT_FLAGS } from "../../src/edit-common";
 import { regRead } from "../../src/read";
 import { makeFakePiRegistry } from "../support/fixtures";
 
@@ -218,5 +218,30 @@ describe("edit prompt flag variants", () => {
   it("withReadPrompts rewrites the re-read note when auto-read is off", () => {
     const result = withReadPrompts(readBase, { ...DEFAULT_EDIT_FLAGS, autoRead: false });
     expect(result.guidelines.some((g) => g === "`read`: call again after an edit when you need anchors you lack.")).toBe(true);
+  });
+
+  it("withTransferPrompts keeps the anchor-only contract by default", () => {
+    const base = {
+      description: loadP("../prompts/copy.md"),
+      snippet: loadP("../prompts/copy-snippet.md"),
+      guidelines: loadGuide("../prompts/copy-guidelines.md"),
+    };
+    const result = withTransferPrompts(base, DEFAULT_EDIT_FLAGS, "copy");
+    expect(result.description).toContain("Path resolution is anchor-only; do not pass `path`.");
+    expect(result.guidelines.some((g) => g.startsWith("`copy`: path resolution is anchor-only"))).toBe(true);
+  });
+
+  it("withTransferPrompts adds the require-path and strict-input notices", () => {
+    const base = {
+      description: loadP("../prompts/move.md"),
+      snippet: loadP("../prompts/move-snippet.md"),
+      guidelines: loadGuide("../prompts/move-guidelines.md"),
+    };
+    const result = withTransferPrompts(base, { ...DEFAULT_EDIT_FLAGS, requirePath: true, strictInput: true }, "move");
+    expect(result.description).toContain("Also give `path` matching the source or destination file the anchors were served for");
+    expect(result.snippet).toContain("; include `path` (required)");
+    expect(result.guidelines.some((g) => g.startsWith("`move`: include `path`"))).toBe(true);
+    expect(result.description).toContain("Strict-input mode is on");
+    expect(result.guidelines.some((g) => g.includes("strict-input is on"))).toBe(true);
   });
 });

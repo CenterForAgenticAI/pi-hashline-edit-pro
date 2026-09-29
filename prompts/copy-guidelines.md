@@ -1,0 +1,4 @@
+- `copy`: the source range stays in place; the copy goes after `insert_after`, which may live in another file and may be the empty-line row of an empty file.
+- `copy`: use the same anchor for `source_from` and `source_to` to copy one line.
+- `copy`: the copied lines are minted fresh anchors in the destination's post-edit diff; the source rows keep theirs.
+- `copy`: `[E_STALE_ANCHOR]` means an anchor is not owned in this session: call `read` for fresh anchors. `[E_RANGE_STALE]` means a served line in the source range or the destination anchor line changed or was never shown: retry with the fresh anchors the error returns.

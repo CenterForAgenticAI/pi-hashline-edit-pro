@@ -77,6 +77,8 @@ export interface ExecPipelineOptions {
   store?: HashStore;
   noPersist?: boolean;
   preloadedNorm?: NormFile;
+  served?: ReadonlyMap<string, string>;
+  allowEmpty?: boolean;
 }
 
 export function hashSpan(hashes: string[], from: string, to: string): [number, number] | undefined {
@@ -92,7 +94,7 @@ export function spanForEdit(originalHashes: string[], from: string, to: string, 
   const replacementCount = splitLines(resultContent).length - (originalHashes.length - (span[1] - span[0] + 1));
   return { start: span[0], end: span[1], replacementCount };
 }
-async function noteAnchorError(absolutePath: string, error: unknown, noPersist?: boolean): Promise<void> {
+export async function noteAnchorError(absolutePath: string, error: unknown, noPersist?: boolean): Promise<void> {
   if (noPersist === true) return;
   if (error instanceof RangeStaleError) {
     adoptAnchors(absolutePath, error.rangeServedMap);
@@ -138,7 +140,7 @@ export async function execPipeline(
   const { edit, warnings: editWarnings } = buildReplaceHEdit(params);
   const hashStore = options?.store ?? await loadHashStore();
   const preResolvedPath = await resolveTarget(toCwd(targetPath, cwd));
-  const served = servedForPath(preResolvedPath);
+  const served = options?.served ?? servedForPath(preResolvedPath);
   const { normalized: originalNormalized, bom, originalEnding, endingSeparators: originalSeparators, fileHashes: originalHashes, hadUtf8DecodeErrors, absolutePath, identity } = await readNormFile(
     targetPath, cwd, { signal: options?.signal, accessMode: options?.accessMode, maxLines: MAX_HASH_LINES, store: hashStore, noPersist: options?.noPersist, allocation: options?.noPersist ? "shadow" : "real", preloadedNorm: options?.preloadedNorm },
   );
@@ -153,6 +155,7 @@ export async function execPipeline(
       originalHashes,
       displayPath,
       served,
+      options?.allowEmpty,
     );
   } catch (error) {
     await noteAnchorError(absolutePath, error, options?.noPersist);

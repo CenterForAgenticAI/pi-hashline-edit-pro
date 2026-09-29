@@ -1,0 +1,6 @@
+- `move`: the range is removed from the source file and re-inserted after `insert_after` in one call; `insert_after` may live in another file, and an empty destination file is seeded with the moved lines.
+- `move`: within one file, `insert_after` must sit outside the source range, and moving a range to where it already sits is a noop.
+- `move`: a cross-file move records one undo entry per file; undo both sides to revert the whole move, because undoing one side alone leaves the moved lines duplicated or missing.
+- `move`: lines between the source and the target keep their content but may be re-anchored; verify the post-edit diff before follow-up edits on that file.
+- `move`: `-anchor│` rows in a post-edit diff are dead anchors; only `+anchor│` and ` anchor│` rows are live.
+- `move`: `[E_STALE_ANCHOR]` means an anchor is not owned in this session: call `read` for fresh anchors. `[E_RANGE_STALE]` means a served line in the source range or the destination anchor line changed or was never shown: retry with the fresh anchors the error returns.
