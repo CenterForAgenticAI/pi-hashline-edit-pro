@@ -185,7 +185,7 @@ Edge cases:
 | --- | --- |
 | `remove_from` | 4-char anchor marking the FIRST line to remove (inclusive). |
 | `remove_to` | 4-char anchor marking the LAST line to remove (inclusive). |
-| `replacement_lines` | Replacement lines, one element per line. Mirror the removed lines exactly, blank lines included: `[]` deletes the range, `[""]` is a single blank line, `["a", ""]` is a line followed by a blank line. Never embed `\n` inside an element. A lone string is accepted too: it is split on newlines, and stringified array text is unwrapped. |
+| `replacement_lines` | Replacement lines, one element per line. Mirror the removed lines exactly, blank lines included: `[]` deletes the range, `[""]` is a single blank line, `["a", ""]` is a line followed by a blank line. One element is one line: an embedded line-break character (`\n`, `\r\n`, or `\r`) splits it, and literal escape text such as `\n` or `\u200b` is written as-is, not decoded. A lone string is accepted too: it is split on newlines, and stringified array text is unwrapped. |
 
 Example: read showed `Hasu│old` and `arvm│old2`; to replace both:
 
@@ -219,7 +219,7 @@ After a successful edit, the diff is capped at 50KB. A row over 50KB is shown as
 | --- | --- |
 | `anchor` | 4-char anchor marking the line next to which the lines go. The anchor line is preserved. A pasted `+Hasu│x` diff row or `anchor│` prefix is stripped automatically with a warning. |
 | `direction` | `"after"` inserts below the anchor line, `"before"` above it. |
-| `lines` | Lines to insert, one element per line. `[""]` is a blank line. Never include the anchor line, and never embed `\n` inside an element. A lone string is split on newlines, and stringified array text is unwrapped. |
+| `lines` | Lines to insert, one element per line. `[""]` is a blank line. Never include the anchor line. One element is one line: an embedded line-break character (`\n`, `\r\n`, or `\r`) splits it, and literal escape text such as `\n` or `\u200b` is written as-is, not decoded. A lone string is split on newlines, and stringified array text is unwrapped. |
 
 Nothing is removed and the inserted lines are written exactly as given; the anchor line and every other line stay in place. Inserting nothing (`lines: []`) reports a noop. To seed an empty file, read it and insert after the `anchor│` empty-line row.
 
@@ -419,6 +419,7 @@ Full reference:
 | `[E_STALE_ANCHOR]` | An anchor is not owned in this session (it was never shown to you, or its line was edited or the file was rewritten); call `read` for fresh anchors. |
 | `[W_INVALID_PATCH]` | A `replacement_lines` element is a diff-preview row (`+anchor│`, `-anchor│`, `-    │`). The marker is stripped automatically with a warning. |
 | `[W_BARE_HASH_PREFIX]` | A `replacement_lines` element starts with an `anchor│` prefix. The prefix is stripped automatically with a warning. |
+| `[W_LITERAL_ESCAPE]` | `lines` or `replacement_lines` contains literal escape text such as `\u200b` or `\n`; the file receives those characters as written. Decode the escapes first if the text came from a quoted prompt. |
 | `[W_ANCHOR_RECLAIMED]` | The session's anchor quota was exhausted, so all anchors of the listed files (the least recently read or edited) were freed to make room. Read those files again before editing them. |
 | `[E_WOULD_EMPTY]` | An edit would empty a non-empty file; use `write` instead. A cross-file `move` may empty its source file. |
 | `[E_NOT_FOUND]` | The path does not exist. |

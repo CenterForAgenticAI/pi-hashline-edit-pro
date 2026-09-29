@@ -8,6 +8,7 @@ import {
   decodeStringArray,
   assertByteLimit,
   isModeUnsupported,
+  literalEscapeWarning,
 } from "../../src/utils";
 
 describe("isRec", () => {
@@ -409,5 +410,38 @@ describe("isModeUnsupported", () => {
     expect(isModeUnsupported(Object.assign(new Error("denied"), { code: "EOPNOTSUPP" }))).toBe(true);
     expect(isModeUnsupported(Object.assign(new Error("denied"), { code: "EACCES" }))).toBe(false);
     expect(isModeUnsupported(new Error("denied"))).toBe(false);
+  });
+});
+
+describe("literalEscapeWarning", () => {
+  it("flags literal escape sequences", () => {
+    const warning = literalEscapeWarning([String.raw`stable\u200bCheckout`, String.raw`a\nb`, String.raw`say \"hi\"`], "lines");
+    expect(warning).toContain("[W_LITERAL_ESCAPE]");
+    expect(warning).toContain('"lines"');
+    expect(warning).toContain(String.raw`"\u200b"`);
+    expect(warning).toContain(String.raw`"\n"`);
+    expect(warning).toContain(String.raw`\"`);
+  });
+
+  it("returns undefined for real characters and plain text", () => {
+    expect(literalEscapeWarning(["stable\u200bCheckout"], "lines")).toBeUndefined();
+    expect(literalEscapeWarning(["a\nb"], "lines")).toBeUndefined();
+    expect(literalEscapeWarning([String.raw`/^\d+\.\d+$/`], "lines")).toBeUndefined();
+    expect(literalEscapeWarning([], "lines")).toBeUndefined();
+  });
+
+  it("skips valid surrogate pairs and the dedicated placeholder", () => {
+    expect(literalEscapeWarning([String.raw`\uD83D\uDE00`], "lines")).toBeUndefined();
+    expect(literalEscapeWarning([String.raw`\uDDDD`], "lines")).toBeUndefined();
+    expect(literalEscapeWarning([String.raw`\uD83D`], "lines")).toContain(String.raw`"\uD83D"`);
+  });
+
+  it("skips simple escapes in a line that also has a real break", () => {
+    expect(literalEscapeWarning([String.raw`a\nb` + "\nc"], "lines")).toBeUndefined();
+  });
+
+  it("caps the reported escapes", () => {
+    const warning = literalEscapeWarning([String.raw`\n\t\r\"\u200b\u2060`], "lines")!;
+    expect(warning).toContain("more");
   });
 });

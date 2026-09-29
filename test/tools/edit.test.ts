@@ -277,3 +277,20 @@ describe("regReplace - robustness", () => {
     });
   });
 });
+
+describe("replace literal escape warnings", () => {
+  it("warns and writes the literal escape text", async () => {
+    await withTempFile("sample.ts", "aaa\nbbb\nccc\n", async ({ cwd, path }) => {
+      const { ctx, editTool } = setupIntegrationTest(cwd);
+      const hashes = await lineHashes("aaa\nbbb\nccc\n", join(cwd, "sample.ts"));
+      const result = await editTool.execute(
+        "e1",
+        { remove_from: hashes[1]!, remove_to: hashes[1]!, replacement_lines: [String.raw`stable\u200bCheckout`] },
+        undefined, undefined, ctx,
+      );
+      expect(result.content[0].text).toContain("[W_LITERAL_ESCAPE]");
+      expect(result.content[0].text).toContain('"replacement_lines"');
+      expect(await readFile(path, "utf-8")).toBe("aaa\nstable\\u200bCheckout\nccc\n");
+    });
+  });
+});

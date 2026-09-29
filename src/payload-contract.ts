@@ -4,7 +4,7 @@ import { isRec, normalizeRequest, rejectUnknownFields, assertNoNul } from "./uti
 const replacementLinesSchema = Type.Array(
   Type.String({
     description:
-      "One replacement line; never embed \\n inside an element.",
+      "One replacement line. An embedded line break (\\n, \\r\\n, or \\r) splits it into lines; escape text such as \\n or \\u200b is written literally.",
   }),
   {
     description:

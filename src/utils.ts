@@ -366,3 +366,49 @@ function normalizeEditLines(record: Record<string, unknown>): void {
 		if (lines !== undefined) record[key] = lines;
 	}
 }
+
+const LITERAL_ESCAPE_RE = /\\(?:u([0-9a-fA-F]{4})|([ntr"]))/g;
+
+const REAL_LINE_BREAK_RE = /[\n\r]/;
+
+const MAX_REPORTED_LITERAL_ESCAPES = 5;
+
+function isSurrogateEscapePair(line: string, index: number, hex: string): boolean {
+	const code = Number.parseInt(hex, 16);
+	if (code >= 0xd800 && code <= 0xdbff) {
+		const next = /^\\u([0-9a-fA-F]{4})/.exec(line.slice(index + 6))?.[1];
+		if (next === undefined) return false;
+		const nextCode = Number.parseInt(next, 16);
+		return nextCode >= 0xdc00 && nextCode <= 0xdfff;
+	}
+	if (code >= 0xdc00 && code <= 0xdfff) {
+		const previous = /\\u([0-9a-fA-F]{4})$/.exec(line.slice(0, index))?.[1];
+		if (previous === undefined) return false;
+		const previousCode = Number.parseInt(previous, 16);
+		return previousCode >= 0xd800 && previousCode <= 0xdbff;
+	}
+	return false;
+}
+
+export function literalEscapeWarning(lines: string[], label: string): string | undefined {
+	const found: string[] = [];
+	for (const line of lines) {
+		if (!line.includes("\\")) continue;
+		const hasRealBreak = REAL_LINE_BREAK_RE.test(line);
+		for (const match of line.matchAll(LITERAL_ESCAPE_RE)) {
+			const hex = match[1];
+			const simple = match[2];
+			if (simple !== undefined && hasRealBreak) continue;
+			if (hex !== undefined) {
+				if (hex.toLowerCase() === "dddd") continue;
+				if (isSurrogateEscapePair(line, match.index, hex)) continue;
+			}
+			if (!found.includes(match[0])) found.push(match[0]);
+		}
+	}
+	if (found.length === 0) return undefined;
+	const shownEscapes = found.slice(0, MAX_REPORTED_LITERAL_ESCAPES);
+	const shown = shownEscapes.map((escape) => `"${escape}"`).join(", ");
+	const more = found.length - shownEscapes.length;
+	return `[W_LITERAL_ESCAPE] "${label}" contains literal escape text (${shown}${more > 0 ? ` (+${more} more)` : ""}); if this came from a quoted prompt, decode the escapes first or the file will contain the backslash sequence.`;
+}

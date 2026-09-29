@@ -437,6 +437,24 @@ describe("insert strip warnings", () => {
   });
 });
 
+describe("insert literal escape warnings", () => {
+  it("warns and writes the literal escape text", async () => {
+    await withTempFile("sample.ts", "alpha\nbeta\n", async ({ cwd, path }) => {
+      const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
+      const text = getText(await readTool.execute("r1", { path: "sample.ts" }, undefined, undefined, ctx));
+      const betaHash = extractHash(text.split("\n").find((line) => line.includes("│beta"))!);
+      const result = await getTool("insert").execute(
+        "i1",
+        { anchor: betaHash, direction: "after", lines: [String.raw`stable\u200bCheckout`] },
+        undefined, undefined, ctx,
+      );
+      expect(result.content[0].text).toContain("[W_LITERAL_ESCAPE]");
+      expect(result.content[0].text).toContain('"lines"');
+      expect(await readFile(path, "utf-8")).toBe("alpha\nbeta\nstable\\u200bCheckout\n");
+    });
+  });
+});
+
 describe("insert tool rendering", () => {
   it("computes a diff preview for an insert request", async () => {
     await withTempFile("sample.ts", "alpha\nbeta\ngamma\n", async ({ cwd }) => {
