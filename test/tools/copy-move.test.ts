@@ -625,3 +625,74 @@ describe("cross-file previews and require-path", () => {
     });
   });
 });
+
+describe("source line endings", () => {
+  it("copies a CRLF line into an LF file with its source ending", async () => {
+    await withTempDir("transfer-endings-copy-", async (dir) => {
+      await writeFile(join(dir, "a.ts"), "alpha\r\nbeta\r\n", "utf-8");
+      await writeFile(join(dir, "b.ts"), "one\ntwo\n", "utf-8");
+      const { ctx, readTool, getTool } = setupIntegrationTest(dir);
+      const aText = getText(await readTool.execute("r1", { path: "a.ts" }, undefined, undefined, ctx));
+      const bText = getText(await readTool.execute("r2", { path: "b.ts" }, undefined, undefined, ctx));
+      const beta = anchorFor(aText, "beta");
+      const one = anchorFor(bText, "one");
+      await getTool("copy").execute("c1", { source_from: beta, source_to: beta, insert_after: one }, undefined, undefined, ctx);
+      expect(await readFile(join(dir, "a.ts"), "utf-8")).toBe("alpha\r\nbeta\r\n");
+      expect(await readFile(join(dir, "b.ts"), "utf-8")).toBe("one\nbeta\r\ntwo\n");
+    });
+  });
+
+  it("keeps LF endings when copying into a CRLF file", async () => {
+    await withTempDir("transfer-endings-lf-", async (dir) => {
+      await writeFile(join(dir, "a.ts"), "alpha\nbeta\n", "utf-8");
+      await writeFile(join(dir, "b.ts"), "one\r\ntwo\r\n", "utf-8");
+      const { ctx, readTool, getTool } = setupIntegrationTest(dir);
+      const aText = getText(await readTool.execute("r1", { path: "a.ts" }, undefined, undefined, ctx));
+      const bText = getText(await readTool.execute("r2", { path: "b.ts" }, undefined, undefined, ctx));
+      const beta = anchorFor(aText, "beta");
+      const one = anchorFor(bText, "one");
+      await getTool("copy").execute("c1", { source_from: beta, source_to: beta, insert_after: one }, undefined, undefined, ctx);
+      expect(await readFile(join(dir, "b.ts"), "utf-8")).toBe("one\r\nbeta\ntwo\r\n");
+    });
+  });
+
+  it("moves a CRLF line into an LF file with its source ending", async () => {
+    await withTempDir("transfer-endings-move-", async (dir) => {
+      await writeFile(join(dir, "a.ts"), "alpha\r\nbeta\r\n", "utf-8");
+      await writeFile(join(dir, "b.ts"), "one\ntwo\n", "utf-8");
+      const { ctx, readTool, getTool } = setupIntegrationTest(dir);
+      const aText = getText(await readTool.execute("r1", { path: "a.ts" }, undefined, undefined, ctx));
+      const bText = getText(await readTool.execute("r2", { path: "b.ts" }, undefined, undefined, ctx));
+      const beta = anchorFor(aText, "beta");
+      const one = anchorFor(bText, "one");
+      await getTool("move").execute("m1", { source_from: beta, source_to: beta, insert_after: one }, undefined, undefined, ctx);
+      expect(await readFile(join(dir, "a.ts"), "utf-8")).toBe("alpha\r\n");
+      expect(await readFile(join(dir, "b.ts"), "utf-8")).toBe("one\nbeta\r\ntwo\n");
+    });
+  });
+
+  it("falls back to the destination ending when the source line has no terminator", async () => {
+    await withTempDir("transfer-endings-eof-", async (dir) => {
+      await writeFile(join(dir, "a.ts"), "alpha\r\nbeta", "utf-8");
+      await writeFile(join(dir, "b.ts"), "one\ntwo\n", "utf-8");
+      const { ctx, readTool, getTool } = setupIntegrationTest(dir);
+      const aText = getText(await readTool.execute("r1", { path: "a.ts" }, undefined, undefined, ctx));
+      const bText = getText(await readTool.execute("r2", { path: "b.ts" }, undefined, undefined, ctx));
+      const beta = anchorFor(aText, "beta");
+      const one = anchorFor(bText, "one");
+      await getTool("copy").execute("c1", { source_from: beta, source_to: beta, insert_after: one }, undefined, undefined, ctx);
+      expect(await readFile(join(dir, "b.ts"), "utf-8")).toBe("one\nbeta\ntwo\n");
+    });
+  });
+
+  it("keeps each source ending when copying inside a mixed-ending file", async () => {
+    await withTempFile("mixed-copy.ts", "a\r\nb\nc\r\n", async ({ cwd, path }) => {
+      const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
+      const text = getText(await readTool.execute("r1", { path: "mixed-copy.ts" }, undefined, undefined, ctx));
+      const a = anchorFor(text, "a");
+      const b = anchorFor(text, "b");
+      await getTool("copy").execute("c1", { source_from: a, source_to: a, insert_after: b }, undefined, undefined, ctx);
+      expect(await readFile(path, "utf-8")).toBe("a\r\nb\na\r\nc\r\n");
+    });
+  });
+});

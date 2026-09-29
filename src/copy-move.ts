@@ -23,7 +23,7 @@ import { toDisplayPath } from "./paths";
 import { getDiffContextLines, readConfig } from "./config";
 import { resolveInCwd, writeAtomic } from "./fs-write";
 import { restoreEndings, type LineEnding } from "./normalize";
-import { joinSeparators, separatorsForSpans } from "./line-endings";
+import { applyEndingOverrides, endingsForRange, joinSeparators, separatorsForSpans } from "./line-endings";
 import { saveUndo, type UndoEntry } from "./replace-undo";
 import { buildChanged, buildMetrics, type TResult } from "./replace-response";
 import { servedHashesFromDiff, serveRows } from "./served";
@@ -53,6 +53,7 @@ export interface TransferPlan {
   foldedAnchorLines: number;
   anchorCarry?: number;
   servedOverride?: ReadonlyMap<string, string>;
+  endingOverrides?: (LineEnding | undefined)[];
 }
 
 interface PairFileCommit {
@@ -61,6 +62,7 @@ interface PairFileCommit {
   absolutePath: string;
   mutationTargetPath: string;
   foldedAnchorLines: number;
+  endingOverrides?: (LineEnding | undefined)[];
 }
 
 function assertRangeVerified(
@@ -128,6 +130,10 @@ export function parseTransferAnchors(req: TransferReq): { refs: TransferRefs; wa
   };
 }
 
+function offsetEndings(offset: number, endings: (LineEnding | undefined)[]): (LineEnding | undefined)[] {
+	return [...new Array<LineEnding | undefined>(offset).fill(undefined), ...endings];
+}
+
 export function buildTransferEdit(input: {
   kind: TransferKind;
   refs: TransferRefs;
@@ -153,6 +159,7 @@ export function buildTransferEdit(input: {
   assertRangeVerified(fileLines, preload.fileHashes, insertLine, insertLine, served, displayPath);
   assertRangeVerified(fileLines, preload.fileHashes, sourceStart, sourceEnd, served, displayPath);
   const sourceLines = fileLines.slice(sourceStart - 1, sourceEnd);
+  const sourceEndings = endingsForRange(preload.endingSeparators, sourceStart, sourceEnd);
   if (kind === "copy") {
     return {
       editParams: {
@@ -162,6 +169,7 @@ export function buildTransferEdit(input: {
       },
       foldedAnchorLines: 1,
       anchorCarry: 0,
+      endingOverrides: [undefined, ...sourceEndings],
     };
   }
   if (insertLine < sourceStart) {
@@ -175,6 +183,7 @@ export function buildTransferEdit(input: {
       },
       foldedAnchorLines: 0,
       servedOverride: trustSpan(fileLines, preload.fileHashes, served, replacedStart, replacedEnd),
+      endingOverrides: sourceEndings,
     };
   }
   const replacedStart = sourceStart;
@@ -187,6 +196,7 @@ export function buildTransferEdit(input: {
     },
     foldedAnchorLines: 0,
     servedOverride: trustSpan(fileLines, preload.fileHashes, served, replacedStart, replacedEnd),
+    endingOverrides: offsetEndings(insertLine - sourceEnd, sourceEndings),
   };
 }
 
@@ -216,6 +226,7 @@ interface CrossTransferPreparation {
   destinationDisplay: string;
   destinationEdit: ReqParams;
   destinationFolded: number;
+  endingOverrides: (LineEnding | undefined)[];
   sourceEdit?: ReqParams;
 }
 
@@ -293,15 +304,17 @@ async function prepareCrossTransfer(input: {
         replacement_lines: [destinationLines[insertLine - 1]!, ...moved],
       };
   const destinationFolded = destinationPreload.normalized.length === 0 ? 0 : 1;
+  const sourceEndings = endingsForRange(sourcePreload.endingSeparators, sourceStart, sourceEnd);
+  const endingOverrides = destinationFolded === 1 ? offsetEndings(1, sourceEndings) : sourceEndings;
   if (kind === "copy") {
-    return { sourcePreload, destinationPreload, sourceDisplay, destinationDisplay, destinationEdit, destinationFolded };
+    return { sourcePreload, destinationPreload, sourceDisplay, destinationDisplay, destinationEdit, destinationFolded, endingOverrides };
   }
   const sourceEdit: ReqParams = {
     remove_from: sourcePreload.fileHashes[sourceStart - 1]!,
     remove_to: sourcePreload.fileHashes[sourceEnd - 1]!,
     replacement_lines: [],
   };
-  return { sourcePreload, destinationPreload, sourceDisplay, destinationDisplay, destinationEdit, destinationFolded, sourceEdit };
+  return { sourcePreload, destinationPreload, sourceDisplay, destinationDisplay, destinationEdit, destinationFolded, sourceEdit, endingOverrides };
 }
 
 function pairEntry(pipe: PipelineResult, separators: LineEnding[] | undefined): UndoEntry {
@@ -332,6 +345,9 @@ async function commitMovePair(input: {
   const destinationSeparators = destinationSpan
     ? separatorsForSpans(input.destination.pipe.originalSeparators, input.destination.pipe.originalHashes.length, [destinationSpan], input.destination.pipe.result, input.destination.pipe.originalEnding)
     : undefined;
+  if (destinationSeparators !== undefined && destinationSpan !== undefined) {
+    applyEndingOverrides(destinationSeparators, destinationSpan.start, input.destination.endingOverrides);
+  }
   const sourceSeparators = sourceSpan
     ? separatorsForSpans(input.source.pipe.originalSeparators, input.source.pipe.originalHashes.length, [sourceSpan], input.source.pipe.result, input.source.pipe.originalEnding)
     : undefined;
@@ -536,6 +552,7 @@ async function executeCrossFile(
         mutationTargetPath: destination.resolved,
         editAnchors: [prepared.destinationEdit.remove_from, prepared.destinationEdit.remove_to],
         ...(prepared.destinationFolded === 1 ? { anchorCarry: 0 } : {}),
+        endingOverrides: prepared.endingOverrides,
         signal,
         verb: "copied",
         noopNoun: "Copy",
@@ -557,6 +574,7 @@ async function executeCrossFile(
         absolutePath: destination.absolute,
         mutationTargetPath: destination.resolved,
         foldedAnchorLines: prepared.destinationFolded,
+        endingOverrides: prepared.endingOverrides,
       },
       signal,
       warnings: anchorWarnings,
@@ -753,6 +771,7 @@ export function buildTransferToolDef(kind: TransferKind, flags: EditToolFlags = 
             mutationTargetPath,
             editAnchors: [plan.editParams.remove_from, plan.editParams.remove_to],
             ...(plan.anchorCarry !== undefined ? { anchorCarry: plan.anchorCarry } : {}),
+            ...(plan.endingOverrides !== undefined ? { endingOverrides: plan.endingOverrides } : {}),
             signal,
             verb: kind === "copy" ? "copied" : "moved",
             noopNoun: kind === "copy" ? "Copy" : "Move",

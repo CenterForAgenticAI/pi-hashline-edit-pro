@@ -88,3 +88,64 @@ export function separatorsForSpans(
 	}
 	return result;
 }
+
+export function endingsForRange(separators: readonly LineEnding[], startLine: number, endLine: number): (LineEnding | undefined)[] {
+	const endings: (LineEnding | undefined)[] = [];
+	for (let line = startLine; line <= endLine; line += 1) {
+		endings.push(separators[line - 1]);
+	}
+	return endings;
+}
+
+export function splitWithEndings(text: string): { lines: string[]; endings: (LineEnding | undefined)[] } {
+	const lines: string[] = [];
+	const endings: (LineEnding | undefined)[] = [];
+	let current = "";
+	for (let index = 0; index < text.length; index += 1) {
+		const char = text[index]!;
+		if (char === "\r") {
+			const crlf = text[index + 1] === "\n";
+			endings.push(crlf ? "\r\n" : "\r");
+			lines.push(current);
+			current = "";
+			if (crlf) index += 1;
+			continue;
+		}
+		if (char === "\n") {
+			endings.push("\n");
+			lines.push(current);
+			current = "";
+			continue;
+		}
+		current += char;
+	}
+	lines.push(current);
+	endings.push(undefined);
+	return { lines, endings };
+}
+
+export function applyEndingOverrides(separators: LineEnding[], spanStart: number, endings: readonly (LineEnding | undefined)[] | undefined): void {
+	if (endings === undefined) return;
+	for (let index = 0; index < endings.length; index += 1) {
+		const ending = endings[index];
+		if (ending === undefined) continue;
+		const target = spanStart + index;
+		if (target >= 0 && target < separators.length) separators[target] = ending;
+	}
+}
+
+export function applySpanEndings(separators: LineEnding[], spans: readonly { start: number; end: number; replacementCount: number; endings?: (LineEnding | undefined)[] }[]): void {
+	const sorted = [...spans].sort((left, right) => left.start - right.start);
+	let offset = 0;
+	for (const span of sorted) {
+		if (span.endings !== undefined) {
+			for (let index = 0; index < span.endings.length; index += 1) {
+				const ending = span.endings[index];
+				if (ending === undefined) continue;
+				const target = span.start + offset + index;
+				if (target >= 0 && target < separators.length) separators[target] = ending;
+			}
+		}
+		offset += span.replacementCount - (span.end - span.start + 1);
+	}
+}

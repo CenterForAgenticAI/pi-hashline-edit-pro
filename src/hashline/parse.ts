@@ -4,6 +4,8 @@ import {
 } from "./hash";
 import { ALPH_RE } from "./alphabet";
 import { NEW_CONTENT_NOT_ARRAY_MSG } from "../constants";
+import { splitWithEndings } from "../line-endings";
+import type { LineEnding } from "../normalize";
 
 const HASH_EXTRACT_RE = new RegExp(HASH_CLASS);
 
@@ -68,15 +70,25 @@ function unwrapJsonEnvelope(line: string): string {
   }
 }
 
+export interface ParsedText {
+	lines: string[];
+	separators: (LineEnding | undefined)[];
+}
+
+export function parseTextWithSeparators(edit: string[]): ParsedText {
+	if (!Array.isArray(edit) || edit.some((line) => typeof line !== "string")) {
+		throw new Error(NEW_CONTENT_NOT_ARRAY_MSG);
+	}
+	const lines: string[] = [];
+	const separators: (LineEnding | undefined)[] = [];
+	for (const line of edit) {
+		const parsed = splitWithEndings(unwrapJsonEnvelope(line));
+		lines.push(...parsed.lines);
+		separators.push(...parsed.endings);
+	}
+	return { lines, separators };
+}
+
 export function parseText(edit: string[]): string[] {
-  if (!Array.isArray(edit) || edit.some((line) => typeof line !== "string")) {
-    throw new Error(NEW_CONTENT_NOT_ARRAY_MSG);
-  }
-  const out: string[] = [];
-  for (const line of edit) {
-    const unwrapped = unwrapJsonEnvelope(line);
-    const normalized = unwrapped.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
-    out.push(...normalized.split("\n"));
-  }
-  return out;
+	return parseTextWithSeparators(edit).lines;
 }

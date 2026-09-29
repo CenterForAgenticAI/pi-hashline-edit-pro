@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseText, parseHashRef } from "../../src/hashline";
+import { parseText, parseTextWithSeparators, parseHashRef } from "../../src/hashline";
 
 describe("parseHashRef", () => {
 	it("parses a hash anchor without # prefix", () => {
@@ -147,5 +147,21 @@ describe("parseText json-envelope autocorrect", () => {
 
 	it("unwraps a single-string wrapper without escapes", () => {
 		expect(parseText(['["hello"].'])).toEqual(["hello"]);
+	});
+});
+
+describe("parseTextWithSeparators", () => {
+	it("records the separator used inside an element", () => {
+		expect(parseTextWithSeparators(["a\r\nb"])).toEqual({ lines: ["a", "b"], separators: ["\r\n", undefined] });
+		expect(parseTextWithSeparators(["a\rb"])).toEqual({ lines: ["a", "b"], separators: ["\r", undefined] });
+		expect(parseTextWithSeparators(["a\nb"])).toEqual({ lines: ["a", "b"], separators: ["\n", undefined] });
+	});
+
+	it("marks element boundaries as unspecified", () => {
+		expect(parseTextWithSeparators(["a", "b"])).toEqual({ lines: ["a", "b"], separators: [undefined, undefined] });
+	});
+
+	it("handles mixed separators and trailing breaks", () => {
+		expect(parseTextWithSeparators(["a\r\nb\nc\r"])).toEqual({ lines: ["a", "b", "c", ""], separators: ["\r\n", "\n", "\r", undefined] });
 	});
 });

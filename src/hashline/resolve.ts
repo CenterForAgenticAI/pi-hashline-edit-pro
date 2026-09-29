@@ -1,15 +1,20 @@
 import { abortIf, rejectUnknownFields, clipLine, decodeStringArray, assertNoNul } from "../utils";
-import { parseHashRef, parseText, type Anchor } from "./parse";
+import { parseHashRef, parseTextWithSeparators, type Anchor } from "./parse";
 import { HASH_SEP, stripRowPrefix, lineChecksum, type RowPrefixKind } from "./hash";
 import { HASH_RUN } from "./alphabet";
 import { NEW_CONTENT_NOT_ARRAY_MSG, MAX_RANGE_STALE_LINES } from "../constants";
+import type { LineEnding } from "../normalize";
 
 export type RAnchor = {
 	line: number;
 	hash: string;
 };
 
-export type HEdit = { content_lines: string[]; hash_bounds: [Anchor, Anchor] };
+export type HEdit = {
+	content_lines: string[];
+	hash_bounds: [Anchor, Anchor];
+	content_separators?: (LineEnding | undefined)[];
+};
 export type RHEdit = {
   content_lines: string[];
   hash_bounds: [RAnchor, RAnchor];
@@ -158,7 +163,8 @@ export function stripAnchorRow(
 export function resEdit(edit: HTEdit, warnings?: string[]): HEdit {
   assertItem(edit as Record<string, unknown>);
 
-  const replaceLines = parseText(decodeStringArray(edit.replacement_lines, warnings) ?? edit.replacement_lines);
+  const parsed = parseTextWithSeparators(decodeStringArray(edit.replacement_lines, warnings) ?? edit.replacement_lines);
+  const replaceLines = parsed.lines;
   assertNoNul(replaceLines);
   const bounds = [edit.remove_from, edit.remove_to].map((ref) => {
     return stripAnchorRow(ref.trim(), "remove_from/remove_to entry", warnings);
@@ -166,6 +172,7 @@ export function resEdit(edit: HTEdit, warnings?: string[]): HEdit {
   return {
     content_lines: replaceLines,
     hash_bounds: [parseHashRef(bounds[0]), parseHashRef(bounds[1])],
+    ...(parsed.separators.some((separator) => separator !== undefined) ? { content_separators: parsed.separators } : {}),
   };
 }
 

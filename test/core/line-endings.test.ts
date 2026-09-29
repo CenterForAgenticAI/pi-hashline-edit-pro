@@ -3,10 +3,15 @@ import {
 	countNewlines,
 	joinSeparators,
 	separatorsForSpans,
+	splitWithEndings,
+	applyEndingOverrides,
+	applySpanEndings,
+	endingsForRange,
 	splitSeparators,
 	type EndingSpan,
 } from "../../src/line-endings";
 import { parseSeparators } from "../../src/hash-store/validation";
+import type { LineEnding } from "../../src/normalize";
 
 afterEach(() => {
 	vi.restoreAllMocks();
@@ -121,5 +126,47 @@ describe("parseSeparators", () => {
 		vi.spyOn(console, "error").mockImplementation(() => undefined);
 		expect(parseSeparators(JSON.stringify([1, 2])).ok).toBe(false);
 		expect(parseSeparators(JSON.stringify(["X"])).ok).toBe(false);
+	});
+});
+
+describe("splitWithEndings", () => {
+	it("records each separator type", () => {
+		expect(splitWithEndings("a\r\nb\rc\nd")).toEqual({ lines: ["a", "b", "c", "d"], endings: ["\r\n", "\r", "\n", undefined] });
+	});
+
+	it("adds a trailing empty line for a trailing break", () => {
+		expect(splitWithEndings("a\n")).toEqual({ lines: ["a", ""], endings: ["\n", undefined] });
+		expect(splitWithEndings("")).toEqual({ lines: [""], endings: [undefined] });
+	});
+});
+
+describe("endingsForRange", () => {
+	it("maps 1-based line numbers and reports a missing EOF terminator", () => {
+		expect(endingsForRange(["\n", "\r\n", "\r"], 2, 4)).toEqual(["\r\n", "\r", undefined]);
+	});
+});
+
+describe("applyEndingOverrides", () => {
+	it("overrides only defined entries inside the separator list", () => {
+		const separators: LineEnding[] = ["\n", "\n", "\n"];
+		applyEndingOverrides(separators, 1, [undefined, "\r\n", undefined, "\r"]);
+		expect(separators).toEqual(["\n", "\n", "\r\n"]);
+	});
+
+	it("ignores an undefined override list", () => {
+		const separators: LineEnding[] = ["\n"];
+		applyEndingOverrides(separators, 0, undefined);
+		expect(separators).toEqual(["\n"]);
+	});
+});
+
+describe("applySpanEndings", () => {
+	it("offsets each span by earlier replacements", () => {
+		const separators: LineEnding[] = ["\n", "\n", "\n", "\n", "\n"];
+		applySpanEndings(separators, [
+			{ start: 0, end: 0, replacementCount: 2, endings: [undefined, "\r\n"] },
+			{ start: 3, end: 3, replacementCount: 1, endings: ["\r"] },
+		]);
+		expect(separators).toEqual(["\n", "\r\n", "\n", "\n", "\r"]);
 	});
 });

@@ -414,13 +414,11 @@ describe("isModeUnsupported", () => {
 });
 
 describe("literalEscapeWarning", () => {
-  it("flags literal escape sequences", () => {
-    const warning = literalEscapeWarning([String.raw`stable\u200bCheckout`, String.raw`a\nb`, String.raw`say \"hi\"`], "lines");
-    expect(warning).toContain("[W_LITERAL_ESCAPE]");
-    expect(warning).toContain('"lines"');
-    expect(warning).toContain(String.raw`"\u200b"`);
-    expect(warning).toContain(String.raw`"\n"`);
-    expect(warning).toContain(String.raw`\"`);
+  it("reports the first literal escape sequence", () => {
+    expect(literalEscapeWarning([String.raw`stable\u200bCheckout`], "lines")).toBe(String.raw`[W_LITERAL_ESCAPE] "lines" contains the literal escape text "\u200b"`);
+    expect(literalEscapeWarning([String.raw`a\nb`], "lines")).toBe(String.raw`[W_LITERAL_ESCAPE] "lines" contains the literal escape text "\n"`);
+    expect(literalEscapeWarning([String.raw`say \"hi\"`], "lines")).toBe(String.raw`[W_LITERAL_ESCAPE] "lines" contains the literal escape text "\""`);
+    expect(literalEscapeWarning([String.raw`\n\t`], "lines")).toBe(String.raw`[W_LITERAL_ESCAPE] "lines" contains the literal escape text "\n"`);
   });
 
   it("returns undefined for real characters and plain text", () => {
@@ -433,15 +431,10 @@ describe("literalEscapeWarning", () => {
   it("skips valid surrogate pairs and the dedicated placeholder", () => {
     expect(literalEscapeWarning([String.raw`\uD83D\uDE00`], "lines")).toBeUndefined();
     expect(literalEscapeWarning([String.raw`\uDDDD`], "lines")).toBeUndefined();
-    expect(literalEscapeWarning([String.raw`\uD83D`], "lines")).toContain(String.raw`"\uD83D"`);
+    expect(literalEscapeWarning([String.raw`\uD83D`], "lines")).toBe(String.raw`[W_LITERAL_ESCAPE] "lines" contains the literal escape text "\uD83D"`);
   });
 
   it("skips simple escapes in a line that also has a real break", () => {
     expect(literalEscapeWarning([String.raw`a\nb` + "\nc"], "lines")).toBeUndefined();
-  });
-
-  it("caps the reported escapes", () => {
-    const warning = literalEscapeWarning([String.raw`\n\t\r\"\u200b\u2060`], "lines")!;
-    expect(warning).toContain("more");
   });
 });

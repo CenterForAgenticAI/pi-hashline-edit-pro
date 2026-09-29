@@ -18,7 +18,9 @@ export {
 export {
 	parseHashRef,
 	parseText,
+	parseTextWithSeparators,
 	type Anchor,
+	type ParsedText,
 } from "./parse";
 
 export {

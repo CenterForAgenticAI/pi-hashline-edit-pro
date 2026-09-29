@@ -448,8 +448,7 @@ describe("insert literal escape warnings", () => {
         { anchor: betaHash, direction: "after", lines: [String.raw`stable\u200bCheckout`] },
         undefined, undefined, ctx,
       );
-      expect(result.content[0].text).toContain("[W_LITERAL_ESCAPE]");
-      expect(result.content[0].text).toContain('"lines"');
+      expect(result.content[0].text).toContain(String.raw`[W_LITERAL_ESCAPE] "lines" contains the literal escape text "\u200b"`);
       expect(await readFile(path, "utf-8")).toBe("alpha\nbeta\nstable\\u200bCheckout\n");
     });
   });
@@ -522,6 +521,18 @@ describe("insert tool rendering", () => {
       ]);
       expect(state.preview).toHaveProperty("diff");
       expect((state.preview as { diff: string }).diff).toContain("BETA1");
+    });
+  });
+});
+
+describe("provided line endings", () => {
+  it("writes a CRLF separator embedded in lines", async () => {
+    await withTempFile("sample.ts", "alpha\nbeta\n", async ({ cwd, path }) => {
+      const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
+      const text = getText(await readTool.execute("r1", { path: "sample.ts" }, undefined, undefined, ctx));
+      const alphaHash = extractHash(text.split("\n").find((line) => line.includes("│alpha"))!);
+      await getTool("insert").execute("i1", { anchor: alphaHash, direction: "after", lines: ["I1\r\nI2"] }, undefined, undefined, ctx);
+      expect(await readFile(path, "utf-8")).toBe("alpha\nI1\r\nI2\nbeta\n");
     });
   });
 });

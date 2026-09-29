@@ -19,7 +19,7 @@ import {
 } from "./hashline";
 import { adoptAnchors, servedForPath, formatAnchorReclaimNotice, takeReclaimedPaths } from "./anchor-registry";
 import { stripBOM, toLF, type LineEnding } from "./normalize";
-import { joinSeparators, separatorsForSpans } from "./line-endings";
+import { applySpanEndings, joinSeparators, separatorsForSpans } from "./line-endings";
 import { assertInsertReq, assertReq, normReq } from "./payload-contract";
 import { saveUndo } from "./replace-undo";
 import { buildChanged, buildNoop, type RMetrics, type TResult } from "./replace-response";
@@ -67,6 +67,7 @@ export interface BatchPiece {
   noop: boolean;
   foldedLines: number;
   carryIndex?: number;
+  separators?: (LineEnding | undefined)[];
 }
 
 export interface BatchMemberInput {
@@ -81,6 +82,7 @@ export interface BatchMemberInput {
   extraWarnings: string[];
   foldedLines?: number;
   stripWarning?: StripWarningLocation;
+  contentSeparators?: (LineEnding | undefined)[];
 }
 
 interface BatchFailure {
@@ -503,6 +505,7 @@ export async function executeBatchMember(input: BatchMemberInput): Promise<TResu
   const originalSlice = baseLines.slice(start - 1, end);
   const noop = originalSlice.length === newLines.length && originalSlice.every((line, index) => line === newLines[index]);
   const foldedLines = input.foldedLines ?? 0;
+  const separators = input.contentSeparators ?? input.hedit.content_separators;
   const carryIndex =
     input.kind === "insert" && foldedLines > 0
       ? input.direction === "after"
@@ -519,6 +522,7 @@ export async function executeBatchMember(input: BatchMemberInput): Promise<TResu
     fromHash: input.hedit.hash_bounds[0].hash,
     toHash: input.hedit.hash_bounds[1].hash,
     newLines: [...newLines],
+    ...(separators !== undefined ? { separators } : {}),
     warnings: [...input.extraWarnings, ...planned.warnings],
     noop,
     foldedLines,
@@ -575,12 +579,16 @@ function mergeInsertPairs(pieces: BatchPiece[]): BatchPiece[] {
     consumed.add(partner);
     const before = piece.direction === "before" ? piece : partner;
     const after = piece.direction === "before" ? partner : piece;
+    const beforeSeparators = before.separators ?? before.newLines.map(() => undefined);
+    const afterSeparators = after.separators ?? after.newLines.map(() => undefined);
+    const mergedSeparators = [...beforeSeparators.slice(0, before.newLines.length), ...afterSeparators.slice(1)];
     merged.push({
       ...before,
       order: Math.min(before.order, after.order),
       newLines: [...before.newLines, ...after.newLines.slice(1)],
       warnings: [...before.warnings, ...after.warnings],
       foldedLines: before.foldedLines + after.foldedLines - 1,
+      ...(before.separators !== undefined || after.separators !== undefined ? { separators: mergedSeparators } : {}),
     });
   }
   return merged;
@@ -633,6 +641,12 @@ async function finishBatch(member: PlannedMember, signal?: AbortSignal): Promise
   const composed = composeBatchLines(base.content, effectivePieces);
   const spans = pieceMappingSpans(effectivePieces);
   const resultSeparators = separatorsForSpans(base.separators, base.hashes.length, spans, composed, base.ending);
+  applySpanEndings(resultSeparators, effectivePieces.map((piece) => ({
+    start: piece.start - 1,
+    end: piece.end - 1,
+    replacementCount: piece.newLines.length,
+    ...(piece.separators !== undefined ? { endings: piece.separators } : {}),
+  })));
   const warnings = [...runtime.warnings];
   if (base.hadUtf8DecodeErrors) warnings.push("Non-UTF-8 bytes were shown as U+FFFD; this edit rewrote the file as UTF-8.");
   try {

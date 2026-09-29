@@ -10,8 +10,8 @@ import { formatAnchorReclaimNotice, takeReclaimedPaths } from "./anchor-registry
 import { servedHashesFromDiff, serveRows } from "./served";
 import { lineHashes } from "./hashline";
 import { spanForEdit } from "./replace";
-import { restoreEndings, stripBOM, toLF } from "./normalize";
-import { joinSeparators, separatorsForSpans } from "./line-endings";
+import { restoreEndings, stripBOM, toLF, type LineEnding } from "./normalize";
+import { applyEndingOverrides, joinSeparators, separatorsForSpans } from "./line-endings";
 export interface CommitMeta {
   editAnchors?: [string, string];
   anchorCarry?: number;
@@ -23,6 +23,7 @@ export interface CommitMeta {
   noopNoun?: string;
   prefixWarnings?: string[];
   foldedAnchorLines?: number;
+  endingOverrides?: (LineEnding | undefined)[];
 }
 
 export async function commitEdit(pipe: PipelineResult, meta: CommitMeta): Promise<TResult> {
@@ -56,6 +57,10 @@ export async function commitEdit(pipe: PipelineResult, meta: CommitMeta): Promis
   const resultSeparators = span
     ? separatorsForSpans(pipe.originalSeparators, pipe.originalHashes.length, [span], pipe.result, pipe.originalEnding)
     : undefined;
+  if (resultSeparators !== undefined && span !== undefined) {
+    applyEndingOverrides(resultSeparators, span.start, pipe.contentSeparators);
+    applyEndingOverrides(resultSeparators, span.start, meta.endingOverrides);
+  }
   const finalFileBytes = pipe.bom + (resultSeparators !== undefined
     ? joinSeparators(pipe.result, resultSeparators)
     : restoreEndings(pipe.result, pipe.originalEnding));

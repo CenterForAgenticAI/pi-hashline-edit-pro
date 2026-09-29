@@ -5,7 +5,8 @@ import { execPipeline, type ReqParams, type ReplaceDetails, previewFromPipe, pre
 import { commitEdit } from "./commit";
 import { batchMemberFor, ensureBatchBase, executeBatchMember, noteBatchFailure } from "./batch";
 import { readNormFile, type NormFile } from "./file-reader";
-import { MAX_HASH_LINES, parseHashRef, resEdit, resolveAnchorLine, type Anchor, type HEdit, type StripWarningLocation } from "./hashline";
+import { MAX_HASH_LINES, parseHashRef, parseTextWithSeparators, resEdit, resolveAnchorLine, type Anchor, type HEdit, type StripWarningLocation } from "./hashline";
+import type { LineEnding } from "./normalize";
 import { stripAnchorRow } from "./hashline/resolve";
 import { withAnchorSession } from "./anchor-registry";
 import { loadP, loadGuide } from "./prompts";
@@ -27,7 +28,7 @@ const insertDirectionSchema = Type.Union(
 
 const insertLinesSchema = Type.Array(
   Type.String({
-    description: "One line to insert. An embedded line break (\\n, \\r\\n, or \\r) splits it into lines; escape text such as \\n or \\u200b is written literally.",
+    description: "One line to insert. An embedded line break (\\n, \\r\\n, or \\r) splits it into lines and sets their endings; escape text such as \\n or \\u200b is written literally.",
   }),
   {
     description: 'One string per line; [""] is a blank line; never include the anchor line.',
@@ -73,7 +74,8 @@ export function buildInsertEdit(
   preload: NormFile,
   ref: Anchor,
   path: string,
-): { editParams: ReqParams; anchorLine: string | undefined } {
+): { editParams: ReqParams; anchorLine: string | undefined; contentSeparators: (LineEnding | undefined)[] } {
+  const parsed = parseTextWithSeparators(req.lines);
   const fileLines = splitLines(preload.normalized);
   const line = resolveAnchorLine(ref, fileLines, preload.fileHashes, path);
   const anchorLine = preload.normalized.length === 0 ? undefined : fileLines[line - 1];
@@ -82,12 +84,17 @@ export function buildInsertEdit(
     remove_to: ref.hash,
     replacement_lines:
       anchorLine === undefined
-        ? [...req.lines]
+        ? [...parsed.lines]
         : req.direction === "after"
-          ? [anchorLine, ...req.lines]
-          : [...req.lines, anchorLine],
+          ? [anchorLine, ...parsed.lines]
+          : [...parsed.lines, anchorLine],
   };
-  return { editParams, anchorLine };
+  const contentSeparators = anchorLine === undefined
+    ? parsed.separators
+    : req.direction === "after"
+      ? [undefined, ...parsed.separators]
+      : [...parsed.separators, undefined];
+  return { editParams, anchorLine, contentSeparators };
 }
 
 function insertStripWarning(anchorLine: string | undefined, direction: "before" | "after"): StripWarningLocation {
@@ -232,6 +239,7 @@ export function buildInsertToolDef(flags: EditToolFlags = DEFAULT_EDIT_FLAGS): I
               extraWarnings: [...anchorWarnings, ...insertWarnings, ...resWarnings],
               foldedLines: built.anchorLine === undefined ? 0 : 1,
               stripWarning: insertStripWarning(built.anchorLine, req.direction),
+              contentSeparators: built.contentSeparators,
             });
           }
           const preload = await readNormFile(targetPath, ctx.cwd, {
@@ -239,7 +247,7 @@ export function buildInsertToolDef(flags: EditToolFlags = DEFAULT_EDIT_FLAGS): I
             accessMode: constants.R_OK | constants.W_OK,
             maxLines: MAX_HASH_LINES,
           });
-          const { editParams, anchorLine } = buildInsertEdit(req, preload, ref, targetPath);
+          const { editParams, anchorLine, contentSeparators } = buildInsertEdit(req, preload, ref, targetPath);
           const pipe = await execPipeline(targetPath, editParams, ctx.cwd, {
             accessMode: constants.R_OK | constants.W_OK,
             signal,
@@ -259,6 +267,7 @@ export function buildInsertToolDef(flags: EditToolFlags = DEFAULT_EDIT_FLAGS): I
             noopNoun: "Insertion",
             foldedAnchorLines: anchorLine === undefined ? 0 : 1,
             prefixWarnings: [...anchorWarnings, ...insertWarnings],
+            endingOverrides: contentSeparators,
           });
         });
       });

@@ -69,6 +69,7 @@ export interface PipelineResult {
   totalRemovedLines: number;
   identity: FileIdentity;
   spans?: DiffSpan[];
+  contentSeparators?: (LineEnding | undefined)[];
 }
 
 
@@ -200,6 +201,7 @@ export async function execPipeline(
     totalRemovedLines,
     identity,
     ...(pipeSpans ? { spans: pipeSpans } : {}),
+    ...(edit.content_separators !== undefined ? { contentSeparators: edit.content_separators } : {}),
   };
 }
 

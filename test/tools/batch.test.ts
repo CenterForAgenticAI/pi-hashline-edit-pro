@@ -1122,3 +1122,24 @@ describe("batched insert strip warnings", () => {
     });
   });
 });
+
+describe("batched provided line endings", () => {
+  it("applies embedded separators from batch members", async () => {
+    await withTempFile("sample.txt", "a\nb\nc\n", async ({ cwd, path }) => {
+      const { getTool, handlers, ctx } = await setupBatchTools(cwd);
+      const readTool = getTool("read");
+      const editTool = getTool("replace");
+      const text = (await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx)).content[0].text as string;
+      const aRef = anchorFor(text, "a");
+      const cRef = anchorFor(text, "c");
+      const firstArgs = { remove_from: aRef, remove_to: aRef, replacement_lines: ["A1\r\nA2"] };
+      const secondArgs = { remove_from: cRef, remove_to: cRef, replacement_lines: ["C"] };
+      const message = assistantMessage([toolCall("p1", "replace", firstArgs), toolCall("p2", "replace", secondArgs)]);
+      await (handlers.get("message_end")!({ type: "message_end", message }, ctx) as Promise<unknown>);
+      await editTool.execute("p1", firstArgs, undefined, undefined, ctx);
+      const last = await editTool.execute("p2", secondArgs, undefined, undefined, ctx);
+      expect(last.content[0].text).toContain("Batch 1: 2 edits applied as one commit");
+      expect(await readFile(path, "utf-8")).toBe("A1\r\nA2\nb\nC\n");
+    });
+  });
+});

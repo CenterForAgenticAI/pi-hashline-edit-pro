@@ -167,9 +167,9 @@ describe("normReq - stringified line fields", () => {
 		expect(result.replacement_lines).toEqual([glmMalformedPayload]);
 	});
 
-	it("splits a lone string into lines", () => {
+	it("keeps a lone string as one element so its line endings survive parsing", () => {
 		const result = normReq({ remove_from: "ATIm", remove_to: "ATIm", replacement_lines: "line1\nline2" }) as Record<string, unknown>;
-		expect(result.replacement_lines).toEqual(["line1", "line2"]);
+		expect(result.replacement_lines).toEqual(["line1\nline2"]);
 	});
 
 	it("turns a stringified empty array into a deletion", () => {

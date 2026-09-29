@@ -342,10 +342,6 @@ export function decodeStringArray(value: unknown, warnings?: string[], label = "
 	return undefined;
 }
 
-function splitEditLines(text: string): string[] {
-	return text.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
-}
-
 function normalizeLineFieldValue(value: unknown): string[] | undefined {
 	const candidate = typeof value === "string"
 		? value
@@ -356,7 +352,7 @@ function normalizeLineFieldValue(value: unknown): string[] | undefined {
 	const decoded = decodeStringArray(candidate);
 	if (decoded !== undefined) return decoded;
 	if (/^\[\s*\]$/.test(stripTrailingMemberCall(stripCodeFence(candidate)))) return [];
-	return splitEditLines(candidate);
+	return [candidate];
 }
 
 function normalizeEditLines(record: Record<string, unknown>): void {
@@ -370,8 +366,6 @@ function normalizeEditLines(record: Record<string, unknown>): void {
 const LITERAL_ESCAPE_RE = /\\(?:u([0-9a-fA-F]{4})|([ntr"]))/g;
 
 const REAL_LINE_BREAK_RE = /[\n\r]/;
-
-const MAX_REPORTED_LITERAL_ESCAPES = 5;
 
 function isSurrogateEscapePair(line: string, index: number, hex: string): boolean {
 	const code = Number.parseInt(hex, 16);
@@ -391,7 +385,6 @@ function isSurrogateEscapePair(line: string, index: number, hex: string): boolea
 }
 
 export function literalEscapeWarning(lines: string[], label: string): string | undefined {
-	const found: string[] = [];
 	for (const line of lines) {
 		if (!line.includes("\\")) continue;
 		const hasRealBreak = REAL_LINE_BREAK_RE.test(line);
@@ -403,12 +396,8 @@ export function literalEscapeWarning(lines: string[], label: string): string | u
 				if (hex.toLowerCase() === "dddd") continue;
 				if (isSurrogateEscapePair(line, match.index, hex)) continue;
 			}
-			if (!found.includes(match[0])) found.push(match[0]);
+			return `[W_LITERAL_ESCAPE] "${label}" contains the literal escape text "${match[0]}"`;
 		}
 	}
-	if (found.length === 0) return undefined;
-	const shownEscapes = found.slice(0, MAX_REPORTED_LITERAL_ESCAPES);
-	const shown = shownEscapes.map((escape) => `"${escape}"`).join(", ");
-	const more = found.length - shownEscapes.length;
-	return `[W_LITERAL_ESCAPE] "${label}" contains literal escape text (${shown}${more > 0 ? ` (+${more} more)` : ""}); if this came from a quoted prompt, decode the escapes first or the file will contain the backslash sequence.`;
+	return undefined;
 }

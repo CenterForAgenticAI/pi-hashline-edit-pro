@@ -185,7 +185,7 @@ Edge cases:
 | --- | --- |
 | `remove_from` | 4-char anchor marking the FIRST line to remove (inclusive). |
 | `remove_to` | 4-char anchor marking the LAST line to remove (inclusive). |
-| `replacement_lines` | Replacement lines, one element per line. Mirror the removed lines exactly, blank lines included: `[]` deletes the range, `[""]` is a single blank line, `["a", ""]` is a line followed by a blank line. One element is one line: an embedded line-break character (`\n`, `\r\n`, or `\r`) splits it, and literal escape text such as `\n` or `\u200b` is written as-is, not decoded. A lone string is accepted too: it is split on newlines, and stringified array text is unwrapped. |
+| `replacement_lines` | Replacement lines, one element per line. Mirror the removed lines exactly, blank lines included: `[]` deletes the range, `[""]` is a single blank line, `["a", ""]` is a line followed by a blank line. One element is one line: an embedded line-break character (`\n`, `\r\n`, or `\r`) splits it and sets that line's ending, and literal escape text such as `\n` or `\u200b` is written as-is, not decoded. A lone string is accepted too: it is split on newlines, and stringified array text is unwrapped. |
 
 Example: read showed `Hasu│old` and `arvm│old2`; to replace both:
 
@@ -219,7 +219,7 @@ After a successful edit, the diff is capped at 50KB. A row over 50KB is shown as
 | --- | --- |
 | `anchor` | 4-char anchor marking the line next to which the lines go. The anchor line is preserved. A pasted `+Hasu│x` diff row or `anchor│` prefix is stripped automatically with a warning. |
 | `direction` | `"after"` inserts below the anchor line, `"before"` above it. |
-| `lines` | Lines to insert, one element per line. `[""]` is a blank line. Never include the anchor line. One element is one line: an embedded line-break character (`\n`, `\r\n`, or `\r`) splits it, and literal escape text such as `\n` or `\u200b` is written as-is, not decoded. A lone string is split on newlines, and stringified array text is unwrapped. |
+| `lines` | Lines to insert, one element per line. `[""]` is a blank line. Never include the anchor line. One element is one line: an embedded line-break character (`\n`, `\r\n`, or `\r`) splits it and sets that line's ending, and literal escape text such as `\n` or `\u200b` is written as-is, not decoded. A lone string is split on newlines, and stringified array text is unwrapped. |
 
 Nothing is removed and the inserted lines are written exactly as given; the anchor line and every other line stay in place. Inserting nothing (`lines: []`) reports a noop. To seed an empty file, read it and insert after the `anchor│` empty-line row.
 
@@ -247,11 +247,11 @@ Example: read served `Hasu│old` in `a.ts` and `Qwer│top` in `b.ts`; to copy 
 { "source_from": "Hasu", "source_to": "Hasu", "insert_after": "Qwer" }
 ```
 
-The source lines stay in place and keep their anchors; the copied lines are minted fresh anchors in the destination's post-edit diff. A cross-file copy writes only the destination, so one `undo_last_change` on it reverts the copy.
+The source lines stay in place and keep their anchors; the copied lines are minted fresh anchors in the destination's post-edit diff and keep their source line endings. A cross-file copy writes only the destination, so one `undo_last_change` on it reverts the copy.
 
 ### move
 
-`move` relocates a range of lines in one call: the range is removed from the source file and written after `insert_after`, which may live in a different file. It takes the same fields as `copy`, and an empty destination file is seeded with the moved lines. Within one file, `insert_after` must sit outside the source range, and moving a range to where it already sits reports `No changes made` and leaves the anchors alone. Lines between the source and the target keep their content but may be re-anchored; a cross-file move that removes every source line leaves the source file empty.
+`move` relocates a range of lines in one call: the range is removed from the source file and written after `insert_after`, which may live in a different file. It takes the same fields as `copy`, and an empty destination file is seeded with the moved lines. Within one file, `insert_after` must sit outside the source range, and moving a range to where it already sits reports `No changes made` and leaves the anchors alone. Lines between the source and the target keep their content but may be re-anchored; the moved lines keep their source line endings, and a cross-file move that removes every source line leaves the source file empty.
 
 The same safety machinery as `replace` applies to both tools: undo is saved before the write (a failed write restores the previous undo record), and line endings and BOMs survive. A cross-file `move` writes two files and records one undo entry per file; undo both sides to revert the whole move, because undoing one side alone leaves the moved lines duplicated or missing.
 

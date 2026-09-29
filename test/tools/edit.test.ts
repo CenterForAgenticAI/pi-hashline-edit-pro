@@ -288,9 +288,36 @@ describe("replace literal escape warnings", () => {
         { remove_from: hashes[1]!, remove_to: hashes[1]!, replacement_lines: [String.raw`stable\u200bCheckout`] },
         undefined, undefined, ctx,
       );
-      expect(result.content[0].text).toContain("[W_LITERAL_ESCAPE]");
-      expect(result.content[0].text).toContain('"replacement_lines"');
+      expect(result.content[0].text).toContain(String.raw`[W_LITERAL_ESCAPE] "replacement_lines" contains the literal escape text "\u200b"`);
       expect(await readFile(path, "utf-8")).toBe("aaa\nstable\\u200bCheckout\nccc\n");
+    });
+  });
+});
+
+describe("provided line endings", () => {
+  it("writes a CRLF separator embedded in replacement_lines", async () => {
+    await withTempFile("sample.ts", "aaa\nbbb\nccc\n", async ({ cwd, path }) => {
+      const { ctx, editTool } = setupIntegrationTest(cwd);
+      const hashes = await lineHashes("aaa\nbbb\nccc\n", join(cwd, "sample.ts"));
+      await editTool.execute(
+        "e1",
+        { remove_from: hashes[1]!, remove_to: hashes[1]!, replacement_lines: ["B1\r\nB2"] },
+        undefined, undefined, ctx,
+      );
+      expect(await readFile(path, "utf-8")).toBe("aaa\nB1\r\nB2\nccc\n");
+    });
+  });
+
+  it("writes a provided CR separator", async () => {
+    await withTempFile("sample.ts", "aaa\nbbb\nccc\n", async ({ cwd, path }) => {
+      const { ctx, editTool } = setupIntegrationTest(cwd);
+      const hashes = await lineHashes("aaa\nbbb\nccc\n", join(cwd, "sample.ts"));
+      await editTool.execute(
+        "e1",
+        { remove_from: hashes[1]!, remove_to: hashes[1]!, replacement_lines: ["B1\rB2"] },
+        undefined, undefined, ctx,
+      );
+      expect(await readFile(path, "utf-8")).toBe("aaa\nB1\rB2\nccc\n");
     });
   });
 });
