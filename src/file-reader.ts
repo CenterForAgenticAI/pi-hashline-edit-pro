@@ -5,6 +5,7 @@ import { loadFileKindAndText, type LFile } from "./file-kind";
 import { resolveTarget, type FileIdentity } from "./fs-write";
 import { toCwd, toDisplayPath } from "./paths";
 import { detectEnding, toLF, stripBOM, type LineEnding } from "./normalize";
+import { splitSeparators } from "./line-endings";
 import { abortIf, errCode, assertLineLimit } from "./utils";
 import { ANCHOR_POOL_EXHAUSTED_PREFIX } from "./constants";
 import { valKind, valAccess } from "./validation";
@@ -14,6 +15,7 @@ export interface NormFile {
   normalized: string;
   bom: string;
   originalEnding: LineEnding;
+  endingSeparators: LineEnding[];
   fileHashes: string[];
   hadUtf8DecodeErrors: boolean;
   identity: FileIdentity;
@@ -91,6 +93,7 @@ export async function readNormFile(
   abortIf(signal);
   const { bom, text: rawContent } = stripBOM(file.text);
   const originalEnding = detectEnding(rawContent);
+  const endingSeparators = splitSeparators(rawContent);
   const normalized = toLF(rawContent);
 
   if (options?.maxLines !== undefined) assertLineLimit(normalized, path, options.maxLines);
@@ -106,6 +109,7 @@ export async function readNormFile(
     normalized,
     bom,
     originalEnding,
+    endingSeparators,
     fileHashes,
     identity,
     hadUtf8DecodeErrors: file.hadUtf8DecodeErrors === true,

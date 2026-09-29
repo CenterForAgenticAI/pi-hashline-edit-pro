@@ -60,3 +60,25 @@ export function isBusyError(error: unknown): boolean {
   }
   return error instanceof Error && /busy|locked/i.test(error.message);
 }
+
+export interface SeparatorParse {
+	ok: boolean;
+	value?: string[];
+}
+
+export function parseSeparators(raw: unknown): SeparatorParse {
+	if (raw === null || raw === undefined || raw === "") return { ok: true };
+	if (typeof raw !== "string") return { ok: false };
+	let parsed: unknown;
+	try {
+		parsed = JSON.parse(raw);
+	} catch (error) {
+		console.error("[parseSeparators] failed to parse stored separators JSON:", error);
+		return { ok: false };
+	}
+	if (!Array.isArray(parsed) || !parsed.every((entry) => entry === "\n" || entry === "\r" || entry === "\r\n")) {
+		console.error("[parseSeparators] stored separators did not pass validation:", JSON.stringify(parsed).slice(0, 200));
+		return { ok: false };
+	}
+	return { ok: true, value: parsed as string[] };
+}

@@ -17,7 +17,8 @@ import {
   type PlannedEdit,
 } from "./hashline";
 import { adoptAnchors, servedForPath, formatAnchorReclaimNotice, takeReclaimedPaths } from "./anchor-registry";
-import { restoreEndings, stripBOM, toLF, type LineEnding } from "./normalize";
+import { stripBOM, toLF, type LineEnding } from "./normalize";
+import { joinSeparators, separatorsForSpans } from "./line-endings";
 import { assertInsertReq, assertReq, normReq } from "./payload-contract";
 import { saveUndo } from "./replace-undo";
 import { buildChanged, buildNoop, type RMetrics, type TResult } from "./replace-response";
@@ -44,6 +45,7 @@ interface BatchBase {
   hashes: string[];
   bom: string;
   ending: LineEnding;
+  separators: LineEnding[];
   identity: FileIdentity;
   hadUtf8DecodeErrors: boolean;
   absolutePath: string;
@@ -434,6 +436,7 @@ export async function ensureBatchBase(input: {
     hashes: file.fileHashes.slice(),
     bom: file.bom,
     ending: file.originalEnding,
+    separators: file.endingSeparators,
     identity: file.identity,
     hadUtf8DecodeErrors: file.hadUtf8DecodeErrors,
     absolutePath: file.absolutePath,
@@ -625,13 +628,15 @@ async function finishBatch(member: PlannedMember, signal?: AbortSignal): Promise
     }
   }
   const composed = composeBatchLines(base.content, effectivePieces);
+  const spans = pieceMappingSpans(effectivePieces);
+  const resultSeparators = separatorsForSpans(base.separators, base.hashes.length, spans, composed, base.ending);
   const warnings = [...runtime.warnings];
   if (base.hadUtf8DecodeErrors) warnings.push("Non-UTF-8 bytes were shown as U+FFFD; this edit rewrote the file as UTF-8.");
   try {
     await throwIfStrictInput(dedupeWarnings(warnings));
     assertNotEmpty(base.content, composed);
     assertLineLimit(composed, paths.displayPath, MAX_HASH_LINES);
-    const finalBytes = base.bom + restoreEndings(composed, base.ending);
+    const finalBytes = base.bom + joinSeparators(composed, resultSeparators);
     assertByteLimit(finalBytes, paths.displayPath);
   } catch (error) {
     discardBatchState(runtime);
@@ -657,12 +662,11 @@ async function finishBatch(member: PlannedMember, signal?: AbortSignal): Promise
     discardBatchState(runtime);
     throw new Error(`[E_OP_ABORTED] Batch ${runtime.display} aborted: the file changed after the batch started. Call read for fresh anchors and retry.`);
   }
-  const preflightSpans = pieceMappingSpans(effectivePieces);
   try {
     await lineHashes(composed, runtime.target, {
       content: base.content,
       hashes: base.hashes,
-      spans: preflightSpans,
+      spans,
     }, undefined, false, true);
   } catch (error) {
     discardBatchState(runtime);
@@ -673,8 +677,10 @@ async function finishBatch(member: PlannedMember, signal?: AbortSignal): Promise
     content: base.content,
     bom: base.bom,
     originalEnding: base.ending,
+    separators: base.separators,
     hashes: base.hashes,
     resultContent: composed,
+    resultSeparators,
   });
   if (!undo.persisted) {
     discardBatchState(runtime);
@@ -682,7 +688,7 @@ async function finishBatch(member: PlannedMember, signal?: AbortSignal): Promise
   }
   try {
     abortIf(signal);
-    await writeAtomic(paths.absolutePath, base.bom + restoreEndings(composed, base.ending), base.identity);
+    await writeAtomic(paths.absolutePath, base.bom + joinSeparators(composed, resultSeparators), base.identity);
   } catch (error) {
     await undo.restore();
     discardBatchState(runtime);
@@ -690,7 +696,6 @@ async function finishBatch(member: PlannedMember, signal?: AbortSignal): Promise
     throw error;
   }
   const updatedSnapshotId = await safeSnapId(paths.absolutePath, "post-edit");
-  const spans = pieceMappingSpans(effectivePieces);
   let resultHashes: string[];
   try {
     resultHashes = await lineHashes(composed, runtime.target, {

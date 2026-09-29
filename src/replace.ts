@@ -56,6 +56,7 @@ export interface PipelineResult {
   result: string;
   bom: string;
   originalEnding: LineEnding;
+  originalSeparators: LineEnding[];
   hadUtf8DecodeErrors: boolean;
   warnings: string[];
   noopEdit?: NEdit;
@@ -138,7 +139,7 @@ export async function execPipeline(
   const hashStore = options?.store ?? await loadHashStore();
   const preResolvedPath = await resolveTarget(toCwd(targetPath, cwd));
   const served = servedForPath(preResolvedPath);
-  const { normalized: originalNormalized, bom, originalEnding, fileHashes: originalHashes, hadUtf8DecodeErrors, absolutePath, identity } = await readNormFile(
+  const { normalized: originalNormalized, bom, originalEnding, endingSeparators: originalSeparators, fileHashes: originalHashes, hadUtf8DecodeErrors, absolutePath, identity } = await readNormFile(
     targetPath, cwd, { signal: options?.signal, accessMode: options?.accessMode, maxLines: MAX_HASH_LINES, store: hashStore, noPersist: options?.noPersist, allocation: options?.noPersist ? "shadow" : "real", preloadedNorm: options?.preloadedNorm },
   );
   const displayPath = toDisplayPath(cwd, absolutePath, targetPath);
@@ -181,6 +182,7 @@ export async function execPipeline(
     result,
     bom,
     originalEnding,
+    originalSeparators,
     hadUtf8DecodeErrors,
     warnings,
     noopEdit: anchorResult.noopEdit,

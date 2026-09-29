@@ -101,7 +101,7 @@ describe("replace tool - first-line whitespace preservation", () => {
     });
   });
 
-  it("preserves whitespace in a file with mixed LF/CRLF endings (WSL signature)", async () => {
+  it("preserves each line ending in a mixed LF/CRLF file (WSL signature)", async () => {
     await withTempFile("sample.ts", "aaa\nbbb\r\nccc\r\n", async ({ cwd, path }) => {
       const { ctx, readTool, editTool } = setupIntegrationTest(cwd);
       const readResult = await readTool.execute("r1", { path: "sample.ts" }, undefined, undefined, ctx);
@@ -113,11 +113,11 @@ describe("replace tool - first-line whitespace preservation", () => {
         undefined, undefined, ctx,
       );
       expect(editResult.content[0].text).toContain("Successfully replaced");
-      expect(await readFile(path, "utf-8")).toBe("aaa\n  BBB\nccc\n");
+      expect(await readFile(path, "utf-8")).toBe("aaa\n  BBB\r\nccc\r\n");
     });
   });
 
-  it("preserves whitespace in a CRLF-first mixed-ending file (WSL signature)", async () => {
+  it("preserves each line ending in a CRLF-first mixed-ending file (WSL signature)", async () => {
     await withTempFile("sample.ts", "aaa\r\nbbb\nccc\n", async ({ cwd, path }) => {
       const { ctx, readTool, editTool } = setupIntegrationTest(cwd);
       const readResult = await readTool.execute("r1", { path: "sample.ts" }, undefined, undefined, ctx);
@@ -129,7 +129,7 @@ describe("replace tool - first-line whitespace preservation", () => {
         undefined, undefined, ctx,
       );
       expect(editResult.content[0].text).toContain("Successfully replaced");
-      expect(await readFile(path, "utf-8")).toBe("aaa\r\n  BBB\r\nccc\r\n");
+      expect(await readFile(path, "utf-8")).toBe("aaa\r\n  BBB\nccc\n");
     });
   });
 

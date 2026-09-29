@@ -11,6 +11,7 @@ import { servedHashesFromDiff, serveRows } from "./served";
 import { lineHashes } from "./hashline";
 import { spanForEdit } from "./replace";
 import { restoreEndings, stripBOM, toLF } from "./normalize";
+import { joinSeparators, separatorsForSpans } from "./line-endings";
 export interface CommitMeta {
   editAnchors?: [string, string];
   anchorCarry?: number;
@@ -50,7 +51,14 @@ export async function commitEdit(pipe: PipelineResult, meta: CommitMeta): Promis
     );
   }
 
-  const finalFileBytes = pipe.bom + restoreEndings(pipe.result, pipe.originalEnding);
+  const span = pipe.spans?.[0] ?? (meta.editAnchors ? spanForEdit(pipe.originalHashes, meta.editAnchors[0], meta.editAnchors[1], pipe.result) : undefined);
+  if (span && meta.anchorCarry !== undefined) span.carry = meta.anchorCarry;
+  const resultSeparators = span
+    ? separatorsForSpans(pipe.originalSeparators, pipe.originalHashes.length, [span], pipe.result, pipe.originalEnding)
+    : undefined;
+  const finalFileBytes = pipe.bom + (resultSeparators !== undefined
+    ? joinSeparators(pipe.result, resultSeparators)
+    : restoreEndings(pipe.result, pipe.originalEnding));
   assertByteLimit(finalFileBytes, path);
 
   if (pipe.hadUtf8DecodeErrors) {
@@ -80,8 +88,10 @@ export async function commitEdit(pipe: PipelineResult, meta: CommitMeta): Promis
     content: pipe.originalNormalized,
     bom: pipe.bom,
     originalEnding: pipe.originalEnding,
+    separators: pipe.originalSeparators,
     hashes: pipe.originalHashes,
     resultContent: pipe.result,
+    ...(resultSeparators !== undefined ? { resultSeparators } : {}),
   });
   if (!undo.persisted) {
     throw new Error(
@@ -110,8 +120,6 @@ export async function commitEdit(pipe: PipelineResult, meta: CommitMeta): Promis
     removedLines: pipe.totalRemovedLines,
   };
 
-  const span = meta.editAnchors ? spanForEdit(pipe.originalHashes, meta.editAnchors[0], meta.editAnchors[1], pipe.result) : undefined;
-  if (span && meta.anchorCarry !== undefined) span.carry = meta.anchorCarry;
   let resultHashes: string[];
   try {
     resultHashes = await lineHashes(pipe.result, mutationTargetPath, {

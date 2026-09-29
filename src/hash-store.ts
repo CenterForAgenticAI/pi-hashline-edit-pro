@@ -11,6 +11,7 @@ import {
   isValidSnapshot,
   isCorruptionError,
   parseHashList,
+  parseSeparators,
 } from "./hash-store/validation";
 import {
   withBusyRetry,
@@ -18,6 +19,7 @@ import {
   withBusyRetryAsync,
 } from "./hash-store/retry";
 import { snapshotCache, cacheSnapshot, SNAPSHOT_CACHE_LIMIT } from "./hash-store/cache";
+import { countNewlines } from "./line-endings";
 
 export { isValidHashList, parseHashList, parseStoredHashes, isCorruptionError };
 export { SNAPSHOT_CACHE_LIMIT };
@@ -135,8 +137,10 @@ export interface UndoRecord {
   content: string;
   bom: string;
   ending: string;
+  separators?: string[];
   hashes: string[];
   resultContent: string;
+  resultSeparators?: string[];
   mode?: number;
 }
 
@@ -181,8 +185,10 @@ function buildStore(db: RawDb): { db: RawDb; stmts: Prepared } {
       "content TEXT NOT NULL, " +
       "bom TEXT NOT NULL, " +
       "ending TEXT NOT NULL, " +
+      "separators TEXT, " +
       "hashes TEXT NOT NULL, " +
       "result_content TEXT NOT NULL, " +
+      "result_separators TEXT, " +
       "updated_at INTEGER NOT NULL" +
     ")"
   );
@@ -191,6 +197,12 @@ function buildStore(db: RawDb): { db: RawDb; stmts: Prepared } {
   } catch {}
   try {
     db.exec("ALTER TABLE undo ADD COLUMN mode INTEGER");
+  } catch {}
+  try {
+    db.exec("ALTER TABLE undo ADD COLUMN separators TEXT");
+  } catch {}
+  try {
+    db.exec("ALTER TABLE undo ADD COLUMN result_separators TEXT");
   } catch {}
   const versionRow = db.prepare("SELECT value FROM meta WHERE key = 'version'").get() as { value?: string } | undefined;
   if (versionRow && versionRow.value !== String(HASH_STORE_VERSION)) {
@@ -210,11 +222,11 @@ function buildStore(db: RawDb): { db: RawDb; stmts: Prepared } {
     "ON CONFLICT(path) DO UPDATE SET checksum = excluded.checksum, line_count = excluded.line_count, hashes = excluded.hashes, line_checksums = excluded.line_checksums, updated_at = excluded.updated_at"
   );
   const undoUpsertStmt = db.prepare(
-    "INSERT INTO undo (path, content, bom, ending, hashes, result_content, mode, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?) " +
-    "ON CONFLICT(path) DO UPDATE SET content = excluded.content, bom = excluded.bom, ending = excluded.ending, hashes = excluded.hashes, result_content = excluded.result_content, mode = excluded.mode, updated_at = excluded.updated_at"
+    "INSERT INTO undo (path, content, bom, ending, separators, hashes, result_content, result_separators, mode, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) " +
+    "ON CONFLICT(path) DO UPDATE SET content = excluded.content, bom = excluded.bom, ending = excluded.ending, separators = excluded.separators, hashes = excluded.hashes, result_content = excluded.result_content, result_separators = excluded.result_separators, mode = excluded.mode, updated_at = excluded.updated_at"
   );
   const undoGetStmt = db.prepare(
-    "SELECT content, bom, ending, hashes, result_content, mode FROM undo WHERE path = ?"
+    "SELECT content, bom, ending, separators, hashes, result_content, result_separators, mode FROM undo WHERE path = ?"
   );
   const undoDelStmt = db.prepare("DELETE FROM undo WHERE path = ?");
   const snapshotTimeStmt = db.prepare("SELECT updated_at FROM snapshots WHERE path = ?");
@@ -543,8 +555,10 @@ export function upsertUndo(store: HashStore, path: string, entry: UndoRecord): v
     entry.content,
     entry.bom,
     entry.ending,
+    entry.separators ? JSON.stringify(entry.separators) : null,
     JSON.stringify(entry.hashes),
     entry.resultContent,
+    entry.resultSeparators ? JSON.stringify(entry.resultSeparators) : null,
     typeof entry.mode === "number" ? entry.mode : null,
     Date.now(),
   );
@@ -560,12 +574,26 @@ export function getUndoEntry(store: HashStore, path: string): UndoRecord | undef
     store.stmts.undoDelete(path);
     return undefined;
   }
+  const separators = parseSeparators(row.separators);
+  const resultSeparators = parseSeparators(row.result_separators);
+  const resultContent = row.result_content as string;
+  if (
+    !separators.ok ||
+    !resultSeparators.ok ||
+    (separators.value !== undefined && separators.value.length !== countNewlines(content)) ||
+    (resultSeparators.value !== undefined && resultSeparators.value.length !== countNewlines(resultContent))
+  ) {
+    store.stmts.undoDelete(path);
+    return undefined;
+  }
   return {
     content,
     bom: row.bom as string,
     ending: row.ending as string,
+    ...(separators.value !== undefined ? { separators: separators.value } : {}),
     hashes: parsed,
-    resultContent: row.result_content as string,
+    resultContent,
+    ...(resultSeparators.value !== undefined ? { resultSeparators: resultSeparators.value } : {}),
     ...(typeof row.mode === "number" ? { mode: row.mode } : {}),
   };
 }
