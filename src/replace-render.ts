@@ -126,7 +126,13 @@ export function getResultText(result: {
 export function extractWarnings(
 	text: string | undefined,
 ): string | undefined {
-	return text?.match(/(?:^|\n)Warnings:\n[\s\S]*$/)?.[0]?.trimStart();
+	return text?.match(/(?:^|\n)Warnings:\n[\s\S]*?(?=\n\nHints:\n|$)/)?.[0]?.trimStart();
+}
+
+export function extractHints(
+	text: string | undefined,
+): string | undefined {
+	return text?.match(/(?:^|\n)Hints:\n[\s\S]*$/)?.[0]?.trimStart();
 }
 
 export function isApplied(
@@ -153,8 +159,8 @@ export function expandHint(): string {
 function extractSummary(text: string | undefined): string | undefined {
 	if (!text) return undefined;
 	if (text.includes("│")) return undefined;
-	const warningsIdx = text.indexOf("\n\nWarnings:");
-	const summary = warningsIdx >= 0 ? text.slice(0, warningsIdx) : text;
+	const noticesIdx = text.search(/\n\n(?:Warnings|Hints):\n/);
+	const summary = noticesIdx >= 0 ? text.slice(0, noticesIdx) : text;
 	return summary.length > 0 ? summary : undefined;
 }
 
@@ -190,6 +196,8 @@ export function buildAppliedText(
 	}
 	const warnings = details?.warnings?.length ? `Warnings:\n${details.warnings.join("\n")}` : extractWarnings(text);
 	if (warnings) sections.push(warnings);
+	const hints = details?.hints?.length ? `Hints:\n${details.hints.join("\n")}` : extractHints(text);
+	if (hints) sections.push(hints);
 	return sections.length > 0 ? sections.join("\n\n") : undefined;
 }
 

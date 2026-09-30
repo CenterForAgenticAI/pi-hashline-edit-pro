@@ -376,6 +376,35 @@ describe("replace diff in model-visible text", () => {
     });
   });
 
+  it("keeps the hints block separate from warnings in the model-visible result", async () => {
+    await withTempDir("auto-read-diff-hint-", async (dir) => {
+      await writeFile(join(dir, "hint.txt"), "aaa\nbbb\nccc\n", "utf-8");
+
+      const { pi, handlers } = makePiStub();
+      register(pi);
+      const handler = handlers.get("tool_result");
+      const diff = " aaa\n-   │bbb\n+XYZ│BBB\n ccc";
+      const hints = [String.raw`[H_LITERAL_ESCAPE] "lines" contains the literal escaped text "\u200b"`];
+
+      const result = await handler!(
+        {
+          toolName: "replace",
+          isError: false,
+          input: { path: "hint.txt" },
+          details: { diff, hints, metrics: { classification: "applied", warnings: 0 } },
+          content: [{ type: "text", text: "Successfully replaced in hint.txt." }],
+        },
+        { cwd: dir },
+      );
+
+      const text = (result as { content: Array<{ type: string; text: string }> }).content[0].text;
+      expect(text).toContain(diff);
+      expect(text).toContain("Hints:");
+      expect(text).toContain(hints[0]!);
+      expect(text).not.toContain("Warnings:");
+    });
+  });
+
   it("leaves the summary untouched when the result carries no diff", async () => {
     const { pi, handlers } = makePiStub();
     register(pi);

@@ -11,7 +11,7 @@ import { stripAnchorRow } from "./hashline/resolve";
 import { withAnchorSession } from "./anchor-registry";
 import { loadP, loadGuide } from "./prompts";
 import { assertInsertReq, normReq, type InsertReq } from "./payload-contract";
-import { decodeStringArray, isRec, literalEscapeWarning, splitLines } from "./utils";
+import { decodeStringArray, isRec, literalEscapeHint, splitLines } from "./utils";
 import { queuedEdit, editToolBase, editRenderCallWrapper, editRenderResultWrapper, resolveEditTargetWithRequirement, throwIfStrictInput, withInsertPrompts, DEFAULT_EDIT_FLAGS, type EditToolFlags } from "./edit-common";
 import type { RPreview, RRState } from "./replace-render";
 export { assertInsertReq, type InsertReq };
@@ -28,7 +28,7 @@ const insertDirectionSchema = Type.Union(
 
 const insertLinesSchema = Type.Array(
   Type.String({
-    description: "One line to insert. A real line break (\\n, \\r\\n, or \\r) splits it into lines and sets their endings; escape sequences are not decoded.",
+    description: "One line to insert. A real line break (\\n, \\r\\n, or \\r) splits it into lines and sets their endings.",
   }),
   {
     description: 'One string per line; [""] is a blank line; never include the anchor line.',
@@ -192,7 +192,7 @@ export function buildInsertToolDef(flags: EditToolFlags = DEFAULT_EDIT_FLAGS): I
         }
         assertInsertReq(canonical);
         const req = canonical;
-        const literalEscape = literalEscapeWarning(req.lines, "lines");
+        const literalEscape = literalEscapeHint(req.lines, "lines");
         if (literalEscape !== undefined) insertWarnings.push(literalEscape);
         const targetPath = await resolveEditTargetWithRequirement({
           anchor: req.anchor,

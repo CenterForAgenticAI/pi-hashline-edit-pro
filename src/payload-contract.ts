@@ -4,7 +4,7 @@ import { isRec, normalizeRequest, rejectUnknownFields, assertNoNul } from "./uti
 const replacementLinesSchema = Type.Array(
   Type.String({
     description:
-      "One replacement line. A real line break (\\n, \\r\\n, or \\r) splits it into lines and sets their endings; escape sequences are not decoded.",
+      "One replacement line. A real line break (\\n, \\r\\n, or \\r) splits it into lines and sets their endings.",
   }),
   {
     description:

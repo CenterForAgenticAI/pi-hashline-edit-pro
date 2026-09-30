@@ -11,7 +11,7 @@ import { buildAutoReadAllInjection, autoReadAllBudget } from "./src/auto-read-al
 import { clearAutoReadAllComplete } from "./src/auto-read-all-state";
 import type { RMetrics } from "./src/replace-response";
 import type { ReplaceDetails } from "./src/replace";
-import { extractWarnings } from "./src/replace-render";
+import { extractHints, extractWarnings } from "./src/replace-render";
 import { MAX_HASH_LINES } from "./src/hashline";
 import type { AutoReadAllMode } from "./src/config";
 import {
@@ -266,6 +266,7 @@ export default function (pi: ExtensionAPI): void {
     const toolDetails = event.details as ReplaceDetails | undefined;
     const diff = toolDetails?.diff;
     const detailWarnings = Array.isArray(toolDetails?.warnings) ? toolDetails.warnings.filter((w): w is string => typeof w === "string") : [];
+    const detailHints = Array.isArray(toolDetails?.hints) ? toolDetails.hints.filter((h): h is string => typeof h === "string") : [];
     if (typeof diff !== "string") return;
     const hasDiff = diff.length > 0;
 
@@ -277,12 +278,14 @@ export default function (pi: ExtensionAPI): void {
       .map((entry) => entry.text)
       .join("\n");
     const warnings = detailWarnings.length ? `Warnings:\n${detailWarnings.join("\n")}` : extractWarnings(rendered);
-    const hint = hasDiff ? (warnings ? `${diff}\n\n${warnings}` : diff) : warnings ? `[post-edit] applied successfully; the diff is empty (whitespace-only change).\n\n${warnings}` : "[post-edit] applied successfully; the diff is empty (whitespace-only change).";
+    const hints = detailHints.length ? `Hints:\n${detailHints.join("\n")}` : extractHints(rendered);
+    const notices = [warnings, hints].filter((part): part is string => part !== undefined).join("\n\n");
+    const noticeText = hasDiff ? (notices ? `${diff}\n\n${notices}` : diff) : notices ? `[post-edit] applied successfully; the diff is empty (whitespace-only change).\n\n${notices}` : "[post-edit] applied successfully; the diff is empty (whitespace-only change).";
     return {
       content: [
         {
           type: "text",
-          text: hint,
+          text: noticeText,
         },
       ],
     };

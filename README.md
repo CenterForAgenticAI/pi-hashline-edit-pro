@@ -41,7 +41,7 @@ the result is the post-edit diff with fresh anchors, so the next edit needs no r
 - [Configuration](#configuration)
 - [Limits](#limits)
 - [Tool result details](#tool-result-details)
-- [Error and warning codes](#error-and-warning-codes)
+- [Error, warning, and hint codes](#error-warning-and-hint-codes)
 - [Troubleshooting](#troubleshooting)
 - [Privacy and on-disk state](#privacy-and-on-disk-state)
 - [How anchors work](#how-anchors-work)
@@ -390,16 +390,16 @@ All seven tools return machine-readable metadata in `details` alongside the mode
 | Tool | `details` |
 | --- | --- |
 | `read` | `truncation` (set when output was truncated), `snapshotId` (a `v2\|path\|ino\|mtime\|ctime\|size` fingerprint), `nextOffset` (use as the next `offset`), and `metrics` with `truncated` and `next_offset`. |
-| `replace`, `insert` | `diff` (post-edit diff, capped, with current anchors on `+anchor│` and ` anchor│` rows; a same-message batch reports the combined diff on its last call and an empty diff on earlier calls), `patch` (a standard unified patch for external tools, capped like the diff), `patchTruncated` (true when the patch was cut or skipped for a pair over 1MB and can no longer be applied as-is), `firstChangedLine`, `snapshotId`, `classification` (`"noop"` when nothing changed), `batch` (`{ id, size, last, total }` marking same-message batch membership; earlier members also carry `aborted: true` and `abortMessage` after a batch abort), and `metrics`: `edits_attempted`, `edits_noop`, `warnings`, `classification` (`"applied"` or `"noop"`), `changed_lines` (`{ first, last }`), `added_lines`, `removed_lines`. |
+| `replace`, `insert` | `diff` (post-edit diff, capped, with current anchors on `+anchor│` and ` anchor│` rows; a same-message batch reports the combined diff on its last call and an empty diff on earlier calls), `patch` (a standard unified patch for external tools, capped like the diff), `patchTruncated` (true when the patch was cut or skipped for a pair over 1MB and can no longer be applied as-is), `firstChangedLine`, `snapshotId`, `classification` (`"noop"` when nothing changed), `batch` (`{ id, size, last, total }` marking same-message batch membership; earlier members also carry `aborted: true` and `abortMessage` after a batch abort), `hints` (informative `[H_*]` notices, for example literal escaped text written as sent), and `metrics`: `edits_attempted`, `edits_noop`, `warnings`, `classification` (`"applied"` or `"noop"`), `changed_lines` (`{ first, last }`), `added_lines`, `removed_lines`. |
 | `copy`, `move` | Same shape as `replace`: `diff` (post-edit diff with current anchors), `patch`, `patchTruncated`, `firstChangedLine`, `snapshotId`, `classification` (`"noop"` when a move changes nothing), and `metrics` with the same counters. |
 | `undo_last_change` | `diff` (the undo diff with restored anchors), `patch`, `patchTruncated`, and `metrics` in the same shape as `replace`. |
 | `anchor_grep` | `metrics` with `matches` (capped at `limit`), `files`, and `truncated`; `truncation` (the standard pi truncation report) when output was cut; and `linesTruncated` (true when long lines were shown as fragments). |
 
-`snapshotId`, `firstChangedLine`, and `metrics.warnings` are the three fields external consumers most often read; `snapshotId` is a string fingerprint, `firstChangedLine` is a 1-based line number on the result file, and `metrics.warnings` counts the `[W_*]` notices in `details.warnings`.
+`snapshotId`, `firstChangedLine`, and `metrics.warnings` are the three fields external consumers most often read; `snapshotId` is a string fingerprint, `firstChangedLine` is a 1-based line number on the result file, and `metrics.warnings` counts the `[W_*]` notices in `details.warnings`; hint `[H_*]` notices live in `details.hints` and are not counted.
 
-## Error and warning codes
+## Error, warning, and hint codes
 
-Codes starting with `E_` are errors: nothing was written, with one exception. `File was written; anchor finalization failed` means the file was written and one undo reverts it. Codes starting with `W_` are warnings: the call succeeded with an auto-fix notice or an anchor-reclaim notice; check `classification` (`applied` vs `noop`) in `details.metrics` to tell whether bytes changed. `[E_AUTO_READ_ALL]` is informational rather than a failure: the `read` was refused because the file is unchanged since the start-of-session auto-read, so the attached content is still exact.
+Codes starting with `E_` are errors: nothing was written, with one exception. `File was written; anchor finalization failed` means the file was written and one undo reverts it. Codes starting with `W_` are warnings: the call succeeded with an auto-fix notice or an anchor-reclaim notice; check `classification` (`applied` vs `noop`) in `details.metrics` to tell whether bytes changed. Codes starting with `H_` are hints: the call succeeded and the file holds exactly what was requested, so the notice is informational, never blocks an edit (not even in strict-input mode), and is reported in `details.hints` instead of `details.warnings`. `[E_AUTO_READ_ALL]` is informational rather than a failure: the `read` was refused because the file is unchanged since the start-of-session auto-read, so the attached content is still exact.
 
 Most common, with the fix:
 
@@ -422,8 +422,8 @@ Full reference:
 | `[E_STALE_ANCHOR]` | An anchor is not owned in this session (it was never shown to you, or its line was edited or the file was rewritten); call `read` for fresh anchors. |
 | `[W_INVALID_PATCH]` | A `replacement_lines` element is a diff-preview row (`+anchor│`, `-anchor│`, `-    │`). The marker is stripped automatically with a warning. |
 | `[W_BARE_HASH_PREFIX]` | A `replacement_lines` element starts with an `anchor│` prefix. The prefix is stripped automatically with a warning. |
-| `[W_LITERAL_ESCAPE]` | `lines` or `replacement_lines` contains literal escape text such as `\u200b` or `\n`; the file receives those characters as written. Decode the escapes first if the text came from a quoted prompt. |
 | `[W_ANCHOR_RECLAIMED]` | The session's anchor quota was exhausted, so all anchors of the listed files (the least recently read or edited) were freed to make room. Read those files again before editing them. |
+| `[H_LITERAL_ESCAPE]` | `lines` or `replacement_lines` contains the literal escaped text such as `\u200b` or `\n`; the file receives those characters as written. Decode the escapes first if the text came from a quoted prompt. |
 | `[E_WOULD_EMPTY]` | An edit would empty a non-empty file; use `write` instead. A cross-file `move` may empty its source file. |
 | `[E_NOT_FOUND]` | The path does not exist. |
 | `[E_ACCESS]` | The file is not readable or writable. |

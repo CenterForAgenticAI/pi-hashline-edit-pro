@@ -278,8 +278,8 @@ describe("regReplace - robustness", () => {
   });
 });
 
-describe("replace literal escape warnings", () => {
-  it("warns and writes the literal escape text", async () => {
+describe("replace literal escape hints", () => {
+  it("hints and writes the literal escaped text", async () => {
     await withTempFile("sample.ts", "aaa\nbbb\nccc\n", async ({ cwd, path }) => {
       const { ctx, editTool } = setupIntegrationTest(cwd);
       const hashes = await lineHashes("aaa\nbbb\nccc\n", join(cwd, "sample.ts"));
@@ -288,7 +288,9 @@ describe("replace literal escape warnings", () => {
         { remove_from: hashes[1]!, remove_to: hashes[1]!, replacement_lines: [String.raw`stable\u200bCheckout`] },
         undefined, undefined, ctx,
       );
-      expect(result.content[0].text).toContain(String.raw`[W_LITERAL_ESCAPE] "replacement_lines" contains the literal escape text "\u200b"`);
+      expect(result.content[0].text).toContain(String.raw`[H_LITERAL_ESCAPE] "replacement_lines" contains the literal escaped text "\u200b"`);
+      expect(result.details.hints).toEqual([String.raw`[H_LITERAL_ESCAPE] "replacement_lines" contains the literal escaped text "\u200b"`]);
+      expect(result.details.metrics?.warnings).toBe(0);
       expect(await readFile(path, "utf-8")).toBe("aaa\nstable\\u200bCheckout\nccc\n");
     });
   });

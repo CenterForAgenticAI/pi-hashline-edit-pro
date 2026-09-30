@@ -10,7 +10,7 @@ import {
 } from "./replace-diff";
 import { readNormFile, type NormFile } from "./file-reader";
 import { editToolSchema, buildEditToolSchema, type ReqParams, assertReq, normReq } from "./payload-contract";
-import { literalEscapeWarning, splitLines } from "./utils";
+import { literalEscapeHint, splitLines } from "./utils";
 import { loadP, loadGuide } from "./prompts";
 import { type FileIdentity } from "./fs-write";
 import { applyEdit,
@@ -48,6 +48,7 @@ export type ReplaceDetails = {
   metrics?: RMetrics;
   diffLineNumbers?: (number | null)[];
   warnings?: string[];
+  hints?: string[];
   batch?: { id: number; size: number; last: boolean; total: number; aborted?: boolean; abortMessage?: string };
 };
 
@@ -273,7 +274,7 @@ export function buildToolDef(flags: EditToolFlags = DEFAULT_EDIT_FLAGS): ToolDef
         const canonical = normReq(params);
         assertReq(canonical);
         const normalizedParams = canonical;
-        const literalEscape = literalEscapeWarning(normalizedParams.replacement_lines, "replacement_lines");
+        const literalEscape = literalEscapeHint(normalizedParams.replacement_lines, "replacement_lines");
         const targetPath = await resolveEditTargetWithRequirement({
           removeFrom: normalizedParams.remove_from,
           removeTo: normalizedParams.remove_to,

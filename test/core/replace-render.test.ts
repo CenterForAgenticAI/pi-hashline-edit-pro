@@ -7,6 +7,7 @@ import {
 	fmtResult,
 	fmtCall,
 	getResultText,
+	extractHints,
 	extractWarnings,
 	isApplied,
 	buildAppliedText,
@@ -190,6 +191,12 @@ describe("extractWarnings", () => {
 
 	it("returns undefined for undefined input", () => {
 		expect(extractWarnings(undefined)).toBeUndefined();
+	});
+
+	it("extracts hints and keeps warnings separate from them", () => {
+		const text = "Some text\nWarnings:\nWarning 1\n\nHints:\nHint 1";
+		expect(extractWarnings(text)).toBe("Warnings:\nWarning 1");
+		expect(extractHints(text)).toBe("Hints:\nHint 1");
 	});
 });
 

@@ -384,7 +384,7 @@ function isSurrogateEscapePair(line: string, index: number, hex: string): boolea
 	return false;
 }
 
-export function literalEscapeWarning(lines: string[], label: string): string | undefined {
+export function literalEscapeHint(lines: string[], label: string): string | undefined {
 	for (const line of lines) {
 		if (!line.includes("\\")) continue;
 		const hasRealBreak = REAL_LINE_BREAK_RE.test(line);
@@ -396,7 +396,7 @@ export function literalEscapeWarning(lines: string[], label: string): string | u
 				if (hex.toLowerCase() === "dddd") continue;
 				if (isSurrogateEscapePair(line, match.index, hex)) continue;
 			}
-			return `[W_LITERAL_ESCAPE] "${label}" contains the literal escape text "${match[0]}"`;
+			return `[H_LITERAL_ESCAPE] "${label}" contains the literal escaped text "${match[0]}"`;
 		}
 	}
 	return undefined;

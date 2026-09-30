@@ -46,6 +46,22 @@ describe("buildNoop", () => {
     expect(result.content[0].text).toContain("Warning 1");
   });
 
+  it("splits hint notices from warnings and does not count them as warnings", () => {
+    const result = buildNoop({
+      path: "test.txt",
+      noopEdit: undefined,
+      snapshotId: "snap1",
+      editMeta: { editsAttempted: 1, noopEditsCount: 0, addedLines: 0, removedLines: 0 },
+      warnings: ["[H_LITERAL_ESCAPE] hint", "[W_BAD_REF] warn"],
+    });
+    expect(result.details.hints).toEqual(["[H_LITERAL_ESCAPE] hint"]);
+    expect(result.details.warnings).toEqual(["[W_BAD_REF] warn"]);
+    expect(result.details.metrics!.warnings).toBe(1);
+    expect(result.content[0].text).toContain("Hints:");
+    expect(result.content[0].text).toContain("[H_LITERAL_ESCAPE] hint");
+    expect(result.content[0].text).toContain("Warnings:");
+  });
+
   it("clips long currentContent in noop details", () => {
     const result = buildNoop({
       path: "test.txt",

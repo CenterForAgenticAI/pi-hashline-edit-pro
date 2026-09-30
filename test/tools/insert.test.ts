@@ -437,8 +437,8 @@ describe("insert strip warnings", () => {
   });
 });
 
-describe("insert literal escape warnings", () => {
-  it("warns and writes the literal escape text", async () => {
+describe("insert literal escape hints", () => {
+  it("hints and writes the literal escaped text", async () => {
     await withTempFile("sample.ts", "alpha\nbeta\n", async ({ cwd, path }) => {
       const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
       const text = getText(await readTool.execute("r1", { path: "sample.ts" }, undefined, undefined, ctx));
@@ -448,7 +448,8 @@ describe("insert literal escape warnings", () => {
         { anchor: betaHash, direction: "after", lines: [String.raw`stable\u200bCheckout`] },
         undefined, undefined, ctx,
       );
-      expect(result.content[0].text).toContain(String.raw`[W_LITERAL_ESCAPE] "lines" contains the literal escape text "\u200b"`);
+      expect(result.content[0].text).toContain(String.raw`[H_LITERAL_ESCAPE] "lines" contains the literal escaped text "\u200b"`);
+      expect(result.details.hints).toEqual([String.raw`[H_LITERAL_ESCAPE] "lines" contains the literal escaped text "\u200b"`]);
       expect(await readFile(path, "utf-8")).toBe("alpha\nbeta\nstable\\u200bCheckout\n");
     });
   });

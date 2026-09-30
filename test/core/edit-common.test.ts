@@ -35,10 +35,10 @@ describe("throwIfStrictInput", () => {
     });
   });
 
-  it("does not reject a literal-escape warning even when strict input is on", async () => {
+  it("does not reject a literal-escape hint even when strict input is on", async () => {
     await withTempDir("pi-hashline-edit-common-test-", async () => {
       await writeConfig({ autoRead: true, anchorGrepEnabled: true, strictInput: true });
-      await expect(throwIfStrictInput(['[W_LITERAL_ESCAPE] "lines" contains the literal escape text "\\u200b"'])).resolves.toBeUndefined();
+      await expect(throwIfStrictInput(['[H_LITERAL_ESCAPE] "lines" contains the literal escaped text "\\u200b"'])).resolves.toBeUndefined();
     });
   });
 });

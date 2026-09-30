@@ -8,7 +8,7 @@ import {
   decodeStringArray,
   assertByteLimit,
   isModeUnsupported,
-  literalEscapeWarning,
+  literalEscapeHint,
 } from "../../src/utils";
 
 describe("isRec", () => {
@@ -413,28 +413,28 @@ describe("isModeUnsupported", () => {
   });
 });
 
-describe("literalEscapeWarning", () => {
+describe("literalEscapeHint", () => {
   it("reports the first literal escape sequence", () => {
-    expect(literalEscapeWarning([String.raw`stable\u200bCheckout`], "lines")).toBe(String.raw`[W_LITERAL_ESCAPE] "lines" contains the literal escape text "\u200b"`);
-    expect(literalEscapeWarning([String.raw`a\nb`], "lines")).toBe(String.raw`[W_LITERAL_ESCAPE] "lines" contains the literal escape text "\n"`);
-    expect(literalEscapeWarning([String.raw`say \"hi\"`], "lines")).toBe(String.raw`[W_LITERAL_ESCAPE] "lines" contains the literal escape text "\""`);
-    expect(literalEscapeWarning([String.raw`\n\t`], "lines")).toBe(String.raw`[W_LITERAL_ESCAPE] "lines" contains the literal escape text "\n"`);
+    expect(literalEscapeHint([String.raw`stable\u200bCheckout`], "lines")).toBe(String.raw`[H_LITERAL_ESCAPE] "lines" contains the literal escaped text "\u200b"`);
+    expect(literalEscapeHint([String.raw`a\nb`], "lines")).toBe(String.raw`[H_LITERAL_ESCAPE] "lines" contains the literal escaped text "\n"`);
+    expect(literalEscapeHint([String.raw`say \"hi\"`], "lines")).toBe(String.raw`[H_LITERAL_ESCAPE] "lines" contains the literal escaped text "\""`);
+    expect(literalEscapeHint([String.raw`\n\t`], "lines")).toBe(String.raw`[H_LITERAL_ESCAPE] "lines" contains the literal escaped text "\n"`);
   });
 
   it("returns undefined for real characters and plain text", () => {
-    expect(literalEscapeWarning(["stable\u200bCheckout"], "lines")).toBeUndefined();
-    expect(literalEscapeWarning(["a\nb"], "lines")).toBeUndefined();
-    expect(literalEscapeWarning([String.raw`/^\d+\.\d+$/`], "lines")).toBeUndefined();
-    expect(literalEscapeWarning([], "lines")).toBeUndefined();
+    expect(literalEscapeHint(["stable\u200bCheckout"], "lines")).toBeUndefined();
+    expect(literalEscapeHint(["a\nb"], "lines")).toBeUndefined();
+    expect(literalEscapeHint([String.raw`/^\d+\.\d+$/`], "lines")).toBeUndefined();
+    expect(literalEscapeHint([], "lines")).toBeUndefined();
   });
 
   it("skips valid surrogate pairs and the dedicated placeholder", () => {
-    expect(literalEscapeWarning([String.raw`\uD83D\uDE00`], "lines")).toBeUndefined();
-    expect(literalEscapeWarning([String.raw`\uDDDD`], "lines")).toBeUndefined();
-    expect(literalEscapeWarning([String.raw`\uD83D`], "lines")).toBe(String.raw`[W_LITERAL_ESCAPE] "lines" contains the literal escape text "\uD83D"`);
+    expect(literalEscapeHint([String.raw`\uD83D\uDE00`], "lines")).toBeUndefined();
+    expect(literalEscapeHint([String.raw`\uDDDD`], "lines")).toBeUndefined();
+    expect(literalEscapeHint([String.raw`\uD83D`], "lines")).toBe(String.raw`[H_LITERAL_ESCAPE] "lines" contains the literal escaped text "\uD83D"`);
   });
 
   it("skips simple escapes in a line that also has a real break", () => {
-    expect(literalEscapeWarning([String.raw`a\nb` + "\nc"], "lines")).toBeUndefined();
+    expect(literalEscapeHint([String.raw`a\nb` + "\nc"], "lines")).toBeUndefined();
   });
 });
