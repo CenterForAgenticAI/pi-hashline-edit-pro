@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import * as os from "os";
 import { resolve } from "path";
-import { toCwd } from "../../src/paths";
+import { toCwd, toDisplayPath } from "../../src/paths";
 import { withHome } from "../support/fixtures";
 
 describe("toCwd", () => {
@@ -51,5 +51,29 @@ describe("toCwd", () => {
     expect(toCwd("@~/notes.md", cwd)).toBe(
       resolve(cwd, "@~/notes.md"),
     );
+  });
+});
+
+describe("toDisplayPath", () => {
+  const cwd = "/home/user/project";
+
+  it("returns a relative path inside the working directory", () => {
+    expect(toDisplayPath(cwd, "/home/user/project/src/main.ts")).toBe("src/main.ts");
+  });
+
+  it("keeps a relative path that does not climb to the root", () => {
+    expect(toDisplayPath(cwd, "/home/user/other/main.ts")).toBe("../other/main.ts");
+  });
+
+  it("uses the absolute path when the relative path climbs to the root", () => {
+    expect(toDisplayPath(cwd, "/tmp/main.ts")).toBe("/tmp/main.ts");
+  });
+
+  it("prefers the provided fallback when the relative path climbs to the root", () => {
+    expect(toDisplayPath(cwd, "/tmp/main.ts", "/fallback/main.ts")).toBe("/fallback/main.ts");
+  });
+
+  it("keeps a relative path when the working directory is the root", () => {
+    expect(toDisplayPath("/", "/tmp/main.ts")).toBe("tmp/main.ts");
   });
 });

@@ -1,5 +1,5 @@
 import { homedir } from "node:os";
-import { isAbsolute, relative, resolve as resolvePath, join, dirname } from "node:path";
+import { isAbsolute, relative, resolve as resolvePath, join, dirname, parse } from "node:path";
 
 
 function homeBase(): string {
@@ -55,6 +55,22 @@ export function toCwd(filePath: string, cwd: string): string {
   return isAbsolute(expanded) ? expanded : resolvePath(cwd, expanded);
 }
 
+function pathDepth(path: string): number {
+  const root = parse(path).root;
+  return path.slice(root.length).split(/[\\/]+/).filter((part) => part.length > 0).length;
+}
+
+function climbsToRoot(cwd: string, relativePath: string): boolean {
+  let climbs = 0;
+  for (const part of relativePath.split("/")) {
+    if (part !== "..") break;
+    climbs += 1;
+  }
+  return climbs > 0 && climbs >= pathDepth(resolvePath(cwd));
+}
+
 export function toDisplayPath(cwd: string, absolutePath: string, fallback?: string): string {
-  return relative(cwd, absolutePath).replace(/\\/g, "/") || (fallback ?? absolutePath);
+  const rel = relative(cwd, absolutePath).replace(/\\/g, "/");
+  if (rel.length === 0 || climbsToRoot(cwd, rel)) return fallback ?? absolutePath;
+  return rel;
 }
