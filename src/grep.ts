@@ -11,7 +11,7 @@ import { globToRegex } from "./glob";
 import { MAX_HASH_LINES, fmtRow, HASH_LEN, HASH_SEP, HASH_CLASS } from "./hashline";
 import { ANCHOR_POOL_EXHAUSTED_PREFIX, MAX_GREP_LINE_BYTES } from "./constants";
 import { toCwd, toDisplayPath } from "./paths";
-import { loadP, loadGuide } from "./prompts";
+import { loadP } from "./prompts";
 import { normReq } from "./payload-contract";
 import { abortIf, clipLine, errCode, gutterWidth, isRec, makePrepareArguments, rejectUnknownFields, truncateToBytes, visLines } from "./utils";
 import { withAnchorSession, formatAnchorReclaimNotice, takeReclaimedPaths } from "./anchor-registry";
@@ -535,7 +535,6 @@ export function regGrep(pi: ExtensionAPI): void {
     label: "Anchor Grep",
     description: loadP("../prompts/grep.md"),
     promptSnippet: loadP("../prompts/grep-snippet.md"),
-    promptGuidelines: loadGuide("../prompts/grep-guidelines.md"),
     prepareArguments: makePrepareArguments(),
     parameters: grepToolSchema,
     executionMode: "sequential",

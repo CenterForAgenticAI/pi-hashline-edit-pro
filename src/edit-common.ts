@@ -45,14 +45,11 @@ export function withReplacePrompts(base: { description: string; snippet: string;
   if (flags.requirePath) {
     descriptionParts.push("Also give `path` matching the file the anchors were served for; it is required and must match anchor ownership.");
     snippetParts.push("; include `path` (required)");
-    guidelines.push("`replace`: include `path` matching the file the anchors were served for; it is required.");
   } else {
     descriptionParts.push("Path resolution is anchor-only; do not pass `path`.");
-    guidelines.push("`replace`: path resolution is anchor-only; don't pass `path`.");
   }
   if (flags.strictInput) {
     descriptionParts.push("Strict-input mode is on: auto-fixable slips are rejected instead of fixed with warnings.");
-    guidelines.push("`replace`: strict-input is on: auto-fixable slips are rejected instead of fixed.");
   }
   return { description: descriptionParts.join(" "), snippet: snippetParts.join(""), guidelines };
 }
@@ -78,14 +75,11 @@ export function withInsertPrompts(base: { description: string; snippet: string; 
   if (flags.requirePath) {
     descriptionParts.push("Also give `path` matching the file the anchor was served for; it is required and must match anchor ownership.");
     snippetParts.push("; include `path` (required)");
-    guidelines.push("`insert`: include `path` matching the file the anchor was served for; it is required.");
   } else {
     descriptionParts.push("Path resolution is anchor-only; do not pass `path`.");
-    guidelines.push("`insert`: path resolution is anchor-only; don't pass `path`.");
   }
   if (flags.strictInput) {
     descriptionParts.push("Strict-input mode is on: auto-fixable slips are rejected instead of fixed with warnings.");
-    guidelines.push("`insert`: strict-input is on: auto-fixable slips are rejected instead of fixed.");
   }
   return { description: descriptionParts.join(" "), snippet: snippetParts.join(""), guidelines };
 }
@@ -97,14 +91,11 @@ export function withReplaceWithinPrompts(base: { description: string; snippet: s
   if (flags.requirePath) {
     descriptionParts.push("Also give `path` matching the file the anchors were served for; it is required and must match anchor ownership.");
     snippetParts.push("; include `path` (required)");
-    guidelines.push("`replace_within`: include `path` matching the file the anchors were served for; it is required.");
   } else {
     descriptionParts.push("Path resolution is anchor-only; do not pass `path`.");
-    guidelines.push("`replace_within`: path resolution is anchor-only; don't pass `path`.");
   }
   if (flags.strictInput) {
     descriptionParts.push("Strict-input mode is on: auto-fixable slips are rejected instead of fixed with warnings.");
-    guidelines.push("`replace_within`: strict-input is on: auto-fixable slips are rejected instead of fixed.");
   }
   return { description: descriptionParts.join(" "), snippet: snippetParts.join(""), guidelines };
 }
@@ -115,21 +106,18 @@ export function withUndoPrompts(base: { description: string; snippet: string; gu
   return { description: base.description, snippet: base.snippet, guidelines };
 }
 
-export function withTransferPrompts(base: { description: string; snippet: string; guidelines: string[] }, flags: EditToolFlags, toolName: "copy" | "move"): { description: string; snippet: string; guidelines: string[] } {
+export function withTransferPrompts(base: { description: string; snippet: string; guidelines: string[] }, flags: EditToolFlags): { description: string; snippet: string; guidelines: string[] } {
   const descriptionParts = [base.description];
   const snippetParts = [base.snippet];
   const guidelines = [...base.guidelines];
   if (flags.requirePath) {
     descriptionParts.push("Also give `path` matching the source or destination file the anchors were served for; it is required and must match anchor ownership.");
     snippetParts.push("; include `path` (required)");
-    guidelines.push(`\`${toolName}\`: include \`path\` matching the source or destination file the anchors were served for; it is required.`);
   } else {
     descriptionParts.push("Path resolution is anchor-only; do not pass `path`.");
-    guidelines.push(`\`${toolName}\`: path resolution is anchor-only; don't pass \`path\`.`);
   }
   if (flags.strictInput) {
     descriptionParts.push("Strict-input mode is on: auto-fixable slips are rejected instead of fixed with warnings.");
-    guidelines.push(`\`${toolName}\`: strict-input is on: auto-fixable slips are rejected instead of fixed.`);
   }
   return { description: descriptionParts.join(" "), snippet: snippetParts.join(""), guidelines };
 }

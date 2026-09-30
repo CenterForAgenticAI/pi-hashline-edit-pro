@@ -9,16 +9,16 @@ const replacementLinesSchema = Type.String({
 
 const removeFromSchema = Type.String({
   description:
-    "Bare 4-char anchor from a served anchor│content row (the text before the `│` separator), never the row content. Marks the FIRST line to remove (inclusive)",
+    "4-char anchor of the FIRST line to remove (never the row content).",
 });
 
 const removeToSchema = Type.String({
   description:
-    "Bare 4-char anchor from a served anchor│content row (the text before the `│` separator), never the row content. Marks the LAST line to remove (inclusive)",
+    "4-char anchor of the LAST line to remove.",
 });
 const pathRequiredSchema = Type.String({
   description:
-    "Path to the file the anchors were served for; required and must match anchor ownership. Anchors still resolve the target.",
+    "Path to the file the anchors were served for; required and must match anchor ownership.",
 });
 
 export const editToolSchema = Type.Object(
@@ -244,11 +244,11 @@ export function getReplaceWithinInput(args: unknown): { path?: string; replace_f
 
 const replaceWithinFromSchema = Type.String({
   description:
-    "Bare 4-char anchor from a served anchor│content row (the text before the `│` separator), never the row content. Marks the FIRST line of the range searched for replace_old.",
+    "4-char anchor of the FIRST line of the range searched (never the row content).",
 });
 const replaceWithinToSchema = Type.String({
   description:
-    "Bare 4-char anchor from a served anchor│content row (the text before the `│` separator), never the row content. Marks the LAST line of the range searched for replace_old; use the same anchor as replace_from for a single line.",
+    "4-char anchor of the LAST line of the range searched; same as replace_from for a single line.",
 });
 const replaceWithinOldSchema = Type.String({
   description:
@@ -260,7 +260,7 @@ const replaceWithinNewSchema = Type.String({
 });
 const replaceWithinPathRequiredSchema = Type.String({
   description:
-    "Path to the file the anchors were served for; required and must match anchor ownership. The anchors still resolve the target.",
+    "Path to the file the anchors were served for; required and must match anchor ownership.",
 });
 
 export const replaceWithinToolSchema = Type.Object(

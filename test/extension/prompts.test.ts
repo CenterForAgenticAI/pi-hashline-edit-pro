@@ -153,13 +153,11 @@ describe("edit prompt flag variants", () => {
     const result = withReplacePrompts(replaceBase, { ...DEFAULT_EDIT_FLAGS, requirePath: true });
     expect(result.description).toContain("Also give `path` matching the file the anchors were served for");
     expect(result.snippet).toContain("; include `path` (required)");
-    expect(result.guidelines.some((g) => g.includes("include `path` matching the file the anchors were served for"))).toBe(true);
   });
 
   it("withReplacePrompts adds the strict-input notice", () => {
     const result = withReplacePrompts(replaceBase, { ...DEFAULT_EDIT_FLAGS, strictInput: true });
     expect(result.description).toContain("Strict-input mode is on: auto-fixable slips are rejected instead of fixed with warnings.");
-    expect(result.guidelines.some((g) => g.includes("strict-input is on"))).toBe(true);
   });
 
   it("withReplacePrompts drops the diff-follow hint and example when auto-read is off", () => {
@@ -197,17 +195,13 @@ describe("edit prompt flag variants", () => {
     const result = withInsertPrompts(insertBase, { ...DEFAULT_EDIT_FLAGS, requirePath: true, strictInput: true });
     expect(result.description).toContain("Also give `path` matching the file the anchor was served for");
     expect(result.snippet).toContain("; include `path` (required)");
-    expect(result.guidelines.some((g) => g.startsWith("`insert`: include `path`"))).toBe(true);
     expect(result.description).toContain("Strict-input mode is on");
-    expect(result.guidelines.some((g) => g.includes("strict-input is on"))).toBe(true);
   });
 
   it("withReplaceWithinPrompts adds the require-path and strict-input notices", () => {
     const result = withReplaceWithinPrompts(replaceBase, { ...DEFAULT_EDIT_FLAGS, requirePath: true, strictInput: true });
     expect(result.description).toContain("Also give `path` matching the file the anchors were served for");
-    expect(result.guidelines.some((g) => g.startsWith("`replace_within`: include `path`"))).toBe(true);
     expect(result.description).toContain("Strict-input mode is on");
-    expect(result.guidelines.some((g) => g.includes("strict-input is on"))).toBe(true);
   });
 
   it("withReadPrompts drops the auto-read-all guideline when auto-read-all is off", () => {
@@ -234,9 +228,8 @@ describe("edit prompt flag variants", () => {
       snippet: loadP("../prompts/copy-snippet.md"),
       guidelines: loadGuide("../prompts/copy-guidelines.md"),
     };
-    const result = withTransferPrompts(base, DEFAULT_EDIT_FLAGS, "copy");
+    const result = withTransferPrompts(base, DEFAULT_EDIT_FLAGS);
     expect(result.description).toContain("Path resolution is anchor-only; do not pass `path`.");
-    expect(result.guidelines.some((g) => g.startsWith("`copy`: path resolution is anchor-only"))).toBe(true);
   });
 
   it("withTransferPrompts adds the require-path and strict-input notices", () => {
@@ -245,11 +238,9 @@ describe("edit prompt flag variants", () => {
       snippet: loadP("../prompts/move-snippet.md"),
       guidelines: loadGuide("../prompts/move-guidelines.md"),
     };
-    const result = withTransferPrompts(base, { ...DEFAULT_EDIT_FLAGS, requirePath: true, strictInput: true }, "move");
+    const result = withTransferPrompts(base, { ...DEFAULT_EDIT_FLAGS, requirePath: true, strictInput: true });
     expect(result.description).toContain("Also give `path` matching the source or destination file the anchors were served for");
     expect(result.snippet).toContain("; include `path` (required)");
-    expect(result.guidelines.some((g) => g.startsWith("`move`: include `path`"))).toBe(true);
     expect(result.description).toContain("Strict-input mode is on");
-    expect(result.guidelines.some((g) => g.includes("strict-input is on"))).toBe(true);
   });
 });

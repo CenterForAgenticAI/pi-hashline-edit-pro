@@ -672,19 +672,19 @@ function getTransferInput(args: unknown): { path?: string; source_from?: string;
 
 const transferSourceFromSchema = Type.String({
   description:
-    "Bare 4-char anchor from a served anchor│content row (the text before the `│` separator), never the row content. Marks the FIRST source line (inclusive); this anchor and `source_to` resolve the source file.",
+    "4-char anchor of the FIRST source line to copy (never the row content).",
 });
 const transferSourceToSchema = Type.String({
   description:
-    "Bare 4-char anchor from a served anchor│content row (the text before the `│` separator), never the row content. Marks the LAST source line (inclusive); this anchor and `source_from` resolve the source file.",
+    "4-char anchor of the LAST source line to copy.",
 });
 const transferInsertAfterSchema = Type.String({
   description:
-    "Bare 4-char anchor of the destination line after which the block goes; it may live in another file than the source, and the destination file is the one this anchor belongs to. The anchor line is preserved.",
+    "4-char anchor of the destination line; the block goes after it and may live in another file.",
 });
 const transferPathRequiredSchema = Type.String({
   description:
-    "Path to the source or destination file the anchors were served for; required and must match anchor ownership. The anchors still resolve both files.",
+    "Path to the source or destination file the anchors were served for; required and must match anchor ownership.",
 });
 
 const transferToolSchema = Type.Object(
@@ -719,7 +719,6 @@ export function buildTransferToolDef(kind: TransferKind, flags: EditToolFlags = 
       guidelines: loadGuide(`../prompts/${kind}-guidelines.md`),
     },
     flags,
-    kind,
   );
   return {
     name: kind,

@@ -18,7 +18,7 @@ export { assertInsertReq, type InsertReq };
 
 const insertAnchorSchema = Type.String({
   description:
-    'Bare 4-char anchor from a served anchor│content row (the text before the `│` separator), never the row content. A pasted diff row or `anchor│` prefix is stripped with a warning. The anchor line is preserved; lines go after or before it.',
+    "4-char anchor of the line to insert next to (never the row content). A pasted diff row is stripped with a warning; the anchor line is preserved.",
 });
 
 const insertDirectionSchema = Type.Union(
@@ -32,7 +32,7 @@ const insertLinesSchema = Type.String({
 
 const insertPathRequiredSchema = Type.String({
   description:
-    "Path to the file the anchor was served for; required and must match anchor ownership. The anchor still resolves the target.",
+    "Path to the file the anchor was served for; required and must match anchor ownership.",
 });
 
 const insertToolSchema = Type.Object(
