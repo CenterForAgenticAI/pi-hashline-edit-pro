@@ -90,6 +90,7 @@ pi install /path/to/pi-hashline-edit-pro
 | `edit` | disabled |
 | `grep` | disabled while `anchor_grep` is enabled |
 | `copy`, `move` | disabled while Copy/move is off |
+| `replace_within` | disabled while Replace within is off |
 | `write` | kept; an auto-read block with fresh anchors is appended to its result |
 | `bash` | untouched |
 
@@ -154,7 +155,7 @@ Nothing commits until an edit call returns: the extension validates the request 
 
 ## Tools
 
-The extension registers eight tools: `read`, `replace`, `replace_within`, `insert`, `copy`, `move`, `anchor_grep`, and `undo_last_change`. The built-in `edit` tool is disabled. `copy` and `move` are enabled by default; turn Copy/move off in `/hashline-config` to remove both. `replace`, `replace_within`, `insert`, `copy`, and `move` take no `path` parameter by default: the file is resolved from the anchors' session ownership alone, so an edit can only land on the file the anchors were served for. Opt in with `/hashline-config` to require `path` in `replace`, `replace_within`, `insert`, `copy`, and `move` for RPC visibility (for example pimacs.el); anchors still resolve the target and `path` must match.
+The extension registers eight tools: `read`, `replace`, `replace_within`, `insert`, `copy`, `move`, `anchor_grep`, and `undo_last_change`. The built-in `edit` tool is disabled. `copy` and `move` are enabled by default; turn Copy/move off in `/hashline-config` to remove both. `replace_within` is enabled by default; turn Replace within off in `/hashline-config` to remove it. `replace`, `replace_within`, `insert`, `copy`, and `move` take no `path` parameter by default: the file is resolved from the anchors' session ownership alone, so an edit can only land on the file the anchors were served for. Opt in with `/hashline-config` to require `path` in `replace`, `replace_within`, `insert`, `copy`, and `move` for RPC visibility (for example pimacs.el); anchors still resolve the target and `path` must match.
 
 ### read
 
@@ -215,7 +216,7 @@ After a successful edit, the diff is capped at 50KB. A row over 50KB is shown as
 
 ### replace_within
 
-`replace_within` changes part of a line (or a range of lines) without retyping the rest. `replace_from` and `replace_to` are bare anchors marking the first and last line of the range; use the same anchor for a single line. `replace_old` is the exact text to find inside that range, and `replace_new` replaces just that match; every other character stays untouched. That makes it the tool for a change the request quotes as a substring: a whole-line `replace` has to reproduce the rest of the line, so a slipped character becomes a wrong byte, while `replace_within` leaves everything the request did not name untouched.
+`replace_within` changes part of a line (or a range of lines) without retyping the rest. `replace_from` and `replace_to` are bare anchors marking the first and last line of the range; use the same anchor for a single line. `replace_old` is the exact text to find inside that range, and `replace_new` replaces just that match; every other character stays untouched. That makes it the tool for a change the request quotes as a substring: a whole-line `replace` has to reproduce the rest of the line, so a slipped character becomes a wrong byte, while `replace_within` leaves everything the request did not name untouched. It is enabled by default; turn Replace within off in `/hashline-config` to remove the tool.
 
 `replace_old` is matched against the range's text (LF line breaks, no final terminator) and must occur exactly once. A missing match is refused with `[E_SUBSTRING_NOT_FOUND]` and the current `anchor│content` rows; a repeated match is refused with `[E_SUBSTRING_AMBIGUOUS]` and the matching line numbers. Both refusals carry enough to retry without a `read`.
 
@@ -343,7 +344,7 @@ The setting lives in `/hashline-config` as Auto-read all and in `config.json` as
 
 | Command | Description |
 | --- | --- |
-| `/hashline-config` | Open the settings window: auto-read anchors, auto-read all mode, ignore folders/files, diff context lines, `anchor_grep` tool, copy/move tools, required `path`, and strict input. Persists across sessions. |
+| `/hashline-config` | Open the settings window: auto-read anchors, auto-read all mode, ignore folders/files, diff context lines, `anchor_grep` tool, copy/move tools, replace_within tool, required `path`, and strict input. Persists across sessions. |
 | `/clear-anchors` | Clear the session's anchor claims. Anchors are re-claimed on the next `read`. |
 
 Settings live in `~/.config/pi-hashline-edit-pro/config.json`, created when a setting is first changed in `/hashline-config`:
@@ -355,6 +356,7 @@ Settings live in `~/.config/pi-hashline-edit-pro/config.json`, created when a se
   "autoReadAllIgnore": [],
   "anchorGrepEnabled": true,
   "copyMoveEnabled": true,
+  "replaceWithinEnabled": true,
   "requirePath": false,
   "strictInput": false,
   "diffContextLines": 1
@@ -368,6 +370,7 @@ Settings live in `~/.config/pi-hashline-edit-pro/config.json`, created when a se
 | `autoReadAllIgnore` | Ignore folders/files | `[]` | Extra folder names, file names, or globs skipped by auto-read all. |
 | `anchorGrepEnabled` | Anchor grep | `true` | Register `anchor_grep` and disable the built-in grep while it is on. |
 | `copyMoveEnabled` | Copy/move | `true` | Offer the `copy` and `move` tools; when off, both are removed from the active tools. |
+| `replaceWithinEnabled` | Replace within | `true` | Offer the `replace_within` tool; when off, it is removed from the active tools. |
 | `requirePath` | Require path | `false` | `replace`, `replace_within`, `insert`, `copy`, and `move` require a `path` argument that must match anchor ownership. |
 | `strictInput` | Strict input | `false` | Reject auto-fixable slips (`[W_BAD_SHAPE]`, `[W_BAD_REF]`, `[W_INVALID_PATCH]`, `[W_BARE_HASH_PREFIX]`) with `[E_BAD_SHAPE]` instead of applying them with a warning. |
 | `diffContextLines` | Diff context | `1` | Surrounding lines in post-edit diffs, 0-10 (needs Auto-read). |

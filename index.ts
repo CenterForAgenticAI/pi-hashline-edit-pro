@@ -21,6 +21,7 @@ import {
   cycleAutoReadAllMode,
   toggleAnchorGrep,
   toggleCopyMove,
+  toggleReplaceWithin,
   toggleRequirePath,
   toggleStrictInput,
   adjustDiffContextLines,
@@ -102,6 +103,7 @@ export default function (pi: ExtensionAPI): void {
       pi.getActiveTools().filter((t) => {
         if (config.anchorGrepEnabled ? t === "grep" : t === "anchor_grep") return false;
         if (config.copyMoveEnabled === false && (t === "copy" || t === "move")) return false;
+        if (config.replaceWithinEnabled === false && t === "replace_within") return false;
         return true;
       }),
     );
@@ -136,7 +138,7 @@ export default function (pi: ExtensionAPI): void {
   }));
 
   pi.registerCommand("hashline-config", {
-    description: "Open the hashline settings window (auto-read, auto-read all, ignore folders/files, diff context, grep, copy/move, path, strict input)",
+    description: "Open the hashline settings window (auto-read, auto-read all, ignore folders/files, diff context, grep, copy/move, replace_within, path, strict input)",
     handler: async (_args, ctx) => {
       if (!ctx.hasUI) {
         ctx.ui.notify("/hashline-config requires interactive mode", "error");
@@ -161,6 +163,11 @@ export default function (pi: ExtensionAPI): void {
               const enabled = await toggleCopyMove();
               const active = pi.getActiveTools();
               pi.setActiveTools(enabled ? [...new Set([...active, "copy", "move"])] : active.filter((t) => t !== "copy" && t !== "move"));
+            }
+            else if (key === "replaceWithinEnabled") {
+              const enabled = await toggleReplaceWithin();
+              const active = pi.getActiveTools();
+              pi.setActiveTools(enabled ? [...new Set([...active, "replace_within"])] : active.filter((t) => t !== "replace_within"));
             }
             else if (key === "requirePath") await toggleRequirePath();
             else if (key === "strictInput") await toggleStrictInput();

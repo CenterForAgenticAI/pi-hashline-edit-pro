@@ -313,6 +313,86 @@ describe("copy/move default", () => {
   });
 });
 
+describe("replace_within default", () => {
+  it("session_start keeps replace_within by default", async () => {
+    await withTempDir("startup-replace-within-on-", async dir => {
+      const home = join(dir, "home");
+      await mkdir(join(home, ".config", "pi-hashline-edit-pro"), { recursive: true });
+      vi.stubEnv("HOME", home);
+      vi.stubEnv("XDG_CONFIG_HOME", "");
+      try {
+        const { pi, handlers, getActive } = makePiStub(["read", "replace", "replace_within", "insert", "edit"]);
+        const { default: register } = await import("../../index");
+        register(pi);
+        const sessionStart = handlers.get("session_start") as (a: unknown, b: unknown) => Promise<void>;
+        await sessionStart({}, { cwd: dir, ui: { notify: vi.fn() } });
+        expect(getActive()).toContain("replace_within");
+        expect(getActive()).not.toContain("edit");
+      } finally {
+        vi.unstubAllEnvs();
+        const { shutdownHashStore } = await import("../../src/hash-store");
+        shutdownHashStore();
+      }
+    });
+  });
+
+  it("session_start removes replace_within when replaceWithinEnabled is false", async () => {
+    await withTempDir("startup-replace-within-off-", async dir => {
+      const home = join(dir, "home");
+      await mkdir(join(home, ".config", "pi-hashline-edit-pro"), { recursive: true });
+      vi.stubEnv("HOME", home);
+      vi.stubEnv("XDG_CONFIG_HOME", "");
+      try {
+        const { writeFile } = await import("fs/promises");
+        await writeFile(
+          join(home, ".config", "pi-hashline-edit-pro", "config.json"),
+          JSON.stringify({ autoRead: true, anchorGrepEnabled: true, replaceWithinEnabled: false }),
+        );
+        const { pi, handlers, getActive } = makePiStub(["read", "replace", "replace_within", "insert", "edit"]);
+        const { default: register } = await import("../../index");
+        register(pi);
+        const sessionStart = handlers.get("session_start") as (a: unknown, b: unknown) => Promise<void>;
+        await sessionStart({}, { cwd: dir, ui: { notify: vi.fn() } });
+        expect(getActive()).not.toContain("replace_within");
+        expect(getActive()).toContain("read");
+      } finally {
+        vi.unstubAllEnvs();
+        const { shutdownHashStore } = await import("../../src/hash-store");
+        shutdownHashStore();
+      }
+    });
+  });
+
+  it("hashline-config toggles replace_within", async () => {
+    await withTempDir("toggle-replace-within-", async dir => {
+      const home = join(dir, "home");
+      await mkdir(join(home, ".config", "pi-hashline-edit-pro"), { recursive: true });
+      vi.stubEnv("HOME", home);
+      vi.stubEnv("XDG_CONFIG_HOME", "");
+      try {
+        const { pi, commands, handlers, getActive } = makePiStub(["read", "replace", "replace_within", "insert", "anchor_grep", "undo_last_change"]);
+        const { default: register } = await import("../../index");
+        register(pi);
+        const sessionStart = handlers.get("session_start") as (a: unknown, b: unknown) => Promise<void>;
+        await sessionStart({}, { cwd: dir, ui: { notify: vi.fn() } });
+        expect(getActive()).toContain("replace_within");
+        const overlay = await openConfigOverlay(commands, dir);
+        for (let step = 0; step < 8; step++) overlay.handleInput("j");
+        overlay.handleInput(" ");
+        await waitForConfig(async () => (await readConfig()).replaceWithinEnabled === false && !getActive().includes("replace_within"));
+        expect(getActive()).not.toContain("replace_within");
+        overlay.handleInput(" ");
+        await waitForConfig(async () => (await readConfig()).replaceWithinEnabled === true && getActive().includes("replace_within"));
+        expect(getActive()).toContain("replace_within");
+      } finally {
+        vi.unstubAllEnvs();
+        const { shutdownHashStore } = await import("../../src/hash-store");
+        shutdownHashStore();
+      }
+    });
+  });
+});
+
 describe("hashline-config overlay rendering", () => {
   it("renders the settings rows and closes on q", async () => {
     await withTempDir("config-render-", async dir => {
@@ -336,12 +416,12 @@ describe("hashline-config overlay rendering", () => {
         expect(lines[lines.length - 1]).toBe(`╰${"─".repeat(58)}╯`);
         expect(lines.some((line) => line.includes("Hashline Config"))).toBe(true);
         expect(lines.some((line) => line.includes("↑↓ navigate"))).toBe(true);
-        expect(lines.filter((line) => line.includes("[x]")).length).toBe(3);
+        expect(lines.filter((line) => line.includes("[x]")).length).toBe(4);
         expect(lines.filter((line) => line.includes("[ ]")).length).toBe(2);
         expect(lines.filter((line) => line.includes("[on]")).length).toBe(0);
         expect(lines.filter((line) => line.includes("[off]")).length).toBe(1);
         overlay.handleInput("k");
-        expect(overlay.render(60).find((line) => line.includes("Strict input"))!).toContain("> ");
+        expect(overlay.render(60).find((line) => line.includes("Replace within"))!).toContain("> ");
         overlay.handleInput("j");
         expect(overlay.render(60).find((line) => line.includes("Auto-read"))!).toContain("> ");
         overlay.invalidate();

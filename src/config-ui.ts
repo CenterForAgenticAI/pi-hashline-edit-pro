@@ -2,7 +2,7 @@ import { Key, matchesKey, visibleWidth } from "@earendil-works/pi-tui";
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import { readConfig, type Config } from "./config";
 
-export type ConfigToggleKey = "autoRead" | "autoReadAll" | "autoReadAllIgnore" | "anchorGrepEnabled" | "copyMoveEnabled" | "requirePath" | "strictInput" | "diffContextLines";
+export type ConfigToggleKey = "autoRead" | "autoReadAll" | "autoReadAllIgnore" | "anchorGrepEnabled" | "copyMoveEnabled" | "replaceWithinEnabled" | "requirePath" | "strictInput" | "diffContextLines";
 
 export interface ConfigRow {
   key: ConfigToggleKey;
@@ -26,6 +26,7 @@ export function configRows(config: Config): ConfigRow[] {
     { key: "copyMoveEnabled", label: "Copy/move", hint: "copy and move tools (both off while disabled)", enabled: config.copyMoveEnabled !== false },
     { key: "requirePath", label: "Require path", hint: "replace, insert, copy, move need path (RPC visibility)", enabled: config.requirePath === true },
     { key: "strictInput", label: "Strict input", hint: "Reject auto-fixable slips instead of warnings", enabled: config.strictInput === true },
+    { key: "replaceWithinEnabled", label: "Replace within", hint: "replace_within tool (off while disabled)", enabled: config.replaceWithinEnabled !== false },
   ];
 }
 
