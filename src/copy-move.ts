@@ -668,15 +668,15 @@ function getTransferInput(args: unknown): { path?: string; source_from?: string;
 
 const transferSourceFromSchema = Type.String({
   description:
-    "Bare 4-char anchor from a served anchor│content row (the text before the `│` separator), never the row content. Marks the FIRST source line (inclusive), in the source file.",
+    "Bare 4-char anchor from a served anchor│content row (the text before the `│` separator), never the row content. Marks the FIRST source line (inclusive); this anchor and `source_to` resolve the source file.",
 });
 const transferSourceToSchema = Type.String({
   description:
-    "Bare 4-char anchor from a served anchor│content row (the text before the `│` separator), never the row content. Marks the LAST source line (inclusive), in the source file.",
+    "Bare 4-char anchor from a served anchor│content row (the text before the `│` separator), never the row content. Marks the LAST source line (inclusive); this anchor and `source_from` resolve the source file.",
 });
 const transferInsertAfterSchema = Type.String({
   description:
-    "Bare 4-char anchor of the destination line after which the block goes; it may live in another file than the source. The anchor line is preserved.",
+    "Bare 4-char anchor of the destination line after which the block goes; it may live in another file than the source, and the destination file is the one this anchor belongs to. The anchor line is preserved.",
 });
 const transferPathRequiredSchema = Type.String({
   description:
