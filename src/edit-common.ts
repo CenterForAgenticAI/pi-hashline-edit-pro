@@ -90,9 +90,28 @@ export function withInsertPrompts(base: { description: string; snippet: string; 
   return { description: descriptionParts.join(" "), snippet: snippetParts.join(""), guidelines };
 }
 
+export function withReplaceWithinPrompts(base: { description: string; snippet: string; guidelines: string[] }, flags: EditToolFlags): { description: string; snippet: string; guidelines: string[] } {
+  const descriptionParts = [base.description];
+  const snippetParts = [base.snippet];
+  const guidelines = [...base.guidelines];
+  if (flags.requirePath) {
+    descriptionParts.push("Also give `path` matching the file the anchors were served for; it is required and must match anchor ownership.");
+    snippetParts.push("; include `path` (required)");
+    guidelines.push("`replace_within`: include `path` matching the file the anchors were served for; it is required.");
+  } else {
+    descriptionParts.push("Path resolution is anchor-only; do not pass `path`.");
+    guidelines.push("`replace_within`: path resolution is anchor-only; don't pass `path`.");
+  }
+  if (flags.strictInput) {
+    descriptionParts.push("Strict-input mode is on: auto-fixable slips are rejected instead of fixed with warnings.");
+    guidelines.push("`replace_within`: strict-input is on: auto-fixable slips are rejected instead of fixed.");
+  }
+  return { description: descriptionParts.join(" "), snippet: snippetParts.join(""), guidelines };
+}
+
 export function withUndoPrompts(base: { description: string; snippet: string; guidelines: string[] }, flags: EditToolFlags): { description: string; snippet: string; guidelines: string[] } {
   if (flags.autoRead) return { description: base.description, snippet: base.snippet, guidelines: [...base.guidelines] };
-  const guidelines = base.guidelines.map((guideline) => guideline.includes("bad diff") ? "`undo_last_change`: only the last `replace`/`insert` per file is undoable; a `write` clears it, so undo right after a bad edit — review what you're restoring." : guideline);
+  const guidelines = base.guidelines.map((guideline) => guideline.includes("bad diff") ? "`undo_last_change`: only the last `replace`/`replace_within`/`insert`/`copy`/`move` per file is undoable; a `write` clears it, so undo right after a bad edit — review what you're restoring." : guideline);
   return { description: base.description, snippet: base.snippet, guidelines };
 }
 

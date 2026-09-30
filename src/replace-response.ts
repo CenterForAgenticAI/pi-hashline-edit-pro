@@ -2,6 +2,7 @@ import type { NEdit } from "./hashline";
 import type { ReplaceDetails } from "./replace";
 import { genDiff, genPatch, type DiffSpan } from "./replace-diff";
 import { visLines, clipLine } from "./utils";
+import { fidelityHints } from "./edit-fidelity";
 
 export type TResult = {
 	content: Array<{ type: "text"; text: string }>;
@@ -139,7 +140,8 @@ export function buildChanged(input: SuccessInput, verb = "replaced", diffContext
   const diffResult = genDiff(originalNormalized, result, diffContextLines, resultHashes, originalHashes, undefined, spans);
   const addedLines = editMeta.addedLines;
   const removedLines = editMeta.removedLines;
-  const { warnings: noticeWarnings, hints } = splitNotices(warnings);
+  const fidelity = fidelityHints(originalNormalized, result, spans);
+  const { warnings: noticeWarnings, hints } = splitNotices(fidelity.length > 0 ? [...(warnings ?? []), ...fidelity] : warnings);
   const noticesBlock = `${warnBlock(noticeWarnings)}${hintBlock(hints)}`;
   const successPrefix = `Successfully ${verb} in ${path}.`;
   const lineSummary = addedLines > 0 || removedLines > 0

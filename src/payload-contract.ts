@@ -1,5 +1,5 @@
 import { Type } from "typebox";
-import { isRec, normalizeRequest, rejectUnknownFields, assertNoNul } from "./utils";
+import { isRec, normalizeFilePath, normalizeRequest, rejectUnknownFields, assertNoNul } from "./utils";
 import { LINES_NOT_STRING_MSG, NEW_CONTENT_NOT_STRING_MSG } from "./constants";
 
 const replacementLinesSchema = Type.String({
@@ -160,4 +160,129 @@ export function assertTransferReq(request: unknown): asserts request is Transfer
   if (typeof request.insert_after !== "string" || request.insert_after.length === 0) {
     throw new Error('[E_BAD_SHAPE] Copy/move request requires an "insert_after" string (4-char anchor from read output).');
   }
+}
+
+const WITHIN_KS = new Set(["path", "replace_from", "replace_to", "replace_old", "replace_new"]);
+
+export interface ReplaceWithinReq {
+  path?: string;
+  replace_from: string;
+  replace_to: string;
+  replace_old: string;
+  replace_new: string;
+}
+
+export function assertReplaceWithinReq(request: unknown): asserts request is ReplaceWithinReq {
+  if (!isRec(request)) {
+    throw new Error("[E_BAD_SHAPE] Replace-within request must be an object.");
+  }
+  rejectUnknownFields(request, WITHIN_KS, "Replace-within request");
+  if (request.path !== undefined && typeof request.path !== "string") {
+    throw new Error('[E_BAD_SHAPE] Replace-within request field "path" must be a string when provided.');
+  }
+  for (const key of ["replace_from", "replace_to", "replace_old", "replace_new"] as const) {
+    if (typeof (request as Record<string, unknown>)[key] !== "string") {
+      throw new Error(`[E_BAD_SHAPE] Replace-within request requires a "${key}" string.`);
+    }
+  }
+  const within = request as unknown as ReplaceWithinReq;
+  if (within.replace_from.length === 0 || within.replace_to.length === 0) {
+    throw new Error('[E_BAD_SHAPE] Replace-within request requires non-empty "replace_from" and "replace_to" anchors.');
+  }
+  if (within.replace_old.length === 0) {
+    throw new Error('[E_BAD_SHAPE] Replace-within request field "replace_old" must be a non-empty string holding the exact text to find.');
+  }
+  assertNoNul([within.replace_new]);
+}
+
+const WITHIN_ANCHOR_ALIASES: Array<[string, "replace_from" | "replace_to"]> = [
+  ["replace_from", "replace_from"],
+  ["remove_from", "replace_from"],
+  ["from", "replace_from"],
+  ["replace_to", "replace_to"],
+  ["remove_to", "replace_to"],
+  ["to", "replace_to"],
+];
+
+export function normalizeReplaceWithinRequest(input: unknown): unknown {
+  if (!isRec(input)) return input;
+  const record: Record<string, unknown> = { ...input };
+  normalizeFilePath(record);
+  for (const [alias, canonical] of WITHIN_ANCHOR_ALIASES) {
+    if (typeof record[canonical] !== "string" && typeof record[alias] === "string") {
+      record[canonical] = record[alias];
+    }
+    if (alias !== canonical) delete record[alias];
+  }
+  return record;
+}
+
+export function getReplaceWithinInput(args: unknown): { path?: string; replace_from: string; replace_to: string; replace_old: string; replace_new: string } | null {
+  let normalized: unknown;
+  try {
+    normalized = normalizeReplaceWithinRequest(args);
+  } catch {
+    return null;
+  }
+  if (!isRec(normalized)) return null;
+  if (
+    typeof normalized.replace_from !== "string" ||
+    typeof normalized.replace_to !== "string" ||
+    typeof normalized.replace_old !== "string" ||
+    typeof normalized.replace_new !== "string"
+  ) {
+    return null;
+  }
+  return {
+    ...(typeof normalized.path === "string" ? { path: normalized.path } : {}),
+    replace_from: normalized.replace_from,
+    replace_to: normalized.replace_to,
+    replace_old: normalized.replace_old,
+    replace_new: normalized.replace_new,
+  };
+}
+
+const replaceWithinFromSchema = Type.String({
+  description:
+    "Bare 4-char anchor from a served anchor│content row (the text before the `│` separator), never the row content. Marks the FIRST line of the range searched for replace_old.",
+});
+const replaceWithinToSchema = Type.String({
+  description:
+    "Bare 4-char anchor from a served anchor│content row (the text before the `│` separator), never the row content. Marks the LAST line of the range searched for replace_old; use the same anchor as replace_from for a single line.",
+});
+const replaceWithinOldSchema = Type.String({
+  description:
+    "The exact text to find inside the selected line(s), copied from the served row. It must occur exactly once; the text around it is left untouched. Matching uses LF line breaks and excludes the last line's terminator.",
+});
+const replaceWithinNewSchema = Type.String({
+  description:
+    'The exact replacement for the matched text. "" deletes the match, "\\n" inserts one blank line, and a trailing line break sets the last line\'s ending instead of adding a blank line; the rest of the range is kept byte-for-byte.',
+});
+const replaceWithinPathRequiredSchema = Type.String({
+  description:
+    "Path to the file the anchors were served for; required and must match anchor ownership. The anchors still resolve the target.",
+});
+
+export const replaceWithinToolSchema = Type.Object(
+  {
+    replace_from: replaceWithinFromSchema,
+    replace_to: replaceWithinToSchema,
+    replace_old: replaceWithinOldSchema,
+    replace_new: replaceWithinNewSchema,
+  },
+  { additionalProperties: true },
+);
+
+export function buildReplaceWithinToolSchema(requirePath: boolean): typeof replaceWithinToolSchema {
+  if (!requirePath) return replaceWithinToolSchema;
+  return Type.Object(
+    {
+      path: replaceWithinPathRequiredSchema,
+      replace_from: replaceWithinFromSchema,
+      replace_to: replaceWithinToSchema,
+      replace_old: replaceWithinOldSchema,
+      replace_new: replaceWithinNewSchema,
+    },
+    { additionalProperties: true },
+  ) as typeof replaceWithinToolSchema;
 }

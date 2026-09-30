@@ -3,7 +3,7 @@ import { dirname, join, resolve } from "path";
 import { fileURLToPath } from "url";
 import { describe, expect, it } from "vitest";
 import { loadGuide, loadP } from "../../src/prompts";
-import { withReadPrompts, withReplacePrompts, withInsertPrompts, withTransferPrompts, withUndoPrompts, DEFAULT_EDIT_FLAGS } from "../../src/edit-common";
+import { withReadPrompts, withReplacePrompts, withReplaceWithinPrompts, withInsertPrompts, withTransferPrompts, withUndoPrompts, DEFAULT_EDIT_FLAGS } from "../../src/edit-common";
 import { regRead } from "../../src/read";
 import { makeFakePiRegistry } from "../support/fixtures";
 
@@ -198,6 +198,14 @@ describe("edit prompt flag variants", () => {
     expect(result.description).toContain("Also give `path` matching the file the anchor was served for");
     expect(result.snippet).toContain("; include `path` (required)");
     expect(result.guidelines.some((g) => g.startsWith("`insert`: include `path`"))).toBe(true);
+    expect(result.description).toContain("Strict-input mode is on");
+    expect(result.guidelines.some((g) => g.includes("strict-input is on"))).toBe(true);
+  });
+
+  it("withReplaceWithinPrompts adds the require-path and strict-input notices", () => {
+    const result = withReplaceWithinPrompts(replaceBase, { ...DEFAULT_EDIT_FLAGS, requirePath: true, strictInput: true });
+    expect(result.description).toContain("Also give `path` matching the file the anchors were served for");
+    expect(result.guidelines.some((g) => g.startsWith("`replace_within`: include `path`"))).toBe(true);
     expect(result.description).toContain("Strict-input mode is on");
     expect(result.guidelines.some((g) => g.includes("strict-input is on"))).toBe(true);
   });

@@ -1,6 +1,7 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES } from "@earendil-works/pi-coding-agent";
 import { initHasher } from "./src/hashline";
+import { regReplaceWithin } from "./src/replace-within";
 import { regReplace } from "./src/replace";
 import { regInsert } from "./src/insert";
 import { regCopy, regMove } from "./src/copy-move";
@@ -43,6 +44,7 @@ export default function (pi: ExtensionAPI): void {
   regRead(pi);
 
   regReplace(pi);
+  regReplaceWithin(pi);
   regInsert(pi);
   regCopy(pi);
   regMove(pi);
@@ -61,6 +63,7 @@ export default function (pi: ExtensionAPI): void {
       const flags = await currentEditFlags();
       regRead(pi, flags);
       regReplace(pi, flags);
+      regReplaceWithin(pi, flags);
       regInsert(pi, flags);
       regCopy(pi, flags);
       regMove(pi, flags);
@@ -251,6 +254,7 @@ export default function (pi: ExtensionAPI): void {
 
     if (
       event.toolName !== "replace" &&
+      event.toolName !== "replace_within" &&
       event.toolName !== "insert" &&
       event.toolName !== "copy" &&
       event.toolName !== "move" &&

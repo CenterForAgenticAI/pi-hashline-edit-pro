@@ -296,6 +296,38 @@ describe("replace literal escape hints", () => {
   });
 });
 
+describe("edit fidelity hints", () => {
+  it("hints when the replacement drops an invisible character", async () => {
+    await withTempFile("sample.ts", "alpha\nlegacy\u200bCheckout\n", async ({ cwd, path }) => {
+      const { ctx, editTool } = setupIntegrationTest(cwd);
+      const hashes = await lineHashes("alpha\nlegacy\u200bCheckout\n", join(cwd, "sample.ts"));
+      const result = await editTool.execute(
+        "e1",
+        { remove_from: hashes[1]!, remove_to: hashes[1]!, replacement_lines: ["stableCheckout"] },
+        undefined, undefined, ctx,
+      );
+      expect(result.content[0].text).toContain("[H_UNICODE_LOST]");
+      expect(result.details.hints).toContainEqual(expect.stringContaining("U+200B (zero-width space)"));
+      expect(result.details.metrics?.warnings).toBe(0);
+      expect(await readFile(path, "utf-8")).toBe("alpha\nstableCheckout\n");
+    });
+  });
+
+  it("does not hint on a plain ASCII edit", async () => {
+    const content = "aaa\nbbb\nccc\n";
+    await withTempFile("sample.ts", content, async ({ cwd }) => {
+      const { ctx, editTool } = setupIntegrationTest(cwd);
+      const hashes = await lineHashes(content, join(cwd, "sample.ts"));
+      const result = await editTool.execute(
+        "e1",
+        { remove_from: hashes[1]!, remove_to: hashes[1]!, replacement_lines: ["BBB"] },
+        undefined, undefined, ctx,
+      );
+      expect(result.details.hints).toBeUndefined();
+    });
+  });
+});
+
 describe("provided line endings", () => {
   it("writes a CRLF separator embedded in replacement_lines", async () => {
     await withTempFile("sample.ts", "aaa\nbbb\nccc\n", async ({ cwd, path }) => {

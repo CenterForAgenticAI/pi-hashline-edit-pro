@@ -1,0 +1,5 @@
+Replace part of a line (or a range of lines) without retyping the rest. `replace_from` and `replace_to` are bare anchors from served `anchor│content` rows marking the first and last line of the range; use the same anchor for one line. `replace_old` is the exact text to find inside that range, copied from the served row; it must occur exactly once. `replace_new` replaces just that match, and every other character stays untouched.
+
+Example: read served `Hasu│    {"id": "checkout-5", "feature": "legacyCheckout", "retries": 3},`. Call { "replace_from": "Hasu", "replace_to": "Hasu", "replace_old": "legacyCheckout", "replace_new": "stableCheckout" }. The line becomes `    {"id": "checkout-5", "feature": "stableCheckout", "retries": 3},` and the post-edit diff carries fresh anchors.
+
+Both strings are exact text; escapes decode once — `\uXXXX` is the character, `\\uXXXX` the literal text. Matching uses LF line breaks and excludes the last line's terminator. A missing match is refused with the current rows, a repeated match with the matching line numbers, so the retry needs no read. Nothing but the matched text changes.

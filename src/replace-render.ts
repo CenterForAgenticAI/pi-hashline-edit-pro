@@ -81,7 +81,7 @@ export function highlightBatchRefs(text: string, theme: FgT): string {
 }
 
 export function fmtCall(
-  args: { path?: string; remove_from?: string; remove_to?: string; anchor?: string; source_from?: string; source_to?: string; insert_after?: string } | undefined,
+  args: { path?: string; remove_from?: string; remove_to?: string; anchor?: string; source_from?: string; source_to?: string; insert_after?: string; replace_from?: string; replace_to?: string } | undefined,
   state: RRState,
   expanded: boolean,
   theme: CallT,
@@ -89,7 +89,7 @@ export function fmtCall(
 ): string {
   const previewPath = state.preview && "path" in state.preview ? state.preview.path : undefined;
   const path = args?.path ?? state.resolvedPath ?? previewPath;
-  const anchorFallback = typeof args?.remove_from === "string" && typeof args?.remove_to === "string" ? `${args.remove_from}→${args.remove_to}` : typeof args?.anchor === "string" ? args.anchor : typeof args?.source_from === "string" && typeof args?.insert_after === "string" ? `${args.source_from}→${args.insert_after}` : undefined;
+  const anchorFallback = typeof args?.remove_from === "string" && typeof args?.remove_to === "string" ? `${args.remove_from}→${args.remove_to}` : typeof args?.anchor === "string" ? args.anchor : typeof args?.source_from === "string" && typeof args?.insert_after === "string" ? `${args.source_from}→${args.insert_after}` : typeof args?.replace_from === "string" && typeof args?.replace_to === "string" ? `${args.replace_from}→${args.replace_to}` : undefined;
   const pathDisplay =
     typeof path === "string" && path.length > 0
       ? theme.fg("accent", path)
@@ -272,9 +272,9 @@ export function reuseMarkdown(context: any, content: string, theme: any): Markdo
 export function makeRenderCall(
 	preview: (args: unknown, cwd: string, signal?: AbortSignal) => Promise<RPreview>,
   options: {
-    getInput?: (args: unknown) => { path?: string; remove_from?: string; remove_to?: string; anchor?: string; source_from?: string; source_to?: string; insert_after?: string } | null;
+    getInput?: (args: unknown) => { path?: string; remove_from?: string; remove_to?: string; anchor?: string; source_from?: string; source_to?: string; insert_after?: string; replace_from?: string; replace_to?: string } | null;
     toolName?: string;
-    resolveTarget?: (input: { remove_from?: string; remove_to?: string; anchor?: string; source_from?: string; source_to?: string; insert_after?: string }) => string | undefined;
+    resolveTarget?: (input: { remove_from?: string; remove_to?: string; anchor?: string; source_from?: string; source_to?: string; insert_after?: string; replace_from?: string; replace_to?: string }) => string | undefined;
   } = {},
 ) {
 	const getInput = options.getInput ?? getPreviewInput;
