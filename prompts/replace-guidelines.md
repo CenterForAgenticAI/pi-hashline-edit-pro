@@ -1,4 +1,4 @@
 - `replace`: `-anchor│` rows in a post-edit diff are dead anchors; only `+anchor│` and ` anchor│` rows are live. Check the post-edit diff before the next turn's edits on that file.
 - `replace`: same-file same-message calls batch: disjoint ranges, one undo. A call whose anchors resolve nowhere fails alone; its file's batch still commits.
-- `replace`: use `replace`/`insert`, not `sed -i` or heredocs — anchor edits are verified against what was shown and undoable.
+- `replace`: use `replace`/`insert` for structural or multi-line edits — anchored, verified, undoable.
 - `replace`: `replacement_lines`: one string per line, `[""]` is one blank line, `[]` deletes. Pasted `anchor│` prefixes are stripped. Single line: same anchor for `remove_from` and `remove_to`.

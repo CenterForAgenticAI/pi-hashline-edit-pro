@@ -81,10 +81,14 @@ export function parseTextWithSeparators(edit: string[]): ParsedText {
 	}
 	const lines: string[] = [];
 	const separators: (LineEnding | undefined)[] = [];
-	for (const line of edit) {
-		const parsed = splitWithEndings(unwrapJsonEnvelope(line));
-		lines.push(...parsed.lines);
-		separators.push(...parsed.endings);
+	for (const element of edit) {
+		const text = unwrapJsonEnvelope(element);
+		const parsed = splitWithEndings(text);
+		const lineCount = text.endsWith("\n") || text.endsWith("\r") ? parsed.lines.length - 1 : parsed.lines.length;
+		for (let index = 0; index < lineCount; index++) {
+			lines.push(parsed.lines[index]!);
+			separators.push(parsed.endings[index]!);
+		}
 	}
 	return { lines, separators };
 }

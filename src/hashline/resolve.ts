@@ -18,6 +18,7 @@ export type HEdit = {
 export type RHEdit = {
   content_lines: string[];
   hash_bounds: [RAnchor, RAnchor];
+  content_separators?: (LineEnding | undefined)[];
 };
 
 interface HMismatch {
@@ -288,6 +289,7 @@ export function valEdit(
 		resolved: {
 			content_lines: edit.content_lines,
 			hash_bounds: [startResolved, endResolved],
+			...(edit.content_separators !== undefined ? { content_separators: edit.content_separators } : {}),
 		},
 		mismatches,
 	};

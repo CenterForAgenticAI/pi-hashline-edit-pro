@@ -280,7 +280,8 @@ export default function (pi: ExtensionAPI): void {
     const warnings = detailWarnings.length ? `Warnings:\n${detailWarnings.join("\n")}` : extractWarnings(rendered);
     const hints = detailHints.length ? `Hints:\n${detailHints.join("\n")}` : extractHints(rendered);
     const notices = [warnings, hints].filter((part): part is string => part !== undefined).join("\n\n");
-    const noticeText = hasDiff ? (notices ? `${diff}\n\n${notices}` : diff) : notices ? `[post-edit] applied successfully; the diff is empty (whitespace-only change).\n\n${notices}` : "[post-edit] applied successfully; the diff is empty (whitespace-only change).";
+    const emptyDiffNotice = "[post-edit] applied successfully; the diff is empty (no content change: whitespace or line endings only).";
+    const noticeText = hasDiff ? (notices ? `${diff}\n\n${notices}` : diff) : notices ? `${emptyDiffNotice}\n\n${notices}` : emptyDiffNotice;
     return {
       content: [
         {

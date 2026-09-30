@@ -543,11 +543,29 @@ export async function executeBatchMember(input: BatchMemberInput): Promise<TResu
 
 function composeBatchLines(baseContent: string, pieces: BatchPiece[]): string {
   const lines = splitLines(baseContent);
+  const baseLineCount = lines.length;
   const descending = [...pieces].sort((a, b) => b.start - a.start);
   for (const piece of descending) lines.splice(piece.start - 1, piece.end - piece.start + 1, ...piece.newLines);
   let composed = lines.join("\n");
-  if (lines.length > 0 && (baseContent.endsWith("\n") || lines[lines.length - 1] === "")) composed += "\n";
+  if (lines.length > 0 && (baseContent.endsWith("\n") || lines[lines.length - 1] === "")) {
+    composed += "\n";
+  } else if (lines.length > 0) {
+    const trailing = pieces.reduce<BatchPiece | undefined>((best, piece) => (best === undefined || piece.end > best.end ? piece : best), undefined);
+    const lastEnding = trailing?.separators?.[trailing.newLines.length - 1];
+    if (trailing !== undefined && trailing.end === baseLineCount && lastEnding !== undefined) composed += "\n";
+  }
   return composed;
+}
+
+function changesEnding(piece: BatchPiece, baseSeparators: LineEnding[]): boolean {
+  if (piece.separators === undefined) return false;
+  for (let index = 0; index < piece.separators.length; index++) {
+    const ending = piece.separators[index];
+    if (ending === undefined) continue;
+    const baseIndex = piece.start - 1 + index;
+    if (baseIndex >= baseSeparators.length || baseSeparators[baseIndex] !== ending) return true;
+  }
+  return false;
 }
 
 function mergeInsertPairs(pieces: BatchPiece[]): BatchPiece[] {
@@ -624,11 +642,12 @@ async function finishBatch(member: PlannedMember, signal?: AbortSignal): Promise
     }
   }
   const appliedPieces = runtime.pieces.filter((piece) => !piece.noop);
-  if (appliedPieces.length === 0) {
+  const candidatePieces = runtime.pieces.filter((piece) => !piece.noop || changesEnding(piece, base.separators));
+  if (candidatePieces.length === 0) {
     const snapshotId = await safeSnapId(paths.absolutePath, "noop edit");
     return combinedNoop(paths.displayPath, member, runtime, snapshotId);
   }
-  const effectivePieces = mergeInsertPairs(appliedPieces);
+  const effectivePieces = mergeInsertPairs(candidatePieces);
   const ordered = [...effectivePieces].sort((a, b) => a.start - b.start);
   for (let i = 1; i < ordered.length; i++) {
     const prev = ordered[i - 1]!;
@@ -649,11 +668,12 @@ async function finishBatch(member: PlannedMember, signal?: AbortSignal): Promise
   })));
   const warnings = [...runtime.warnings];
   if (base.hadUtf8DecodeErrors) warnings.push("Non-UTF-8 bytes were shown as U+FFFD; this edit rewrote the file as UTF-8.");
+  const finalBytes = base.bom + joinSeparators(composed, resultSeparators);
+  const originalBytes = base.bom + joinSeparators(base.content, base.separators);
   try {
     await throwIfStrictInput(dedupeWarnings(warnings));
     assertNotEmpty(base.content, composed);
     assertLineLimit(composed, paths.displayPath, MAX_HASH_LINES);
-    const finalBytes = base.bom + joinSeparators(composed, resultSeparators);
     assertByteLimit(finalBytes, paths.displayPath);
   } catch (error) {
     discardBatchState(runtime);
@@ -662,7 +682,7 @@ async function finishBatch(member: PlannedMember, signal?: AbortSignal): Promise
   }
   const reclaimNotice = formatAnchorReclaimNotice(takeReclaimedPaths());
   if (reclaimNotice !== undefined) warnings.push(reclaimNotice);
-  if (composed === base.content) {
+  if (finalBytes === originalBytes) {
     const snapshotId = await safeSnapId(paths.absolutePath, "noop edit");
     return combinedNoop(paths.displayPath, member, runtime, snapshotId);
   }
@@ -756,8 +776,10 @@ async function finishBatch(member: PlannedMember, signal?: AbortSignal): Promise
     batchVerb(runtime),
     await getDiffContextLines(),
   );
-  changed.details.diff = `${header}\n${changed.details.diff}`;
-  changed.details.diffLineNumbers?.unshift(null);
+  if (changed.details.diff.length > 0) {
+    changed.details.diff = `${header}\n${changed.details.diff}`;
+    changed.details.diffLineNumbers?.unshift(null);
+  }
   try {
     serveRows(runtime.target, resultHashes, splitLines(composed), servedHashesFromDiff(changed.details.diff));
   } catch (error) {

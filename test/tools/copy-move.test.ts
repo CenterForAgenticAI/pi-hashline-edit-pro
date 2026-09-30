@@ -270,7 +270,7 @@ describe("copy and move validation", () => {
       const beta = anchorFor(aText, "beta");
       const emptyAnchor = bText.split("\n")[0]!.split("│")[0]!;
       await getTool("copy").execute("c1", { source_from: alpha, source_to: beta, insert_after: emptyAnchor }, undefined, undefined, ctx);
-      expect(await readFile(join(dir, "b.ts"), "utf-8")).toBe("alpha\nbeta");
+      expect(await readFile(join(dir, "b.ts"), "utf-8")).toBe("alpha\nbeta\n");
     });
   });
 
@@ -621,7 +621,7 @@ describe("cross-file previews and require-path", () => {
       const emptyAnchor = bText.split("\n")[0]!.split("│")[0]!;
       await getTool("move").execute("m1", { source_from: alpha, source_to: beta, insert_after: emptyAnchor }, undefined, undefined, ctx);
       expect(await readFile(join(dir, "a.ts"), "utf-8")).toBe("");
-      expect(await readFile(join(dir, "b.ts"), "utf-8")).toBe("alpha\nbeta");
+      expect(await readFile(join(dir, "b.ts"), "utf-8")).toBe("alpha\nbeta\n");
     });
   });
 });

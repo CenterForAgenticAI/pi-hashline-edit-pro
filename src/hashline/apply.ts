@@ -68,12 +68,12 @@ function resToSpan(
   const startLine = edit.hash_bounds[0].line;
   const endLine = edit.hash_bounds[1].line;
   const originalLines = fileLines.slice(startLine - 1, endLine);
-  if (
+  const contentUnchanged =
     originalLines.length === edit.content_lines.length &&
     originalLines.every(
       (line, lineIndex) => line === edit.content_lines[lineIndex],
-    )
-  ) {
+    );
+  if (contentUnchanged && edit.content_separators === undefined) {
     return {
       kind: "noop",
       loc: edit.hash_bounds[0].hash,
@@ -82,7 +82,9 @@ function resToSpan(
   }
 
   if (edit.content_lines.length > 0) {
-    const lastReplacementLine = edit.content_lines[edit.content_lines.length - 1]!;
+    const lastIndex = edit.content_lines.length - 1;
+    const lastReplacementLine = edit.content_lines[lastIndex]!;
+    const lastEnding = edit.content_separators?.[lastIndex];
     const endsWithBlank = lastReplacementLine.length === 0;
     const endsAtEofWithoutNewline =
       endLine === fileLines.length && !content.endsWith("\n");
@@ -92,7 +94,7 @@ function resToSpan(
       start: lineStarts[startLine - 1]!,
       end: lineStarts[endLine - 1]! + fileLines[endLine - 1]!.length,
       replacement:
-        endsAtEofWithoutNewline && endsWithBlank
+        endsAtEofWithoutNewline && (endsWithBlank || lastEnding !== undefined)
           ? `${replacement}\n`
           : replacement,
     };

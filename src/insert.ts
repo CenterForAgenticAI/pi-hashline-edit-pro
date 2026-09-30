@@ -125,13 +125,14 @@ export async function insertPreview(request: unknown, cwd: string, signal?: Abor
       allocation: "shadow",
       signal,
     });
-    const { editParams, anchorLine } = buildInsertEdit(normalized, preload, ref, targetPath);
+    const { editParams, anchorLine, contentSeparators } = buildInsertEdit(normalized, preload, ref, targetPath);
     const pipe = await execPipeline(targetPath, editParams, cwd, {
       accessMode: constants.R_OK,
       noPersist: true,
       preloadedNorm: preload,
       signal,
       stripWarning: insertStripWarning(anchorLine, normalized.direction),
+      endingOverrides: contentSeparators,
     });
     return previewFromPipe(pipe);
   } catch (error: unknown) {
@@ -253,6 +254,7 @@ export function buildInsertToolDef(flags: EditToolFlags = DEFAULT_EDIT_FLAGS): I
             signal,
             preloadedNorm: preload,
             stripWarning: insertStripWarning(anchorLine, req.direction),
+            endingOverrides: contentSeparators,
           });
           return commitEdit(pipe, {
             path: pipe.path,

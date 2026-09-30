@@ -83,6 +83,7 @@ export interface ExecPipelineOptions {
   served?: ReadonlyMap<string, string>;
   allowEmpty?: boolean;
   stripWarning?: StripWarningLocation;
+  endingOverrides?: (LineEnding | undefined)[];
 }
 
 export function hashSpan(hashes: string[], from: string, to: string): [number, number] | undefined {
@@ -134,6 +135,17 @@ export function buildReplaceHEdit(params: ReqParams): { edit: HEdit; warnings: s
   return { edit, warnings: editWarnings };
 }
 
+function withEndingOverrides(edit: HEdit, overrides: (LineEnding | undefined)[] | undefined): HEdit {
+  if (overrides === undefined) return edit;
+  const length = Math.max(edit.content_separators?.length ?? 0, overrides.length);
+  const separators: (LineEnding | undefined)[] = new Array(length);
+  for (let index = 0; index < length; index++) {
+    separators[index] = overrides[index] ?? edit.content_separators?.[index];
+  }
+  if (separators.every((ending) => ending === undefined)) return edit;
+  return { ...edit, content_separators: separators };
+}
+
 export async function execPipeline(
   targetPath: string,
   params: ReqParams,
@@ -142,6 +154,7 @@ export async function execPipeline(
 ): Promise<PipelineResult> {
 
   const { edit, warnings: editWarnings } = buildReplaceHEdit(params);
+  const anchoredEdit = withEndingOverrides(edit, options?.endingOverrides);
   const hashStore = options?.store ?? await loadHashStore();
   const preResolvedPath = await resolveTarget(toCwd(targetPath, cwd));
   const served = options?.served ?? servedForPath(preResolvedPath);
@@ -154,7 +167,7 @@ export async function execPipeline(
   try {
     anchorResult = applyEdit(
       originalNormalized,
-      edit,
+      anchoredEdit,
       options?.signal,
       originalHashes,
       displayPath,
@@ -202,12 +215,15 @@ export async function execPipeline(
     totalRemovedLines,
     identity,
     ...(pipeSpans ? { spans: pipeSpans } : {}),
-    ...(edit.content_separators !== undefined ? { contentSeparators: edit.content_separators } : {}),
+    ...(anchoredEdit.content_separators !== undefined ? { contentSeparators: anchoredEdit.content_separators } : {}),
   };
 }
 
 export function previewFromPipe(pipe: PipelineResult): RPreview {
   if (pipe.originalNormalized === pipe.result) {
+    if (pipe.contentSeparators !== undefined) {
+      return { diff: "", path: pipe.path };
+    }
     return {
       error: `No changes made to ${pipe.path}. The edit produced identical content.`,
       path: pipe.path,

@@ -186,7 +186,7 @@ Edge cases:
 | --- | --- |
 | `remove_from` | 4-char anchor marking the FIRST line to remove (inclusive). |
 | `remove_to` | 4-char anchor marking the LAST line to remove (inclusive). |
-| `replacement_lines` | Replacement lines, one element per line. Mirror the removed lines exactly, blank lines included: `[]` deletes the range, `[""]` is a single blank line, `["a", ""]` is a line followed by a blank line. One element is one line: a real line-break character (`\n`, `\r\n`, or `\r`) splits it and sets that line's ending; escapes decode once — `\uXXXX` is the character, `\\uXXXX` the literal text. A lone string is accepted too: it is split on newlines, and stringified array text is unwrapped. |
+| `replacement_lines` | Replacement lines, one element per line. Mirror the removed lines exactly, blank lines included: `[]` deletes the range, `[""]` is a single blank line, `["a", ""]` is a line followed by a blank line. One element is one line: a real line-break character (`\n`, `\r\n`, or `\r`) splits it and sets the line's ending; escapes decode once — `\uXXXX` is the character, `\\uXXXX` the literal text. A trailing line-break sets the ending of the element's last line instead of adding a blank line, so `["b\n"]` sets that line's ending to LF, `["b\r\n"]` to CRLF, and on a file without a final newline it adds it. A lone string is accepted too: it is split on newlines, and stringified array text is unwrapped. |
 
 Example: read showed `Hasu│old` and `arvm│old2`; to replace both:
 
@@ -208,7 +208,7 @@ Content containing a NUL byte (`U+0000`) is rejected with `[E_BAD_SHAPE]` before
 
 Every line in the removed range must match what was last shown to you. The extension records the `anchor│content` rows it serves (`read` output, `anchor_grep` output, the auto-read block after `write`, the `+anchor│` and ` anchor│` rows of post-edit diffs, the current-range rows of `[E_RANGE_STALE]` feedback, and the context rows of stale-anchor feedback) and verifies the whole range against that record before writing. A line that changed on disk since it was shown, or an anchor that is not owned in this session, refuses the edit with `[E_RANGE_STALE]` or `[E_STALE_ANCHOR]` and returns the current range with fresh anchors, so the retry needs no `read`. An owned anchor enters the served record when its row is shown (after a restart, restored ownership counts as shown), so a file with no owned anchors cannot be edited by anchor at all; call `read` first. An owned line that was never shown, for example beyond an auto-read preview's truncation cap, is refused with `[E_RANGE_STALE]` and returns the current range, so the retry still needs no `read`.
 
-An edit that produces identical content reports `No changes made` and leaves the anchors alone.
+An edit that changes neither content nor line endings reports `No changes made` and leaves the anchors alone.
 
 After a successful edit, the diff is capped at 50KB. A row over 50KB is shown as a marker that keeps the row's anchor, and only the rows shown in the capped diff are recorded as served. The same caps apply to the `insert` and `undo_last_change` diffs, to the interactive previews, and to `details.patch`.
 
@@ -220,7 +220,7 @@ After a successful edit, the diff is capped at 50KB. A row over 50KB is shown as
 | --- | --- |
 | `anchor` | 4-char anchor marking the line next to which the lines go. The anchor line is preserved. A pasted `+Hasu│x` diff row or `anchor│` prefix is stripped automatically with a warning. |
 | `direction` | `"after"` inserts below the anchor line, `"before"` above it. |
-| `lines` | Lines to insert, one element per line. `[""]` is a blank line. Never include the anchor line. One element is one line: a real line-break character (`\n`, `\r\n`, or `\r`) splits it and sets that line's ending; escapes decode once — `\uXXXX` is the character, `\\uXXXX` the literal text. A lone string is split on newlines, and stringified array text is unwrapped. |
+| `lines` | Lines to insert, one element per line. `[""]` is a blank line. Never include the anchor line. One element is one line: a real line-break character (`\n`, `\r\n`, or `\r`) splits it and sets the line's ending; escapes decode once — `\uXXXX` is the character, `\\uXXXX` the literal text. A trailing line-break sets the ending of the element's last line instead of adding a blank line, so `["b\n"]` inserts `b` with an LF ending, and on a file without a final newline it adds it. A lone string is split on newlines, and stringified array text is unwrapped. |
 
 Nothing is removed and the inserted lines are written exactly as given; the anchor line and every other line stay in place. Inserting nothing (`lines: []`) reports a noop. To seed an empty file, read it and insert after the `anchor│` empty-line row.
 
@@ -313,6 +313,8 @@ The hashline tools are sequential in pi, so a message that contains one runs all
 Auto-read is enabled by default. After a successful `write`, the extension reads the file and appends an `--- Auto-read (hashline anchors) ---` block, so you get fresh `anchor│content` anchors without a separate `read` call.
 
 After `replace`, `insert`, `copy`, `move`, and `undo_last_change`, the result shows the post-edit diff. Inside a same-message batch, only the batch's last call shows the combined diff, headed by a `batch N:` line; earlier calls reply `In batch N`. The `+anchor│` and ` anchor│` rows carry the current anchors, so follow-up edits can anchor on the diff directly. The `-anchor│` rows show removed lines with their old anchors, which are stale after the edit. When the context line next to a change is blank or whitespace-only, one more context line is shown in that direction, so the change stays anchored to visible content. Call `read` when you want the full file's anchors.
+
+An edit that changes only line endings has no content diff; the result still reports `applied`, and one `undo_last_change` reverts it.
 
 Auto-read keeps the same 50KB and 2000-line budget as `read`. Auto-read and Diff context live in `/hashline-config` and persist across sessions. The post-edit diff shows 1 surrounding line by default; change Diff context in `/hashline-config` (0-10, needs Auto-read) to show more or fewer.
 

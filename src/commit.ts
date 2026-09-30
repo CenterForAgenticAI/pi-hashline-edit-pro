@@ -33,7 +33,22 @@ export async function commitEdit(pipe: PipelineResult, meta: CommitMeta): Promis
   const readReclaim = formatAnchorReclaimNotice(takeReclaimedPaths());
   if (readReclaim !== undefined) warnings.push(readReclaim);
 
-  if (pipe.result === pipe.originalNormalized) {
+  const span = pipe.spans?.[0] ?? (meta.editAnchors ? spanForEdit(pipe.originalHashes, meta.editAnchors[0], meta.editAnchors[1], pipe.result) : undefined);
+  if (span && meta.anchorCarry !== undefined) span.carry = meta.anchorCarry;
+  const resultSeparators = span
+    ? separatorsForSpans(pipe.originalSeparators, pipe.originalHashes.length, [span], pipe.result, pipe.originalEnding)
+    : undefined;
+  if (resultSeparators !== undefined && span !== undefined) {
+    applyEndingOverrides(resultSeparators, span.start, pipe.contentSeparators);
+    applyEndingOverrides(resultSeparators, span.start, meta.endingOverrides);
+  }
+  const finalFileBytes = pipe.bom + (resultSeparators !== undefined
+    ? joinSeparators(pipe.result, resultSeparators)
+    : restoreEndings(pipe.result, pipe.originalEnding));
+  const contentUnchanged = pipe.result === pipe.originalNormalized;
+  const bytesUnchanged = contentUnchanged && (span === undefined || finalFileBytes === pipe.bom + joinSeparators(pipe.originalNormalized, pipe.originalSeparators));
+
+  if (bytesUnchanged) {
     const noopSnapshotId = await safeSnapId(absolutePath, "noop edit");
     return buildNoop(
       {
@@ -52,18 +67,6 @@ export async function commitEdit(pipe: PipelineResult, meta: CommitMeta): Promis
     );
   }
 
-  const span = pipe.spans?.[0] ?? (meta.editAnchors ? spanForEdit(pipe.originalHashes, meta.editAnchors[0], meta.editAnchors[1], pipe.result) : undefined);
-  if (span && meta.anchorCarry !== undefined) span.carry = meta.anchorCarry;
-  const resultSeparators = span
-    ? separatorsForSpans(pipe.originalSeparators, pipe.originalHashes.length, [span], pipe.result, pipe.originalEnding)
-    : undefined;
-  if (resultSeparators !== undefined && span !== undefined) {
-    applyEndingOverrides(resultSeparators, span.start, pipe.contentSeparators);
-    applyEndingOverrides(resultSeparators, span.start, meta.endingOverrides);
-  }
-  const finalFileBytes = pipe.bom + (resultSeparators !== undefined
-    ? joinSeparators(pipe.result, resultSeparators)
-    : restoreEndings(pipe.result, pipe.originalEnding));
   assertByteLimit(finalFileBytes, path);
 
   if (pipe.hadUtf8DecodeErrors) {

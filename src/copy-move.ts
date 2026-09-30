@@ -544,6 +544,7 @@ async function executeCrossFile(
       accessMode: constants.R_OK | constants.W_OK,
       signal,
       preloadedNorm: prepared.destinationPreload,
+      endingOverrides: prepared.endingOverrides,
     });
     if (kind === "copy") {
       return commitEdit(destinationPipe, {
@@ -610,6 +611,7 @@ export async function transferPreview(kind: TransferKind, request: unknown, cwd:
         noPersist: true,
         preloadedNorm: preload,
         served: plan.servedOverride,
+        endingOverrides: plan.endingOverrides,
         signal,
       });
       return previewFromPipe(pipe);
@@ -619,6 +621,7 @@ export async function transferPreview(kind: TransferKind, request: unknown, cwd:
       accessMode: constants.R_OK,
       noPersist: true,
       preloadedNorm: prepared.destinationPreload,
+      endingOverrides: prepared.endingOverrides,
       signal,
     });
     if (kind === "copy") return previewFromPipe(destinationPipe);
@@ -764,6 +767,7 @@ export function buildTransferToolDef(kind: TransferKind, flags: EditToolFlags = 
             signal,
             preloadedNorm: preload,
             served: plan.servedOverride,
+            endingOverrides: plan.endingOverrides,
           });
           return commitEdit(pipe, {
             path: pipe.path,
