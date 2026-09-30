@@ -13,13 +13,17 @@ export interface EditToolFlags {
   strictInput: boolean;
   autoRead: boolean;
   autoReadAllActive: boolean;
+  replaceWithinEnabled: boolean;
+  copyMoveEnabled: boolean;
 }
 
 export const DEFAULT_EDIT_FLAGS: EditToolFlags = {
   requirePath: false,
   strictInput: false,
   autoRead: true,
-  autoReadAllActive: false
+  autoReadAllActive: false,
+  replaceWithinEnabled: true,
+  copyMoveEnabled: true
 };
 
 export async function currentEditFlags(): Promise<EditToolFlags> {
@@ -28,7 +32,9 @@ export async function currentEditFlags(): Promise<EditToolFlags> {
     requirePath: config.requirePath === true,
     strictInput: config.strictInput === true,
     autoRead: config.autoRead !== false,
-    autoReadAllActive: (config.autoReadAll ?? "off") !== "off"
+    autoReadAllActive: (config.autoReadAll ?? "off") !== "off",
+    replaceWithinEnabled: config.replaceWithinEnabled !== false,
+    copyMoveEnabled: config.copyMoveEnabled !== false
   };
 }
 
@@ -40,6 +46,9 @@ export function withReplacePrompts(base: { description: string; snippet: string;
     description = description.replace(/\n\nExample:[\s\S]*$/, "");
     guidelines = guidelines.filter((guideline) => !guideline.includes("post-edit diff"));
     description = description.replace("and the last call shows the combined diff,", "and the last call shows the combined result,");
+  }
+  if (!flags.replaceWithinEnabled) {
+    description = description.replace(/\n?To change only part of a line without retyping the rest, use `replace_within` instead; it preserves every character the request does not name\./, "");
   }
   const descriptionParts = [description];
   if (flags.requirePath) {
@@ -87,7 +96,7 @@ export function withInsertPrompts(base: { description: string; snippet: string; 
 export function withReplaceWithinPrompts(base: { description: string; snippet: string; guidelines: string[] }, flags: EditToolFlags): { description: string; snippet: string; guidelines: string[] } {
   const descriptionParts = [base.description];
   const snippetParts = [base.snippet];
-  const guidelines = [...base.guidelines];
+  const guidelines = base.guidelines.map((guideline) => flags.copyMoveEnabled ? guideline : guideline.replace(", like `copy` and `move`", ""));
   if (flags.requirePath) {
     descriptionParts.push("Also give `path` matching the file the anchors were served for; it is required and must match anchor ownership.");
     snippetParts.push("; include `path` (required)");
@@ -100,10 +109,45 @@ export function withReplaceWithinPrompts(base: { description: string; snippet: s
   return { description: descriptionParts.join(" "), snippet: snippetParts.join(""), guidelines };
 }
 
+function gatedEditOps(ops: string[], flags: EditToolFlags): string[] {
+  return ops.filter((op) => {
+    if (op === "replace_within") return flags.replaceWithinEnabled;
+    if (op === "copy" || op === "move") return flags.copyMoveEnabled;
+    return true;
+  });
+}
+
+function joinOps(ops: string[], options?: { backtick?: boolean; separator?: "/" }): string {
+  const formatted = ops.map((op) => (options?.backtick ? `\`${op}\`` : op));
+  if (options?.separator === "/") return formatted.join("/");
+  if (formatted.length <= 1) return formatted[0] ?? "";
+  const last = formatted[formatted.length - 1]!;
+  const head = formatted.slice(0, -1).join(", ");
+  return formatted.length === 2 ? `${head} or ${last}` : `${head}, or ${last}`;
+}
+
+export function withGrepPrompts(base: { description: string; snippet: string }, flags: EditToolFlags): { description: string; snippet: string } {
+  if (flags.copyMoveEnabled) return base;
+  return { ...base, description: base.description.replaceAll("replace, insert, copy, or move", joinOps(gatedEditOps(["replace", "insert", "copy", "move"], flags))) };
+}
+
 export function withUndoPrompts(base: { description: string; snippet: string; guidelines: string[] }, flags: EditToolFlags): { description: string; snippet: string; guidelines: string[] } {
-  if (flags.autoRead) return { description: base.description, snippet: base.snippet, guidelines: [...base.guidelines] };
-  const guidelines = base.guidelines.map((guideline) => guideline.includes("bad diff") ? "`undo_last_change`: only the last `replace`/`replace_within`/`insert`/`copy`/`move` per file is undoable; a `write` clears it, so undo right after a bad edit — review what you're restoring." : guideline);
-  return { description: base.description, snippet: base.snippet, guidelines };
+  const ops = gatedEditOps(["replace", "replace_within", "insert", "copy", "move"], flags);
+  let description = base.description;
+  let snippet = base.snippet;
+  let guidelines = [...base.guidelines];
+  if (!flags.autoRead) {
+    guidelines = guidelines.map((guideline) => guideline.includes("bad diff") ? "`undo_last_change`: only the last `replace`/`replace_within`/`insert`/`copy`/`move` per file is undoable; a `write` clears it, so undo right after a bad edit — review what you're restoring." : guideline);
+  }
+  if (ops.length !== 5) {
+    description = description.replaceAll("replace, replace_within, insert, copy, or move", joinOps(ops));
+    snippet = snippet.replaceAll("`replace`, `replace_within`, `insert`, `copy`, or `move`", joinOps(ops, { backtick: true }));
+    guidelines = guidelines.map((guideline) => guideline.replaceAll("`replace`/`replace_within`/`insert`/`copy`/`move`", joinOps(ops, { backtick: true, separator: "/" })));
+  }
+  if (!flags.copyMoveEnabled) {
+    guidelines = guidelines.filter((guideline) => !guideline.includes("cross-file `move`"));
+  }
+  return { description, snippet, guidelines };
 }
 
 export function withTransferPrompts(base: { description: string; snippet: string; guidelines: string[] }, flags: EditToolFlags): { description: string; snippet: string; guidelines: string[] } {

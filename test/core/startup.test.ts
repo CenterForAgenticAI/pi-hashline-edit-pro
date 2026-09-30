@@ -237,7 +237,7 @@ describe("copy/move default", () => {
       vi.stubEnv("HOME", home);
       vi.stubEnv("XDG_CONFIG_HOME", "");
       try {
-        const { pi, handlers, getActive } = makePiStub(["read", "replace", "insert", "copy", "move", "anchor_grep", "undo_last_change", "edit"]);
+        const { pi, handlers, getActive, getTool } = makePiStub(["read", "replace", "insert", "copy", "move", "anchor_grep", "undo_last_change", "edit"]);
         const { default: register } = await import("../../index");
         register(pi);
         const sessionStart = handlers.get("session_start") as (a: unknown, b: unknown) => Promise<void>;
@@ -245,6 +245,9 @@ describe("copy/move default", () => {
         expect(getActive()).toContain("copy");
         expect(getActive()).toContain("move");
         expect(getActive()).not.toContain("edit");
+        expect(getTool("undo_last_change").description).toContain("insert, copy, or move");
+        expect(getTool("anchor_grep").description).toContain("replace, insert, copy, or move");
+        expect(getTool("replace_within").promptGuidelines.some((g: string) => g.includes("`copy`"))).toBe(true);
       } finally {
         vi.unstubAllEnvs();
         const { shutdownHashStore } = await import("../../src/hash-store");
@@ -265,7 +268,7 @@ describe("copy/move default", () => {
           join(home, ".config", "pi-hashline-edit-pro", "config.json"),
           JSON.stringify({ autoRead: true, anchorGrepEnabled: true, copyMoveEnabled: false }),
         );
-        const { pi, handlers, getActive } = makePiStub(["read", "replace", "insert", "copy", "move", "anchor_grep", "undo_last_change", "edit"]);
+        const { pi, handlers, getActive, getTool } = makePiStub(["read", "replace", "insert", "copy", "move", "anchor_grep", "undo_last_change", "edit"]);
         const { default: register } = await import("../../index");
         register(pi);
         const sessionStart = handlers.get("session_start") as (a: unknown, b: unknown) => Promise<void>;
@@ -273,6 +276,10 @@ describe("copy/move default", () => {
         expect(getActive()).not.toContain("copy");
         expect(getActive()).not.toContain("move");
         expect(getActive()).toContain("read");
+        expect(getTool("undo_last_change").description).not.toContain("or move");
+        expect(getTool("undo_last_change").description).not.toContain("copy");
+        expect(getTool("anchor_grep").description).not.toContain("copy");
+        expect(getTool("replace_within").promptGuidelines.some((g: string) => g.includes("`copy`"))).toBe(false);
       } finally {
         vi.unstubAllEnvs();
         const { shutdownHashStore } = await import("../../src/hash-store");
@@ -321,13 +328,14 @@ describe("replace_within default", () => {
       vi.stubEnv("HOME", home);
       vi.stubEnv("XDG_CONFIG_HOME", "");
       try {
-        const { pi, handlers, getActive } = makePiStub(["read", "replace", "replace_within", "insert", "edit"]);
+        const { pi, handlers, getActive, getTool } = makePiStub(["read", "replace", "replace_within", "insert", "edit"]);
         const { default: register } = await import("../../index");
         register(pi);
         const sessionStart = handlers.get("session_start") as (a: unknown, b: unknown) => Promise<void>;
         await sessionStart({}, { cwd: dir, ui: { notify: vi.fn() } });
         expect(getActive()).toContain("replace_within");
         expect(getActive()).not.toContain("edit");
+        expect(getTool("replace").description).toContain("use `replace_within` instead");
       } finally {
         vi.unstubAllEnvs();
         const { shutdownHashStore } = await import("../../src/hash-store");
@@ -348,13 +356,14 @@ describe("replace_within default", () => {
           join(home, ".config", "pi-hashline-edit-pro", "config.json"),
           JSON.stringify({ autoRead: true, anchorGrepEnabled: true, replaceWithinEnabled: false }),
         );
-        const { pi, handlers, getActive } = makePiStub(["read", "replace", "replace_within", "insert", "edit"]);
+        const { pi, handlers, getActive, getTool } = makePiStub(["read", "replace", "replace_within", "insert", "edit"]);
         const { default: register } = await import("../../index");
         register(pi);
         const sessionStart = handlers.get("session_start") as (a: unknown, b: unknown) => Promise<void>;
         await sessionStart({}, { cwd: dir, ui: { notify: vi.fn() } });
         expect(getActive()).not.toContain("replace_within");
         expect(getActive()).toContain("read");
+        expect(getTool("replace").description).not.toContain("replace_within");
       } finally {
         vi.unstubAllEnvs();
         const { shutdownHashStore } = await import("../../src/hash-store");

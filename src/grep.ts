@@ -13,6 +13,7 @@ import { ANCHOR_POOL_EXHAUSTED_PREFIX, MAX_GREP_LINE_BYTES } from "./constants";
 import { toCwd, toDisplayPath } from "./paths";
 import { loadP } from "./prompts";
 import { normReq } from "./payload-contract";
+import { DEFAULT_EDIT_FLAGS, withGrepPrompts, type EditToolFlags } from "./edit-common";
 import { abortIf, clipLine, errCode, gutterWidth, isRec, makePrepareArguments, rejectUnknownFields, truncateToBytes, visLines } from "./utils";
 import { withAnchorSession, formatAnchorReclaimNotice, takeReclaimedPaths } from "./anchor-registry";
 import { serveRows } from "./served";
@@ -529,12 +530,13 @@ export function renderGrepResult(result: { content?: Array<{ type: string; text?
   if (lines.length > maxLines) shown.push(theme.fg("muted", `... ${lines.length - maxLines} more grep lines (${expandHint()})`));
   return reuseText(context, shown.join("\n"));
 }
-export function regGrep(pi: ExtensionAPI): void {
+export function regGrep(pi: ExtensionAPI, flags: EditToolFlags = DEFAULT_EDIT_FLAGS): void {
+  const prompted = withGrepPrompts({ description: loadP("../prompts/grep.md"), snippet: loadP("../prompts/grep-snippet.md") }, flags);
   pi.registerTool({
     name: "anchor_grep",
     label: "Anchor Grep",
-    description: loadP("../prompts/grep.md"),
-    promptSnippet: loadP("../prompts/grep-snippet.md"),
+    description: prompted.description,
+    promptSnippet: prompted.snippet,
     prepareArguments: makePrepareArguments(),
     parameters: grepToolSchema,
     executionMode: "sequential",

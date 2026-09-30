@@ -52,7 +52,7 @@ describe("copy and move registration", () => {
   });
 
   it("adds path to the schema when require-path mode is on", () => {
-    const tool = buildTransferToolDef("copy", { requirePath: true, strictInput: false, autoRead: true, autoReadAllActive: false });
+    const tool = buildTransferToolDef("copy", { requirePath: true, strictInput: false, autoRead: true, autoReadAllActive: false, replaceWithinEnabled: true, copyMoveEnabled: true });
     const schema = tool.parameters as { properties?: Record<string, unknown> };
     expect(schema.properties?.path).toBeDefined();
   });
