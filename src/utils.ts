@@ -1,5 +1,7 @@
 import { NUL_CONTENT_MSG, MAX_BYTES } from "./constants";
 import { HASH_CLASS } from "./hashline/alphabet";
+import { splitWithEndings } from "./line-endings";
+import type { LineEnding } from "./normalize";
 
 export function isRec(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -342,24 +344,36 @@ export function decodeStringArray(value: unknown, warnings?: string[], label = "
 	return undefined;
 }
 
-function normalizeLineFieldValue(value: unknown): string[] | undefined {
-	const candidate = typeof value === "string"
-		? value
-		: Array.isArray(value) && value.length === 1 && typeof value[0] === "string"
-			? value[0]
-			: undefined;
-	if (candidate === undefined) return undefined;
-	const decoded = decodeStringArray(candidate);
-	if (decoded !== undefined) return decoded;
-	if (/^\[\s*\]$/.test(stripTrailingMemberCall(stripCodeFence(candidate)))) return [];
-	return [candidate];
+function legacyLinesToText(lines: string[]): string {
+	const decoded = decodeStringArray(lines) ?? lines;
+	const parsedLines: string[] = [];
+	const parsedSeparators: (LineEnding | undefined)[] = [];
+	for (const element of decoded) {
+		const parsed = splitWithEndings(element);
+		const lineCount = element.endsWith("\n") || element.endsWith("\r") ? parsed.lines.length - 1 : parsed.lines.length;
+		for (let index = 0; index < lineCount; index++) {
+			parsedLines.push(parsed.lines[index]!);
+			parsedSeparators.push(parsed.endings[index]);
+		}
+	}
+	let text = "";
+	for (let index = 0; index < parsedLines.length; index++) {
+		const line = parsedLines[index]!;
+		const separator = parsedSeparators[index];
+		text += line;
+		if (separator !== undefined) text += separator;
+		else if (index < parsedLines.length - 1) text += "\n";
+		else if (line === "") text += "\n";
+	}
+	return text;
 }
 
 function normalizeEditLines(record: Record<string, unknown>): void {
 	for (const key of ["replacement_lines", "lines"]) {
-		if (!(key in record)) continue;
-		const lines = normalizeLineFieldValue(record[key]);
-		if (lines !== undefined) record[key] = lines;
+		const value = record[key];
+		if (Array.isArray(value) && value.every((entry): entry is string => typeof entry === "string")) {
+			record[key] = legacyLinesToText(value);
+		}
 	}
 }
 

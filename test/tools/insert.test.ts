@@ -214,7 +214,7 @@ describe("insert tool", () => {
 
   it("rejects a NUL byte in lines before any file I/O", () => {
     const nul = String.fromCharCode(0);
-    expect(() => assertInsertReq({ anchor: "Hasu", direction: "after", lines: [nul] })).toThrow(/NUL byte/);
+    expect(() => assertInsertReq({ anchor: "Hasu", direction: "after", lines: nul })).toThrow(/NUL byte/);
   });
 
   it("rejects a NUL byte in inserted lines", async () => {
@@ -228,7 +228,7 @@ describe("insert tool", () => {
       await expect(
         insertTool.execute(
           "i1",
-          { anchor: betaHash, direction: "after", lines: [`a${nul}b`] },
+          { anchor: betaHash, direction: "after", lines: `a${nul}b` },
           undefined, undefined, ctx,
         ),
       ).rejects.toThrow(/NUL byte/);
@@ -359,7 +359,7 @@ describe("insert tool", () => {
 
       const result = await insertTool.execute(
         "i1",
-        { anchor: betaHash, direction: "after", lines: '["beta1", "beta2"].map(s => s)' },
+        { anchor: betaHash, direction: "after", lines: ['["beta1", "beta2"].map(s => s)'] },
         undefined, undefined, ctx,
       );
 

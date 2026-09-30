@@ -1,17 +1,17 @@
 import type { ExtensionAPI, ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { constants } from "node:fs";
-import { execPipeline, type ReqParams, type ReplaceDetails, previewFromPipe, previewError } from "./replace";
+import { execPipeline, type ReplaceDetails, previewFromPipe, previewError } from "./replace";
 import { commitEdit } from "./commit";
 import { batchMemberFor, ensureBatchBase, executeBatchMember, noteBatchFailure } from "./batch";
 import { readNormFile, type NormFile } from "./file-reader";
-import { MAX_HASH_LINES, parseHashRef, parseTextWithSeparators, resEdit, resolveAnchorLine, type Anchor, type HEdit, type StripWarningLocation } from "./hashline";
+import { MAX_HASH_LINES, parseHashRef, parsePayloadText, resEdit, resolveAnchorLine, type Anchor, type HEdit, type HTEdit, type StripWarningLocation } from "./hashline";
 import type { LineEnding } from "./normalize";
 import { stripAnchorRow } from "./hashline/resolve";
 import { withAnchorSession } from "./anchor-registry";
 import { loadP, loadGuide } from "./prompts";
 import { assertInsertReq, normReq, type InsertReq } from "./payload-contract";
-import { decodeStringArray, isRec, literalEscapeHint, splitLines } from "./utils";
+import { isRec, literalEscapeHint, splitLines } from "./utils";
 import { queuedEdit, editToolBase, editRenderCallWrapper, editRenderResultWrapper, resolveEditTargetWithRequirement, throwIfStrictInput, withInsertPrompts, DEFAULT_EDIT_FLAGS, type EditToolFlags } from "./edit-common";
 import type { RPreview, RRState } from "./replace-render";
 export { assertInsertReq, type InsertReq };
@@ -25,15 +25,10 @@ const insertDirectionSchema = Type.Union(
   [Type.Literal("after"), Type.Literal("before")],
   { description: '"after" or "before"' },
 );
-
-const insertLinesSchema = Type.Array(
-  Type.String({
-    description: "One line to insert. A real line break (\\n, \\r\\n, or \\r) splits it into lines and sets their endings.",
-  }),
-  {
-    description: 'One string per line; [""] is a blank line; never include the anchor line.',
-  }
-);
+const insertLinesSchema = Type.String({
+  description:
+    'The exact text to insert. "" inserts nothing, "\\n" is one blank line, and a trailing line break sets the last line\'s ending instead of adding a blank line. Never include the anchor line.',
+});
 
 const insertPathRequiredSchema = Type.String({
   description:
@@ -74,12 +69,12 @@ export function buildInsertEdit(
   preload: NormFile,
   ref: Anchor,
   path: string,
-): { editParams: ReqParams; anchorLine: string | undefined; contentSeparators: (LineEnding | undefined)[] } {
-  const parsed = parseTextWithSeparators(req.lines);
+): { editParams: HTEdit; anchorLine: string | undefined; contentSeparators: (LineEnding | undefined)[] } {
+  const parsed = parsePayloadText(req.lines);
   const fileLines = splitLines(preload.normalized);
   const line = resolveAnchorLine(ref, fileLines, preload.fileHashes, path);
   const anchorLine = preload.normalized.length === 0 ? undefined : fileLines[line - 1];
-  const editParams: ReqParams = {
+  const editParams: HTEdit = {
     remove_from: ref.hash,
     remove_to: ref.hash,
     replacement_lines:
@@ -104,15 +99,10 @@ function insertStripWarning(anchorLine: string | undefined, direction: "before" 
 export async function insertPreview(request: unknown, cwd: string, signal?: AbortSignal): Promise<RPreview> {
   try {
     const normalized = normReq(request);
-    const previewFixes: string[] = [];
-    if (isRec(normalized)) {
-      const expanded = decodeStringArray(normalized.lines, previewFixes, "lines");
-      if (expanded) normalized.lines = expanded;
-    }
     assertInsertReq(normalized);
     const previewReq = normalized as InsertReq;
     const { ref, warnings: previewAnchorWarnings } = parseInsertAnchor(previewReq.anchor);
-    await throwIfStrictInput([...previewFixes, ...previewAnchorWarnings]);
+    await throwIfStrictInput(previewAnchorWarnings);
     const targetPath = await resolveEditTargetWithRequirement({
       anchor: previewReq.anchor,
       providedPath: previewReq.path,
@@ -141,7 +131,7 @@ export async function insertPreview(request: unknown, cwd: string, signal?: Abor
   }
 }
 
-function getInsertInput(args: unknown): { path?: string; anchor?: string; direction?: "before" | "after"; lines?: string[] } | null {
+function getInsertInput(args: unknown): { path?: string; anchor?: string; direction?: "before" | "after"; lines?: string } | null {
   let normalized: unknown;
   try {
     normalized = normReq(args);
@@ -152,8 +142,7 @@ function getInsertInput(args: unknown): { path?: string; anchor?: string; direct
   if (
     typeof normalized.anchor !== "string" ||
     (normalized.direction !== "before" && normalized.direction !== "after") ||
-    !Array.isArray(normalized.lines) ||
-    normalized.lines.some((line) => typeof line !== "string")
+    typeof normalized.lines !== "string"
   ) {
     return null;
   }
@@ -161,7 +150,7 @@ function getInsertInput(args: unknown): { path?: string; anchor?: string; direct
     ...(typeof normalized.path === "string" ? { path: normalized.path } : {}),
     anchor: normalized.anchor as string,
     direction: normalized.direction as "before" | "after",
-    lines: normalized.lines as string[],
+    lines: normalized.lines,
   };
 }
 
@@ -186,14 +175,10 @@ export function buildInsertToolDef(flags: EditToolFlags = DEFAULT_EDIT_FLAGS): I
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
       return withAnchorSession(ctx, async () => {
         const canonical = normReq(params);
-        const insertWarnings: string[] = [];
-        if (isRec(canonical)) {
-          const expanded = decodeStringArray(canonical.lines, insertWarnings, "lines");
-          if (expanded) canonical.lines = expanded;
-        }
         assertInsertReq(canonical);
         const req = canonical;
-        const literalEscape = literalEscapeHint(req.lines, "lines");
+        const insertWarnings: string[] = [];
+        const literalEscape = literalEscapeHint([req.lines], "lines");
         if (literalEscape !== undefined) insertWarnings.push(literalEscape);
         const targetPath = await resolveEditTargetWithRequirement({
           anchor: req.anchor,

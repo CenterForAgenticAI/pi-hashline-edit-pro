@@ -96,3 +96,10 @@ export function parseTextWithSeparators(edit: string[]): ParsedText {
 export function parseText(edit: string[]): string[] {
 	return parseTextWithSeparators(edit).lines;
 }
+
+export function parsePayloadText(text: string): ParsedText {
+	if (text.length === 0) return { lines: [], separators: [] };
+	const parsed = splitWithEndings(text);
+	const lineCount = text.endsWith("\n") || text.endsWith("\r") ? parsed.lines.length - 1 : parsed.lines.length;
+	return { lines: parsed.lines.slice(0, lineCount), separators: parsed.endings.slice(0, lineCount) };
+}

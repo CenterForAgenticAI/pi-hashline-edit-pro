@@ -1,16 +1,11 @@
 import { Type } from "typebox";
 import { isRec, normalizeRequest, rejectUnknownFields, assertNoNul } from "./utils";
+import { LINES_NOT_STRING_MSG, NEW_CONTENT_NOT_STRING_MSG } from "./constants";
 
-const replacementLinesSchema = Type.Array(
-  Type.String({
-    description:
-      "One replacement line. A real line break (\\n, \\r\\n, or \\r) splits it into lines and sets their endings.",
-  }),
-  {
-    description:
-      "One string per line. Use [] to delete the range; [\"\"] is a single blank line.",
-  },
-);
+const replacementLinesSchema = Type.String({
+  description:
+    'The exact text to write in place of the removed range. "" deletes the range, "\\n" is one blank line, and a trailing line break sets the last line\'s ending instead of adding a blank line.',
+});
 
 const removeFromSchema = Type.String({
   description:
@@ -52,7 +47,14 @@ export type ReqParams = {
   path?: string;
   remove_from: string;
   remove_to: string;
-  replacement_lines: string[];
+  replacement_lines: string;
+};
+
+export type RawReqParams = {
+  path?: string;
+  remove_from: string;
+  remove_to: string;
+  replacement_lines: string | string[];
 };
 
 const ROOT_KS = new Set(["path", "remove_from", "remove_to", "replacement_lines"]);
@@ -66,20 +68,21 @@ export function assertReq(request: unknown): asserts request is ReqParams {
   }
   if (
     typeof request.remove_from !== "string" ||
-    typeof request.remove_to !== "string" ||
-    !Array.isArray(request.replacement_lines) ||
-    request.replacement_lines.some((line) => typeof line !== "string")
+    typeof request.remove_to !== "string"
   ) {
     throw new Error(
-      '[E_BAD_SHAPE] Edit request requires "remove_from", "remove_to", and "replacement_lines" (array of strings, one per line; use [] to delete).',
+      '[E_BAD_SHAPE] Edit request requires "remove_from" and "remove_to" anchor strings and a "replacement_lines" string with the exact text to write.',
     );
   }
-  assertNoNul(request.replacement_lines);
+  if (typeof request.replacement_lines !== "string") {
+    throw new Error(NEW_CONTENT_NOT_STRING_MSG);
+  }
+  assertNoNul([request.replacement_lines]);
 }
 
 export { normalizeRequest as normReq } from "./utils";
 
-export function getPreviewInput(args: unknown): { path?: string; remove_from: string; remove_to: string; replacement_lines: string[] } | null {
+export function getPreviewInput(args: unknown): { path?: string; remove_from: string; remove_to: string; replacement_lines: string } | null {
   let normalized: unknown;
   try {
     normalized = normalizeRequest(args);
@@ -90,8 +93,7 @@ export function getPreviewInput(args: unknown): { path?: string; remove_from: st
   if (
     typeof normalized.remove_from !== "string" ||
     typeof normalized.remove_to !== "string" ||
-    !Array.isArray(normalized.replacement_lines) ||
-    normalized.replacement_lines.some((line) => typeof line !== "string")
+    typeof normalized.replacement_lines !== "string"
   ) {
     return null;
   }
@@ -99,7 +101,7 @@ export function getPreviewInput(args: unknown): { path?: string; remove_from: st
     ...(typeof normalized.path === "string" ? { path: normalized.path } : {}),
     remove_from: normalized.remove_from as string,
     remove_to: normalized.remove_to as string,
-    replacement_lines: normalized.replacement_lines as string[],
+    replacement_lines: normalized.replacement_lines,
   };
 }
 
@@ -109,7 +111,7 @@ export interface InsertReq {
   path?: string;
   anchor: string;
   direction: "before" | "after";
-  lines: string[];
+  lines: string;
 }
 
 export function assertInsertReq(request: unknown): asserts request is InsertReq {
@@ -126,10 +128,10 @@ export function assertInsertReq(request: unknown): asserts request is InsertReq 
   if (request.direction !== "before" && request.direction !== "after") {
     throw new Error('[E_BAD_SHAPE] Insert request "direction" must be "before" or "after".');
   }
-  if (!Array.isArray(request.lines) || request.lines.some((line) => typeof line !== "string")) {
-    throw new Error('[E_BAD_SHAPE] Insert request requires "lines" as an array of strings, one element per line.');
+  if (typeof request.lines !== "string") {
+    throw new Error(LINES_NOT_STRING_MSG);
   }
-  assertNoNul(request.lines);
+  assertNoNul([request.lines]);
 }
 
 const TRANSFER_KEYS = new Set(["path", "source_from", "source_to", "insert_after"]);

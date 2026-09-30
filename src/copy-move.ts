@@ -2,7 +2,7 @@ import type { ExtensionAPI, ToolDefinition } from "@earendil-works/pi-coding-age
 import { DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES, formatSize, truncateHead, withFileMutationQueue } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { constants } from "node:fs";
-import { execPipeline, noteAnchorError, previewFromPipe, previewError, type PipelineResult, type ReqParams, type ReplaceDetails } from "./replace";
+import { execPipeline, noteAnchorError, previewFromPipe, previewError, type PipelineResult, type ReplaceDetails } from "./replace";
 import { commitEdit } from "./commit";
 import { readNormFile, safeSnapId, type NormFile } from "./file-reader";
 import {
@@ -14,6 +14,7 @@ import {
   resolveAnchorLine,
   stripAnchorRow,
   type Anchor,
+  type HTEdit,
 } from "./hashline";
 import { formatAnchorReclaimNotice, servedForPath, takeReclaimedPaths, withAnchorSession } from "./anchor-registry";
 import { loadP, loadGuide } from "./prompts";
@@ -49,7 +50,7 @@ interface TransferRefs {
 }
 
 export interface TransferPlan {
-  editParams: ReqParams;
+  editParams: HTEdit;
   foldedAnchorLines: number;
   anchorCarry?: number;
   servedOverride?: ReadonlyMap<string, string>;
@@ -224,10 +225,10 @@ interface CrossTransferPreparation {
   destinationPreload: NormFile;
   sourceDisplay: string;
   destinationDisplay: string;
-  destinationEdit: ReqParams;
+  destinationEdit: HTEdit;
   destinationFolded: number;
   endingOverrides: (LineEnding | undefined)[];
-  sourceEdit?: ReqParams;
+  sourceEdit?: HTEdit;
 }
 
 async function prepareCrossTransfer(input: {
@@ -292,7 +293,7 @@ async function prepareCrossTransfer(input: {
   }
 
   const moved = sourceLines.slice(sourceStart - 1, sourceEnd);
-  const destinationEdit: ReqParams = destinationPreload.normalized.length === 0
+  const destinationEdit: HTEdit = destinationPreload.normalized.length === 0
     ? {
         remove_from: destinationPreload.fileHashes[0]!,
         remove_to: destinationPreload.fileHashes[0]!,
@@ -309,7 +310,7 @@ async function prepareCrossTransfer(input: {
   if (kind === "copy") {
     return { sourcePreload, destinationPreload, sourceDisplay, destinationDisplay, destinationEdit, destinationFolded, endingOverrides };
   }
-  const sourceEdit: ReqParams = {
+  const sourceEdit: HTEdit = {
     remove_from: sourcePreload.fileHashes[sourceStart - 1]!,
     remove_to: sourcePreload.fileHashes[sourceEnd - 1]!,
     replacement_lines: [],

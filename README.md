@@ -17,7 +17,7 @@ HDtm│}
 
 replace one line by its anchor:
 
-{ "remove_from": "Emno", "remove_to": "Emno", "replacement_lines": ["  console.log('hi');"] }
+{ "remove_from": "Emno", "remove_to": "Emno", "replacement_lines": "  console.log('hi');" }
 
 the result is the post-edit diff with fresh anchors, so the next edit needs no re-read.
 ```
@@ -128,7 +128,7 @@ pi uninstall npm:pi-hashline-edit-pro
    {
      "remove_from": "Emno",
      "remove_to": "Emno",
-     "replacement_lines": ["  console.log('hi');"]
+     "replacement_lines": "  console.log('hi');"
    }
    ```
 
@@ -186,7 +186,7 @@ Edge cases:
 | --- | --- |
 | `remove_from` | 4-char anchor marking the FIRST line to remove (inclusive). |
 | `remove_to` | 4-char anchor marking the LAST line to remove (inclusive). |
-| `replacement_lines` | Replacement lines, one element per line. Mirror the removed lines exactly, blank lines included: `[]` deletes the range, `[""]` is a single blank line, `["a", ""]` is a line followed by a blank line. One element is one line: a real line-break character (`\n`, `\r\n`, or `\r`) splits it and sets the line's ending; escapes decode once — `\uXXXX` is the character, `\\uXXXX` the literal text. A trailing line-break sets the ending of the element's last line instead of adding a blank line, so `["b\n"]` sets that line's ending to LF, `["b\r\n"]` to CRLF, and on a file without a final newline it adds it. A lone string is accepted too: it is split on newlines, and stringified array text is unwrapped. |
+| `replacement_lines` | The exact text to write in place of the removed range, as one string: `""` deletes the range, `"\n"` is one blank line, and a trailing line break sets the last line's ending instead of adding a blank line. Embedded `\r\n`/`\r`/`\n` are preserved; escapes decode once — `\uXXXX` is the character, `\\uXXXX` the literal text. Legacy arrays are converted to text (elements joined with LF); prefer the string form. |
 
 Example: read showed `Hasu│old` and `arvm│old2`; to replace both:
 
@@ -194,7 +194,7 @@ Example: read showed `Hasu│old` and `arvm│old2`; to replace both:
 {
   "remove_from": "Hasu",
   "remove_to": "arvm",
-  "replacement_lines": ["new line 1", "new line 2"]
+  "replacement_lines": "new line 1\nnew line 2"
 }
 ```
 
@@ -202,7 +202,7 @@ Single line: use the same anchor for `remove_from` and `remove_to`. `replace_fro
 
 The extension checks the request before any file I/O, so a bad request never touches the file.
 
-Auto-fixable slips fall into two groups. Fixed silently: a reversed range, stringified array text (even with a trailing JS method call, for example `[…].map(s => s)`), and embedded newlines. Fixed with a warning: a leftover `anchor│` prefix in `replacement_lines` or the anchor fields (a prefix of 4 to 5 letters before `│`, for example `abde│`), and diff-preview rows pasted into the replacement.
+Auto-fixable slips fall into two groups. Fixed silently: a reversed range, embedded newlines, and a legacy array payload (a single-element array that holds stringified array text, even with a trailing JS method call, for example `[…].map(s => s)`, is unwrapped). Fixed with a warning: a leftover `anchor│` prefix in `replacement_lines` or the anchor fields (a prefix of 4 to 5 letters before `│`, for example `abde│`), and diff-preview rows pasted into the replacement.
 
 Content containing a NUL byte (`U+0000`) is rejected with `[E_BAD_SHAPE]` before any file I/O: writing it would make the file binary, so use an empty replacement to delete. This applies to `replace`'s `replacement_lines` and `insert`'s `lines`.
 
@@ -220,14 +220,14 @@ After a successful edit, the diff is capped at 50KB. A row over 50KB is shown as
 | --- | --- |
 | `anchor` | 4-char anchor marking the line next to which the lines go. The anchor line is preserved. A pasted `+Hasu│x` diff row or `anchor│` prefix is stripped automatically with a warning. |
 | `direction` | `"after"` inserts below the anchor line, `"before"` above it. |
-| `lines` | Lines to insert, one element per line. `[""]` is a blank line. Never include the anchor line. One element is one line: a real line-break character (`\n`, `\r\n`, or `\r`) splits it and sets the line's ending; escapes decode once — `\uXXXX` is the character, `\\uXXXX` the literal text. A trailing line-break sets the ending of the element's last line instead of adding a blank line, so `["b\n"]` inserts `b` with an LF ending, and on a file without a final newline it adds it. A lone string is split on newlines, and stringified array text is unwrapped. |
+| `lines` | The exact text to insert, as one string: `""` inserts nothing, `"\n"` is one blank line, and a trailing line break sets the last line's ending instead of adding a blank line. Never include the anchor line. Embedded `\r\n`/`\r`/`\n` are preserved; escapes decode once — `\uXXXX` is the character, `\\uXXXX` the literal text. Legacy arrays are converted to text (elements joined with LF); prefer the string form. |
 
-Nothing is removed and the inserted lines are written exactly as given; the anchor line and every other line stay in place. Inserting nothing (`lines: []`) reports a noop. To seed an empty file, read it and insert after the `anchor│` empty-line row.
+Nothing is removed and the inserted lines are written exactly as given; the anchor line and every other line stay in place. Inserting nothing (`lines: ""`) reports a noop. To seed an empty file, read it and insert after the `anchor│` empty-line row.
 
 Example: add a line after `Emno│`:
 
 ```json
-{ "anchor": "Emno", "direction": "after", "lines": ["  // log the greeting"] }
+{ "anchor": "Emno", "direction": "after", "lines": "  // log the greeting" }
 ```
 
 The same safety machinery as `replace` applies: undo is saved before the write (a failed write restores the previous undo record), and line endings and BOMs survive.
@@ -417,13 +417,13 @@ Full reference:
 | Code | Meaning |
 | --- | --- |
 | `[E_CONFIG]` | `PI_HASHLINE_DIR` is nonempty but not an absolute path. |
-| `[E_BAD_SHAPE]` | Request envelope or edit item has unknown, missing, or wrongly-typed fields (for example `replacement_lines` must be an array of strings, one element per line), content contains a NUL byte (`U+0000`), which would make the file binary, or a grep `glob` has invalid bracket or brace syntax. |
-| `[W_BAD_SHAPE]` | Auto-corrected request slip reported as a warning (for example stringified array text that could not be parsed and was kept as one literal line). |
+| `[E_BAD_SHAPE]` | Request envelope or edit item has unknown, missing, or wrongly-typed fields (for example `replacement_lines` must be a string holding the exact text), content contains a NUL byte (`U+0000`), which would make the file binary, or a grep `glob` has invalid bracket or brace syntax. |
+| `[W_BAD_SHAPE]` | Auto-corrected request slip reported as a warning (for example legacy array text that could not be parsed and was kept as one literal line). |
 | `[E_BAD_REF]` | An anchor in `remove_from`/`remove_to` is not a bare 4-character anchor (the anchor table is letters only). |
 | `[W_BAD_REF]` | A pasted `anchor│` or diff-preview marker was stripped from an anchor field with a warning. |
 | `[E_STALE_ANCHOR]` | An anchor is not owned in this session (it was never shown to you, or its line was edited or the file was rewritten); call `read` for fresh anchors. |
-| `[W_INVALID_PATCH]` | A `replacement_lines` element is a diff-preview row (`+anchor│`, `-anchor│`, `-    │`). The marker is stripped automatically with a warning. |
-| `[W_BARE_HASH_PREFIX]` | A `replacement_lines` element starts with an `anchor│` prefix. The prefix is stripped automatically with a warning. |
+| `[W_INVALID_PATCH]` | A `replacement_lines` line is a diff-preview row (`+anchor│`, `-anchor│`, `-    │`). The marker is stripped automatically with a warning. |
+| `[W_BARE_HASH_PREFIX]` | A `replacement_lines` line starts with an `anchor│` prefix. The prefix is stripped automatically with a warning. |
 | `[W_ANCHOR_RECLAIMED]` | The session's anchor quota was exhausted, so all anchors of the listed files (the least recently read or edited) were freed to make room. Read those files again before editing them. |
 | `[H_LITERAL_ESCAPE]` | `lines` or `replacement_lines` contains literal escaped text such as `\uXXXX` or `\n`; the file receives those backslash characters as written. Escapes decode once in the tool call (`\uXXXX` → the character), so a doubled escape (`\\uXXXX`) lands literally — resend with the real character if that was not intended. |
 | `[E_WOULD_EMPTY]` | An edit would empty a non-empty file; use `write` instead. A cross-file `move` may empty its source file. |

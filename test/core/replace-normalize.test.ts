@@ -12,7 +12,7 @@ describe("normReq", () => {
 	it("returns object input unchanged when no normalization needed", () => {
 		const input = {
 			remove_from: "ATIm", remove_to: "ATIm",
-			replacement_lines: ["new"],
+			replacement_lines: "new",
 		};
 		const result = normReq(input);
 		expect(result).toEqual(input);
@@ -70,7 +70,7 @@ describe("normReq - top-level shape", () => {
 		const result = normReq(input) as Record<string, unknown>;
 		expect(result.remove_from).toEqual("ATIm");
 		expect(result.remove_to).toEqual("BeSR");
-		expect(result.replacement_lines).toEqual(["new line"]);
+		expect(result.replacement_lines).toEqual("new line");
 	});
 
 	it("handles flat format with file_path alias", () => {
@@ -144,47 +144,58 @@ describe("normReq - top-level shape", () => {
 	});
 });
 
-describe("normReq - stringified line fields", () => {
+describe("normReq - line fields", () => {
 	const glmMapPayload = '["    \\"pi-hashline-edit-pro\\": \\"^4.3.5\\","].map(s => s)';
 	const glmSlicePayload = '["    \\"@cortexkit/aft\\": \\"^0.57.0\\",", "    \\"@cortexkit/aft-pi\\": \\"^0.57.0\\","].slice(0, 3)';
 	const glmMalformedPayload = '["    \\"pi-hashline-edit-pro\\": \\"^4.3.5\\",""]';
 
-	it("unwraps a method-chained stringified array", () => {
+	it("keeps a JSON-array-shaped string literal", () => {
 		const result = normReq({ remove_from: "ATIm", remove_to: "ATIm", replacement_lines: glmMapPayload }) as Record<string, unknown>;
-		expect(result.replacement_lines).toEqual(['    "pi-hashline-edit-pro": "^4.3.5",']);
+		expect(result.replacement_lines).toBe(glmMapPayload);
 	});
 
-	it("unwraps a multi-line stringified array with a trailing slice", () => {
+	it("keeps a multi-line JSON-array-shaped string literal", () => {
 		const result = normReq({ remove_from: "ATIm", remove_to: "ATIm", replacement_lines: glmSlicePayload }) as Record<string, unknown>;
-		expect(result.replacement_lines).toEqual([
-			'    "@cortexkit/aft": "^0.57.0",',
-			'    "@cortexkit/aft-pi": "^0.57.0",',
-		]);
+		expect(result.replacement_lines).toBe(glmSlicePayload);
 	});
 
-	it("keeps a malformed stringified array as one warnable element", () => {
+	it("keeps a malformed JSON-array-shaped string literal", () => {
 		const result = normReq({ remove_from: "ATIm", remove_to: "ATIm", replacement_lines: glmMalformedPayload }) as Record<string, unknown>;
-		expect(result.replacement_lines).toEqual([glmMalformedPayload]);
+		expect(result.replacement_lines).toBe(glmMalformedPayload);
 	});
 
-	it("keeps a lone string as one element so its line endings survive parsing", () => {
+	it("keeps a string payload with its line endings", () => {
 		const result = normReq({ remove_from: "ATIm", remove_to: "ATIm", replacement_lines: "line1\nline2" }) as Record<string, unknown>;
-		expect(result.replacement_lines).toEqual(["line1\nline2"]);
+		expect(result.replacement_lines).toBe("line1\nline2");
 	});
 
-	it("turns a stringified empty array into a deletion", () => {
+	it("keeps a stringified empty array literal", () => {
 		const result = normReq({ remove_from: "ATIm", remove_to: "ATIm", replacement_lines: "[]" }) as Record<string, unknown>;
-		expect(result.replacement_lines).toEqual([]);
+		expect(result.replacement_lines).toBe("[]");
+	});
+
+	it("converts a legacy lines array into the exact text", () => {
+		const result = normReq({ remove_from: "ATIm", remove_to: "ATIm", replacement_lines: ["a", "b"] }) as Record<string, unknown>;
+		expect(result.replacement_lines).toBe("a\nb");
+	});
+
+	it("keeps a trailing blank line when converting a legacy array", () => {
+		const result = normReq({ remove_from: "ATIm", remove_to: "ATIm", replacement_lines: ["a", ""] }) as Record<string, unknown>;
+		expect(result.replacement_lines).toBe("a\n\n");
+	});
+
+	it("converts an empty legacy array into a deletion", () => {
+		const result = normReq({ remove_from: "ATIm", remove_to: "ATIm", replacement_lines: [] }) as Record<string, unknown>;
+		expect(result.replacement_lines).toBe("");
+	});
+
+	it("still unwraps a legacy stringified array element", () => {
+		const result = normReq({ remove_from: "ATIm", remove_to: "ATIm", replacement_lines: [glmMapPayload] }) as Record<string, unknown>;
+		expect(result.replacement_lines).toBe('    "pi-hashline-edit-pro": "^4.3.5",');
 	});
 
 	it("normalizes the insert lines field the same way", () => {
-		const result = normReq({ anchor: "ATIm", direction: "after", lines: glmMapPayload }) as Record<string, unknown>;
-		expect(result.lines).toEqual(['    "pi-hashline-edit-pro": "^4.3.5",']);
-	});
-
-	it("leaves a valid multi-line array untouched", () => {
-		const replacement_lines = ["a", "b"];
-		const result = normReq({ remove_from: "ATIm", remove_to: "ATIm", replacement_lines }) as Record<string, unknown>;
-		expect(result.replacement_lines).toBe(replacement_lines);
+		const result = normReq({ anchor: "ATIm", direction: "after", lines: ["a", "b"] }) as Record<string, unknown>;
+		expect(result.lines).toBe("a\nb");
 	});
 });

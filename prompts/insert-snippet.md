@@ -1,1 +1,1 @@
-Insert `lines` after or before an anchor line: the anchor line stays, `lines` are bare without `│`, one per element
+Insert a text block after or before an anchor line: the anchor line stays; `lines` is the exact text without anchor prefixes

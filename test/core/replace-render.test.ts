@@ -31,7 +31,7 @@ describe("getPreviewInput", () => {
 	});
 
   it("returns partial input for record without path", () => {
-    expect(getPreviewInput({ remove_from: "ATIm", remove_to: "BeSR", replacement_lines: ["new"] })).toEqual({ remove_from: "ATIm", remove_to: "BeSR", replacement_lines: ["new"] });
+    expect(getPreviewInput({ remove_from: "ATIm", remove_to: "BeSR", replacement_lines: "new" })).toEqual({ remove_from: "ATIm", remove_to: "BeSR", replacement_lines: "new" });
   });
 
 	it("returns null for record with non-string path", () => {
@@ -43,7 +43,7 @@ describe("getPreviewInput", () => {
 	});
 
 	it("returns request for valid input", () => {
-		const input = { remove_from: "ATIm", remove_to: "BeSR", replacement_lines: ["new"] };
+		const input = { remove_from: "ATIm", remove_to: "BeSR", replacement_lines: "new" };
 		const result = getPreviewInput(input);
 		expect(result).toEqual(input);
 	});

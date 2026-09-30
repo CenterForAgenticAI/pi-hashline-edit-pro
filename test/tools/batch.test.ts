@@ -889,7 +889,7 @@ describe("same-turn edit batches", () => {
       const betaRef = anchorFor(text, "beta");
       const gammaRef = anchorFor(text, "gamma");
 
-      const firstArgs = { remove_from: betaRef, remove_to: betaRef, replacement_lines: '["BETA"].map(s => s)' };
+      const firstArgs = { remove_from: betaRef, remove_to: betaRef, replacement_lines: ['["BETA"].map(s => s)'] };
       const secondArgs = { remove_from: gammaRef, remove_to: gammaRef, replacement_lines: ["GAMMA"] };
       const message = assistantMessage([
         toolCall("m1", "replace", firstArgs),

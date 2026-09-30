@@ -17,7 +17,7 @@ describe("assertReq", () => {
 	});
 
   it("allows an optional path hint for require-path mode", () => {
-    expect(() => assertReq({ path: "test.txt", remove_from: "ATIm", remove_to: "BeSR", replacement_lines: ["new"] }))
+    expect(() => assertReq({ path: "test.txt", remove_from: "ATIm", remove_to: "BeSR", replacement_lines: "new" }))
       .not.toThrow();
   });
 
@@ -44,13 +44,13 @@ describe("assertReq", () => {
   it("accepts the top-level edit shape", () => {
     expect(() => assertReq({
       remove_from: "ATIm", remove_to: "BeSR",
-      replacement_lines: ["new"],
+      replacement_lines: "new",
     })).not.toThrow();
   });
 
   it("throws for a NUL byte in replacement_lines", () => {
     const nul = String.fromCharCode(0);
-    expect(() => assertReq({ remove_from: "ATIm", remove_to: "BeSR", replacement_lines: [`a${nul}b`] }))
+    expect(() => assertReq({ remove_from: "ATIm", remove_to: "BeSR", replacement_lines: `a${nul}b` }))
       .toThrow(/NUL byte/);
   });
 
@@ -84,12 +84,12 @@ describe("prepareArguments normalization", () => {
 		expect(tool.prepareArguments!("raw")).toBe("raw");
 	});
 
-	it("passes replacement_lines through as an array", () => {
+	it("converts a legacy lines array into the exact text", () => {
 		const tool = buildToolDef();
 		const prepared = tool.prepareArguments!({
 			remove_from: "ATIm", remove_to: "BeSR",
 			replacement_lines: ["line1", "line2"],
 		}) as Record<string, unknown>;
-		expect(prepared.replacement_lines).toEqual(["line1", "line2"]);
+		expect(prepared.replacement_lines).toEqual("line1\nline2");
 	});
 });

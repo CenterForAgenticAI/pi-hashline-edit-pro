@@ -34,14 +34,12 @@ describe("resEdit", () => {
 		expect(() => resEdit(edit)).toThrow(/Invalid anchor/);
 	});
 
-  it("rejects a single string replacement_lines input", () => {
-    const edit = {
+  it("accepts a single string replacement_lines input", () => {
+    const resolved = resEdit({
       remove_from: "wpDM", remove_to: "wpDM",
       replacement_lines: "hello",
-    } as unknown as HTEdit;
-    expect(() => resEdit(edit)).toThrow(
-      /must be an array of strings/i,
-    );
+    });
+    expect(resolved.content_lines).toEqual(["hello"]);
   });
 
   it("passes replacement_lines through as content lines", () => {

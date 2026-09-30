@@ -9,7 +9,7 @@ import {
   type LineEnding,
 } from "./replace-diff";
 import { readNormFile, type NormFile } from "./file-reader";
-import { editToolSchema, buildEditToolSchema, type ReqParams, assertReq, normReq } from "./payload-contract";
+import { editToolSchema, buildEditToolSchema, type ReqParams, type RawReqParams, assertReq, normReq } from "./payload-contract";
 import { literalEscapeHint, splitLines } from "./utils";
 import { loadP, loadGuide } from "./prompts";
 import { type FileIdentity } from "./fs-write";
@@ -121,17 +121,12 @@ function countLineChanges(
     totalRemovedLines,
   };
 }
-
-export function buildReplaceHEdit(params: ReqParams): { edit: HEdit; warnings: string[] } {
+export function buildReplaceHEdit(params: RawReqParams): { edit: HEdit; warnings: string[] } {
   const editWarnings: string[] = [];
-  const edit = resEdit(
-    {
-      remove_from: params.remove_from,
-      remove_to: params.remove_to,
-      replacement_lines: params.replacement_lines,
-    },
-    editWarnings,
-  );
+  const anchors = { remove_from: params.remove_from, remove_to: params.remove_to };
+  const edit = typeof params.replacement_lines === "string"
+    ? resEdit({ ...anchors, replacement_lines: params.replacement_lines }, editWarnings)
+    : resEdit({ ...anchors, replacement_lines: params.replacement_lines }, editWarnings);
   return { edit, warnings: editWarnings };
 }
 
@@ -148,7 +143,7 @@ function withEndingOverrides(edit: HEdit, overrides: (LineEnding | undefined)[] 
 
 export async function execPipeline(
   targetPath: string,
-  params: ReqParams,
+  params: RawReqParams,
   cwd: string,
   options?: ExecPipelineOptions,
 ): Promise<PipelineResult> {
@@ -290,7 +285,7 @@ export function buildToolDef(flags: EditToolFlags = DEFAULT_EDIT_FLAGS): ToolDef
         const canonical = normReq(params);
         assertReq(canonical);
         const normalizedParams = canonical;
-        const literalEscape = literalEscapeHint(normalizedParams.replacement_lines, "replacement_lines");
+        const literalEscape = literalEscapeHint([normalizedParams.replacement_lines], "replacement_lines");
         const targetPath = await resolveEditTargetWithRequirement({
           removeFrom: normalizedParams.remove_from,
           removeTo: normalizedParams.remove_to,

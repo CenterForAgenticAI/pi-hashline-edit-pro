@@ -20,15 +20,12 @@ describe("edit input validation", () => {
 		expect(result.warnings?.[0]).toMatch(/replacement_lines line 1/);
 	});
 
-	it("rejects a single string replacement_lines before patch-prefix validation", () => {
-		const toolEdit: HTEdit = {
-      remove_from: "PyBY",
-      remove_to: "PyBY", replacement_lines: "+PyBY:foo",
-    } as unknown as HTEdit;
-    expect(() => resEdit(toolEdit)).toThrow(
-      /must be an array of strings/i,
-    );
-	});
+		it("accepts a single string replacement_lines before patch-prefix validation", () => {
+		const toolEdit = { remove_from: "PyBY",
+		remove_to: "PyBY", replacement_lines: "+PyBY:foo" };
+		const resolved = resEdit(toolEdit);
+		expect(resolved.content_lines).toEqual(["+PyBY:foo"]);
+		});
 
 	it("passes through numbered deletion rows as literal content", () => {
 		const toolEdit: HTEdit = { remove_from: "PyBY",

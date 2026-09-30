@@ -43,7 +43,7 @@ describe("replace tool - first-line whitespace preservation", () => {
       const bHash = extractHash(lines.find((l: string) => l.includes("│bbb"))!);
       const editResult = await editTool.execute(
         "e1",
-        { remove_from: bHash, remove_to: bHash, replacement_lines: ["  BBB", "  CCC"] },
+        { remove_from: bHash, remove_to: bHash, replacement_lines: "  BBB\r\n  CCC" },
         undefined, undefined, ctx,
       );
       expect(editResult.content[0].text).toContain("Successfully replaced");

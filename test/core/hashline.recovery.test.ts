@@ -100,10 +100,10 @@ describe("applyEdit - recovery scenarios", () => {
     expect(() => resEdit(edit)).toThrow(/must be an array of strings/);
   });
 
-  it("rejects a single string replacement_lines", () => {
+  it("accepts a single string replacement_lines", () => {
     const edit = { remove_from: "PyBY",
-    remove_to: "PyBY", replacement_lines: "hello" } as any;
-    expect(() => resEdit(edit)).toThrow(/must be an array of strings/);
+    remove_to: "PyBY", replacement_lines: "hello" } as const;
+    expect(resEdit(edit).content_lines).toEqual(["hello"]);
   });
 
   it("accepts array replacement_lines", () => {

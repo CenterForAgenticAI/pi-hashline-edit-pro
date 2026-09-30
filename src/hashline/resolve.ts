@@ -1,8 +1,8 @@
 import { abortIf, rejectUnknownFields, clipLine, decodeStringArray, assertNoNul } from "../utils";
-import { parseHashRef, parseTextWithSeparators, type Anchor } from "./parse";
+import { parseHashRef, parsePayloadText, parseTextWithSeparators, type Anchor, type ParsedText } from "./parse";
 import { HASH_SEP, stripRowPrefix, lineChecksum, type RowPrefixKind } from "./hash";
 import { HASH_RUN } from "./alphabet";
-import { NEW_CONTENT_NOT_ARRAY_MSG, MAX_RANGE_STALE_LINES } from "../constants";
+import { NEW_CONTENT_NOT_ARRAY_MSG, NEW_CONTENT_NOT_STRING_MSG, MAX_RANGE_STALE_LINES } from "../constants";
 import type { LineEnding } from "../normalize";
 
 export type RAnchor = {
@@ -34,6 +34,12 @@ export interface NEdit {
 
 export type HTEdit = {
   replacement_lines: string[];
+  remove_from: string;
+  remove_to: string;
+};
+
+export type HTPayloadEdit = {
+  replacement_lines: string;
   remove_from: string;
   remove_to: string;
 };
@@ -116,30 +122,57 @@ export function fmtMismatchWithHashes(
 
 const ITEM_KS = new Set(["replacement_lines", "remove_from", "remove_to"]);
 
-function assertItem(edit: Record<string, unknown>): void {
-  rejectUnknownFields(edit, ITEM_KS, "Edit", "The edit takes only { replacement_lines, remove_from, remove_to }.");
+function assertBounds(edit: Record<string, unknown>): void {
+	if ("remove_from" in edit && typeof edit.remove_from !== "string") {
+		throw new Error(
+			`[E_BAD_SHAPE] Field "remove_from" must be an anchor string (4-char anchor).`,
+		);
+	}
+	if ("remove_to" in edit && typeof edit.remove_to !== "string") {
+		throw new Error(
+			`[E_BAD_SHAPE] Field "remove_to" must be an anchor string (4-char anchor).`,
+		);
+	}
+	if (typeof edit.remove_from !== "string" || typeof edit.remove_to !== "string") {
+		throw new Error(
+			`[E_BAD_SHAPE] The edit requires "remove_from" and "remove_to" anchor strings (4-char anchors from read output).`,
+		);
+	}
+}
 
-  if ("remove_from" in edit && typeof edit.remove_from !== "string") {
-    throw new Error(
-      `[E_BAD_SHAPE] Field "remove_from" must be an anchor string (4-char anchor).`,
-    );
-  }
-  if ("remove_to" in edit && typeof edit.remove_to !== "string") {
-    throw new Error(
-      `[E_BAD_SHAPE] Field "remove_to" must be an anchor string (4-char anchor).`,
-    );
-  }
-  if (!("replacement_lines" in edit)) {
-    throw new Error(`[E_BAD_SHAPE] The edit requires a "replacement_lines" array (use [] to delete).`);
-  }
-  if (!Array.isArray(edit.replacement_lines) || edit.replacement_lines.some((line) => typeof line !== "string")) {
-    throw new Error(NEW_CONTENT_NOT_ARRAY_MSG);
-  }
-  if (typeof edit.remove_from !== "string" || typeof edit.remove_to !== "string") {
-    throw new Error(
-      `[E_BAD_SHAPE] The edit requires "remove_from" and "remove_to" anchor strings (4-char anchors from read output).`,
-    );
-  }
+function assertItem(edit: Record<string, unknown>): void {
+	rejectUnknownFields(edit, ITEM_KS, "Edit", "The edit takes only { replacement_lines, remove_from, remove_to }.");
+	assertBounds(edit);
+	if (!("replacement_lines" in edit)) {
+		throw new Error(`[E_BAD_SHAPE] The edit requires a "replacement_lines" array (use [] to delete).`);
+	}
+	if (!Array.isArray(edit.replacement_lines) || edit.replacement_lines.some((line) => typeof line !== "string")) {
+		throw new Error(NEW_CONTENT_NOT_ARRAY_MSG);
+	}
+}
+
+function assertPayloadItem(edit: Record<string, unknown>): void {
+	rejectUnknownFields(edit, ITEM_KS, "Edit", "The edit takes only { replacement_lines, remove_from, remove_to }.");
+	assertBounds(edit);
+	if (!("replacement_lines" in edit)) {
+		throw new Error(`[E_BAD_SHAPE] The edit requires a "replacement_lines" string (use "" to delete).`);
+	}
+	if (typeof edit.replacement_lines !== "string") {
+		throw new Error(NEW_CONTENT_NOT_STRING_MSG);
+	}
+}
+
+function resolveParsedEdit(removeFrom: string, removeTo: string, parsed: ParsedText, warnings?: string[]): HEdit {
+	const replaceLines = parsed.lines;
+	assertNoNul(replaceLines);
+	const bounds = [removeFrom, removeTo].map((ref) => {
+		return stripAnchorRow(ref.trim(), "remove_from/remove_to entry", warnings);
+	}) as [string, string];
+	return {
+		content_lines: replaceLines,
+		hash_bounds: [parseHashRef(bounds[0]), parseHashRef(bounds[1])],
+		...(parsed.separators.some((separator) => separator !== undefined) ? { content_separators: parsed.separators } : {}),
+	};
 }
 
 export const ANCHOR_ROW_RE = new RegExp(`^([+-]?)(${HASH_RUN})│`);
@@ -161,20 +194,14 @@ export function stripAnchorRow(
 	return match[2]!;
 }
 
-export function resEdit(edit: HTEdit, warnings?: string[]): HEdit {
-  assertItem(edit as Record<string, unknown>);
-
-  const parsed = parseTextWithSeparators(decodeStringArray(edit.replacement_lines, warnings) ?? edit.replacement_lines);
-  const replaceLines = parsed.lines;
-  assertNoNul(replaceLines);
-  const bounds = [edit.remove_from, edit.remove_to].map((ref) => {
-    return stripAnchorRow(ref.trim(), "remove_from/remove_to entry", warnings);
-  }) as [string, string];
-  return {
-    content_lines: replaceLines,
-    hash_bounds: [parseHashRef(bounds[0]), parseHashRef(bounds[1])],
-    ...(parsed.separators.some((separator) => separator !== undefined) ? { content_separators: parsed.separators } : {}),
-  };
+export function resEdit(edit: HTEdit | HTPayloadEdit, warnings?: string[]): HEdit {
+	if (typeof edit.replacement_lines === "string") {
+		assertPayloadItem(edit as unknown as Record<string, unknown>);
+		return resolveParsedEdit(edit.remove_from, edit.remove_to, parsePayloadText(edit.replacement_lines), warnings);
+	}
+	assertItem(edit as Record<string, unknown>);
+	const parsed = parseTextWithSeparators(decodeStringArray(edit.replacement_lines, warnings) ?? edit.replacement_lines);
+	return resolveParsedEdit(edit.remove_from, edit.remove_to, parsed, warnings);
 }
 
 function warnUnicodeEsc(

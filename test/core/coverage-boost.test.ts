@@ -246,6 +246,6 @@ describe("coverage boost hash-store and read", () => {
     expect(() => assertInsertReq(null)).toThrow("[E_BAD_SHAPE]");
     expect(() => assertInsertReq({ anchor: "", direction: "after", lines: [] })).toThrow();
     expect(() => assertInsertReq({ anchor: "abc", direction: "wrong" as never, lines: [] })).toThrow();
-    expect(() => assertInsertReq({ anchor: "abc", direction: "after", lines: "x" as never })).toThrow();
+    expect(() => assertInsertReq({ anchor: "abc", direction: "after", lines: "x" })).not.toThrow();
   });
 });
