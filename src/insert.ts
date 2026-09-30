@@ -28,7 +28,7 @@ const insertDirectionSchema = Type.Union(
 
 const insertLinesSchema = Type.Array(
   Type.String({
-    description: "One line to insert. An embedded line break (\\n, \\r\\n, or \\r) splits it into lines and sets their endings; escape text such as \\n or \\u200b is written literally.",
+    description: "One line to insert. A real line break (\\n, \\r\\n, or \\r) splits it into lines and sets their endings; escape sequences are not decoded.",
   }),
   {
     description: 'One string per line; [""] is a blank line; never include the anchor line.',
