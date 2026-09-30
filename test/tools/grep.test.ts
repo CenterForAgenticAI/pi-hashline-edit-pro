@@ -311,6 +311,26 @@ async function withSystemTempDir(prefix: string, run: (dir: string) => Promise<v
     });
   });
 
+  it("honors .gitignore outside a git repository", async () => {
+    await withSystemTempDir("grep-gitignore-outside-", async (dir) => {
+      await mkdir(join(dir, "node_modules", "pkg"), { recursive: true });
+      await writeFile(join(dir, "node_modules", "pkg", "b.ts"), "needle in node_modules\n", "utf-8");
+      await writeFile(join(dir, "ok.ts"), "needle in root\n", "utf-8");
+      await writeFile(join(dir, ".gitignore"), "node_modules\n", "utf-8");
+
+      const { ctx, getTool } = setupIntegrationTest(dir);
+      const grepTool = getTool("anchor_grep");
+      const result = await grepTool.execute(
+        "g1",
+        { pattern: "needle" },
+        undefined, undefined, ctx,
+      );
+      const text = getText(result);
+      expect(text).toContain("=== ok.ts ===");
+      expect(text).not.toContain("node_modules");
+    });
+  });
+
   it("skips binary files silently", async () => {
     await withTempDir("grep-bin-", async (dir) => {
       await writeFile(join(dir, "a.txt"), "needle here\n", "utf-8");

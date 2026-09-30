@@ -186,7 +186,7 @@ Edge cases:
 | --- | --- |
 | `remove_from` | 4-char anchor marking the FIRST line to remove (inclusive). |
 | `remove_to` | 4-char anchor marking the LAST line to remove (inclusive). |
-| `replacement_lines` | Replacement lines, one element per line. Mirror the removed lines exactly, blank lines included: `[]` deletes the range, `[""]` is a single blank line, `["a", ""]` is a line followed by a blank line. One element is one line: a real line-break character (`\n`, `\r\n`, or `\r`) splits it and sets that line's ending; escape sequences such as `\n` or `\u200b` are not decoded. A lone string is accepted too: it is split on newlines, and stringified array text is unwrapped. |
+| `replacement_lines` | Replacement lines, one element per line. Mirror the removed lines exactly, blank lines included: `[]` deletes the range, `[""]` is a single blank line, `["a", ""]` is a line followed by a blank line. One element is one line: a real line-break character (`\n`, `\r\n`, or `\r`) splits it and sets that line's ending; escapes decode once — `\uXXXX` is the character, `\\uXXXX` the literal text. A lone string is accepted too: it is split on newlines, and stringified array text is unwrapped. |
 
 Example: read showed `Hasu│old` and `arvm│old2`; to replace both:
 
@@ -220,7 +220,7 @@ After a successful edit, the diff is capped at 50KB. A row over 50KB is shown as
 | --- | --- |
 | `anchor` | 4-char anchor marking the line next to which the lines go. The anchor line is preserved. A pasted `+Hasu│x` diff row or `anchor│` prefix is stripped automatically with a warning. |
 | `direction` | `"after"` inserts below the anchor line, `"before"` above it. |
-| `lines` | Lines to insert, one element per line. `[""]` is a blank line. Never include the anchor line. One element is one line: a real line-break character (`\n`, `\r\n`, or `\r`) splits it and sets that line's ending; escape sequences such as `\n` or `\u200b` are not decoded. A lone string is split on newlines, and stringified array text is unwrapped. |
+| `lines` | Lines to insert, one element per line. `[""]` is a blank line. Never include the anchor line. One element is one line: a real line-break character (`\n`, `\r\n`, or `\r`) splits it and sets that line's ending; escapes decode once — `\uXXXX` is the character, `\\uXXXX` the literal text. A lone string is split on newlines, and stringified array text is unwrapped. |
 
 Nothing is removed and the inserted lines are written exactly as given; the anchor line and every other line stay in place. Inserting nothing (`lines: []`) reports a noop. To seed an empty file, read it and insert after the `anchor│` empty-line row.
 
@@ -357,7 +357,7 @@ Settings live in `~/.config/pi-hashline-edit-pro/config.json`, created when a se
 | `autoReadAllIgnore` | Ignore folders/files | `[]` | Extra folder names, file names, or globs skipped by auto-read all. |
 | `anchorGrepEnabled` | Anchor grep | `true` | Register `anchor_grep` and disable the built-in grep while it is on. |
 | `copyMoveEnabled` | Copy/move | `true` | Offer the `copy` and `move` tools; when off, both are removed from the active tools. |
-| `requirePath` | Require path | `false` | `replace` and `insert` require a `path` argument that must match anchor ownership. |
+| `requirePath` | Require path | `false` | `replace`, `insert`, `copy`, and `move` require a `path` argument that must match anchor ownership. |
 | `strictInput` | Strict input | `false` | Reject auto-fixable slips (`[W_BAD_SHAPE]`, `[W_BAD_REF]`, `[W_INVALID_PATCH]`, `[W_BARE_HASH_PREFIX]`) with `[E_BAD_SHAPE]` instead of applying them with a warning. |
 | `diffContextLines` | Diff context | `1` | Surrounding lines in post-edit diffs, 0-10 (needs Auto-read). |
 
@@ -369,7 +369,7 @@ When `PI_HASHLINE_DIR` is unset or empty, non-Windows platforms honor `XDG_CONFI
 | --- | --- | --- |
 | Output cap | 2000 lines and 50KB | `read`, auto-read after `write`, post-edit diffs, patches, previews, `details.patch` |
 | Oversized row | 50KB per `anchor│content` row | replaced by an anchor-keeping marker you can still edit through |
-| Line cap | 1,353,139 lines per file | `read`, `replace`, `insert` (`[E_FILE_TOO_LARGE]`) |
+| Line cap | 1,353,139 lines per file | `read`, `replace`, `insert`, `copy`, `move` (`[E_FILE_TOO_LARGE]`) |
 | File size | 100MB | all tools (`[E_FILE_TOO_LARGE]`) |
 | Hash window | first 500 bytes of a line | anchor identity for long lines |
 | Patch guard | 1MB of pre-edit + post-edit text | patch generation is skipped and `patchTruncated` is set |
@@ -423,7 +423,7 @@ Full reference:
 | `[W_INVALID_PATCH]` | A `replacement_lines` element is a diff-preview row (`+anchor│`, `-anchor│`, `-    │`). The marker is stripped automatically with a warning. |
 | `[W_BARE_HASH_PREFIX]` | A `replacement_lines` element starts with an `anchor│` prefix. The prefix is stripped automatically with a warning. |
 | `[W_ANCHOR_RECLAIMED]` | The session's anchor quota was exhausted, so all anchors of the listed files (the least recently read or edited) were freed to make room. Read those files again before editing them. |
-| `[H_LITERAL_ESCAPE]` | `lines` or `replacement_lines` contains the literal escaped text such as `\u200b` or `\n`; the file receives those characters as written. Decode the escapes first if the text came from a quoted prompt. |
+| `[H_LITERAL_ESCAPE]` | `lines` or `replacement_lines` contains literal escaped text such as `\uXXXX` or `\n`; the file receives those backslash characters as written. Escapes decode once in the tool call (`\uXXXX` → the character), so a doubled escape (`\\uXXXX`) lands literally — resend with the real character if that was not intended. |
 | `[E_WOULD_EMPTY]` | An edit would empty a non-empty file; use `write` instead. A cross-file `move` may empty its source file. |
 | `[E_NOT_FOUND]` | The path does not exist. |
 | `[E_ACCESS]` | The file is not readable or writable. |
@@ -479,7 +479,7 @@ Background snapshot pruning and registry sidecar GC skip `EPERM`/`EACCES` withou
 
 ### Allocation
 
-Anchors are allocated, never derived. Every line that is served to you, by `read`, `anchor_grep`, the auto-read block after `write`, or a post-edit diff, gets the next free anchor from the session's pool, claimed by walking the table with a stride of 836,286 entries (coprime to the 1,353,139-entry table), so consecutively minted anchors land in unrelated regions of the table instead of sharing leading characters. Each session seeds its walk from its own offset (derived from the session key and the process id), so concurrent sessions mint different sequences instead of identical ones: an anchor minted in one session is unknown in another and is rejected with `[E_STALE_ANCHOR]` rather than resolving to a different file. Ownership is exclusive: an anchor is owned by one file's line until it is freed (the line was edited, the file was written or deleted, you ran `/clear-anchors`, or the session's quota ran out and the file was the least recently read or edited, which frees all of its anchors and reports it in `[W_ANCHOR_RECLAIMED]`). Minting prefers anchors the session has never used; when a bounded fresh-anchor probe finds nothing, freed anchors are recycled after their stale served records are purged, so an anchor is never shared by two live lines. Because ownership is exclusive, an anchor resolves to exactly one file. Two byte-identical lines never share an anchor, and that guarantee sets the file size cap: the pool is the shipped table's 1,353,139 entries (not all 26⁴ letter combinations), so a file can hold at most 1,353,139 lines, beyond which `read`, `replace`, and `insert` reject with `[E_FILE_TOO_LARGE]` (use `write` for very large files).
+Anchors are allocated, never derived. Every line that is served to you, by `read`, `anchor_grep`, the auto-read block after `write`, or a post-edit diff, gets the next free anchor from the session's pool, claimed by walking the table with a stride of 836,286 entries (coprime to the 1,353,139-entry table), so consecutively minted anchors land in unrelated regions of the table instead of sharing leading characters. Each session seeds its walk from its own offset (derived from the session key and the process id), so concurrent sessions mint different sequences instead of identical ones: an anchor minted in one session is unknown in another and is rejected with `[E_STALE_ANCHOR]` rather than resolving to a different file. Ownership is exclusive: an anchor is owned by one file's line until it is freed (the line was edited, the file was written or deleted, you ran `/clear-anchors`, or the session's quota ran out and the file was the least recently read or edited, which frees all of its anchors and reports it in `[W_ANCHOR_RECLAIMED]`). Minting prefers anchors the session has never used; when a bounded fresh-anchor probe finds nothing, freed anchors are recycled after their stale served records are purged, so an anchor is never shared by two live lines. Because ownership is exclusive, an anchor resolves to exactly one file. Two byte-identical lines never share an anchor, and that guarantee sets the file size cap: the pool is the shipped table's 1,353,139 entries (not all 52⁴ letter combinations), so a file can hold at most 1,353,139 lines, beyond which `read`, `replace`, `insert`, `copy`, and `move` reject with `[E_FILE_TOO_LARGE]` (use `write` for very large files).
 
 ### Ownership and mapping across edits
 

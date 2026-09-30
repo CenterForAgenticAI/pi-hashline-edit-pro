@@ -298,14 +298,30 @@ export async function resolveRgPath(): Promise<string> {
   throw new Error("[E_ACCESS] ripgrep (rg) is required for grep but was not found. Install ripgrep or ensure pi can download it to ~/.pi/agent/bin.");
 }
 
+async function insideGitRepo(start: string): Promise<boolean> {
+  let current = start;
+  for (;;) {
+    try {
+      await stat(join(current, ".git"));
+      return true;
+    } catch {
+      const parent = dirname(current);
+      if (parent === current) return false;
+      current = parent;
+    }
+  }
+}
+
 async function collectRgMatches(
   rgPath: string,
   pattern: string,
   searchPath: string,
   req: GrepReq,
-  signal?: AbortSignal,
+  signal: AbortSignal | undefined,
+  repoRooted: boolean,
 ): Promise<Map<string, number[]>> {
   const args = ["--json", "--line-number", "--color=never", "--hidden", "--glob", "!.git"];
+  if (!repoRooted) args.push("--no-require-git");
   const wanted = req.limit ?? 100;
   args.push("--max-count", String(wanted + 1));
   if (typeof req.glob === "string" && req.glob.length > 0) {
@@ -583,7 +599,8 @@ export function regGrep(pi: ExtensionAPI): void {
         };
         const readGrepFile = makeGrepReader("real");
         const readGrepFileShadow = makeGrepReader("shadow");
-        const rgMatches = await collectRgMatches(rgPath, req.pattern, base, req, signal);
+        const repoRooted = await insideGitRepo(globRoot);
+        const rgMatches = await collectRgMatches(rgPath, req.pattern, base, req, signal, repoRooted);
         const sortedFiles = [...rgMatches.keys()].sort(cmp);
         for (let f = 0; f < sortedFiles.length; f++) {
           abortIf(signal);
