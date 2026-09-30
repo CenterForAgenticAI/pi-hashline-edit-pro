@@ -2,7 +2,7 @@ import { Key, matchesKey, visibleWidth } from "@earendil-works/pi-tui";
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import { readConfig, type Config } from "./config";
 
-export type ConfigToggleKey = "autoRead" | "autoReadAll" | "autoReadAllIgnore" | "anchorGrepEnabled" | "requirePath" | "strictInput" | "diffContextLines";
+export type ConfigToggleKey = "autoRead" | "autoReadAll" | "autoReadAllIgnore" | "anchorGrepEnabled" | "copyMoveEnabled" | "requirePath" | "strictInput" | "diffContextLines";
 
 export interface ConfigRow {
   key: ConfigToggleKey;
@@ -23,6 +23,7 @@ export function configRows(config: Config): ConfigRow[] {
     { key: "autoReadAllIgnore", label: "Ignore folders/files", hint: "Extra folders, files, or globs skipped by auto-read all (comma-separated)", enabled: (config.autoReadAllIgnore ?? []).length > 0, folders: config.autoReadAllIgnore ?? [] },
     { key: "diffContextLines", label: "Diff context", hint: "Surrounding lines in post-edit diffs (needs Auto-read)", enabled: config.autoRead !== false, value: config.diffContextLines ?? 1, disabled: config.autoRead === false },
     { key: "anchorGrepEnabled", label: "Anchor grep", hint: "anchor_grep tool (builtin grep off while on)", enabled: config.anchorGrepEnabled === true },
+    { key: "copyMoveEnabled", label: "Copy/move", hint: "copy and move tools (both off while disabled)", enabled: config.copyMoveEnabled !== false },
     { key: "requirePath", label: "Require path", hint: "replace + insert need path (RPC visibility)", enabled: config.requirePath === true },
     { key: "strictInput", label: "Strict input", hint: "Reject auto-fixable slips instead of warnings", enabled: config.strictInput === true },
   ];

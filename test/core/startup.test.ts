@@ -229,6 +229,90 @@ describe("anchor_grep default", () => {
   });
 });
 
+describe("copy/move default", () => {
+  it("session_start keeps copy and move by default", async () => {
+    await withTempDir("startup-copy-move-on-", async dir => {
+      const home = join(dir, "home");
+      await mkdir(join(home, ".config", "pi-hashline-edit-pro"), { recursive: true });
+      vi.stubEnv("HOME", home);
+      vi.stubEnv("XDG_CONFIG_HOME", "");
+      try {
+        const { pi, handlers, getActive } = makePiStub(["read", "replace", "insert", "copy", "move", "anchor_grep", "undo_last_change", "edit"]);
+        const { default: register } = await import("../../index");
+        register(pi);
+        const sessionStart = handlers.get("session_start") as (a: unknown, b: unknown) => Promise<void>;
+        await sessionStart({}, { cwd: dir, ui: { notify: vi.fn() } });
+        expect(getActive()).toContain("copy");
+        expect(getActive()).toContain("move");
+        expect(getActive()).not.toContain("edit");
+      } finally {
+        vi.unstubAllEnvs();
+        const { shutdownHashStore } = await import("../../src/hash-store");
+        shutdownHashStore();
+      }
+    });
+  });
+
+  it("session_start removes copy and move when copyMoveEnabled is false", async () => {
+    await withTempDir("startup-copy-move-off-", async dir => {
+      const home = join(dir, "home");
+      await mkdir(join(home, ".config", "pi-hashline-edit-pro"), { recursive: true });
+      vi.stubEnv("HOME", home);
+      vi.stubEnv("XDG_CONFIG_HOME", "");
+      try {
+        const { writeFile } = await import("fs/promises");
+        await writeFile(
+          join(home, ".config", "pi-hashline-edit-pro", "config.json"),
+          JSON.stringify({ autoRead: true, anchorGrepEnabled: true, copyMoveEnabled: false }),
+        );
+        const { pi, handlers, getActive } = makePiStub(["read", "replace", "insert", "copy", "move", "anchor_grep", "undo_last_change", "edit"]);
+        const { default: register } = await import("../../index");
+        register(pi);
+        const sessionStart = handlers.get("session_start") as (a: unknown, b: unknown) => Promise<void>;
+        await sessionStart({}, { cwd: dir, ui: { notify: vi.fn() } });
+        expect(getActive()).not.toContain("copy");
+        expect(getActive()).not.toContain("move");
+        expect(getActive()).toContain("read");
+      } finally {
+        vi.unstubAllEnvs();
+        const { shutdownHashStore } = await import("../../src/hash-store");
+        shutdownHashStore();
+      }
+    });
+  });
+
+  it("hashline-config toggles copy and move", async () => {
+    await withTempDir("toggle-copy-move-", async dir => {
+      const home = join(dir, "home");
+      await mkdir(join(home, ".config", "pi-hashline-edit-pro"), { recursive: true });
+      vi.stubEnv("HOME", home);
+      vi.stubEnv("XDG_CONFIG_HOME", "");
+      try {
+        const { pi, commands, handlers, getActive } = makePiStub(["read", "replace", "insert", "copy", "move", "anchor_grep", "undo_last_change"]);
+        const { default: register } = await import("../../index");
+        register(pi);
+        const sessionStart = handlers.get("session_start") as (a: unknown, b: unknown) => Promise<void>;
+        await sessionStart({}, { cwd: dir, ui: { notify: vi.fn() } });
+        expect(getActive()).toContain("copy");
+        const overlay = await openConfigOverlay(commands, dir);
+        for (let step = 0; step < 5; step++) overlay.handleInput("j");
+        overlay.handleInput(" ");
+        await waitForConfig(async () => (await readConfig()).copyMoveEnabled === false && !getActive().includes("copy") && !getActive().includes("move"));
+        expect(getActive()).not.toContain("copy");
+        expect(getActive()).not.toContain("move");
+        overlay.handleInput(" ");
+        await waitForConfig(async () => (await readConfig()).copyMoveEnabled === true && getActive().includes("copy") && getActive().includes("move"));
+        expect(getActive()).toContain("copy");
+        expect(getActive()).toContain("move");
+      } finally {
+        vi.unstubAllEnvs();
+        const { shutdownHashStore } = await import("../../src/hash-store");
+        shutdownHashStore();
+      }
+    });
+  });
+});
+
 describe("hashline-config overlay rendering", () => {
   it("renders the settings rows and closes on q", async () => {
     await withTempDir("config-render-", async dir => {
@@ -252,7 +336,7 @@ describe("hashline-config overlay rendering", () => {
         expect(lines[lines.length - 1]).toBe(`╰${"─".repeat(58)}╯`);
         expect(lines.some((line) => line.includes("Hashline Config"))).toBe(true);
         expect(lines.some((line) => line.includes("↑↓ navigate"))).toBe(true);
-        expect(lines.filter((line) => line.includes("[x]")).length).toBe(2);
+        expect(lines.filter((line) => line.includes("[x]")).length).toBe(3);
         expect(lines.filter((line) => line.includes("[ ]")).length).toBe(2);
         expect(lines.filter((line) => line.includes("[on]")).length).toBe(0);
         expect(lines.filter((line) => line.includes("[off]")).length).toBe(1);
@@ -300,6 +384,10 @@ describe("hashline-config overlay rendering", () => {
 
         overlay.handleInput("j");
         overlay.handleInput(" ");
+        await waitForConfig(async () => (await readConfig()).copyMoveEnabled === false);
+
+        overlay.handleInput("j");
+        overlay.handleInput(" ");
         await waitForConfig(async () => (await readConfig()).requirePath === true);
 
         overlay.handleInput("j");
@@ -309,6 +397,7 @@ describe("hashline-config overlay rendering", () => {
         const config = await readConfig();
         expect(config.autoRead).toBe(false);
         expect(config.anchorGrepEnabled).toBe(false);
+        expect(config.copyMoveEnabled).toBe(false);
         expect(config.autoReadAll).toBe("on");
         expect(config.requirePath).toBe(true);
         expect(config.strictInput).toBe(true);

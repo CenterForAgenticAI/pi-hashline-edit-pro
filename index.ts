@@ -19,6 +19,7 @@ import {
   toggleAutoRead,
   cycleAutoReadAllMode,
   toggleAnchorGrep,
+  toggleCopyMove,
   toggleRequirePath,
   toggleStrictInput,
   adjustDiffContextLines,
@@ -95,9 +96,11 @@ export default function (pi: ExtensionAPI): void {
     autoReadAllInjected = sessionBranch.some((entry) => entry.type === "custom_message" && entry.customType === AUTO_READ_ALL_CUSTOM_TYPE);
     await refreshEditTools();
     pi.setActiveTools(
-      pi.getActiveTools().filter((t) =>
-        config.anchorGrepEnabled ? t !== "grep" : t !== "anchor_grep",
-      ),
+      pi.getActiveTools().filter((t) => {
+        if (config.anchorGrepEnabled ? t === "grep" : t === "anchor_grep") return false;
+        if (config.copyMoveEnabled === false && (t === "copy" || t === "move")) return false;
+        return true;
+      }),
     );
     const debugValue = process.env.PI_HASHLINE_DEBUG;
     if (debugValue === "1" || debugValue === "true") {
@@ -130,7 +133,7 @@ export default function (pi: ExtensionAPI): void {
   }));
 
   pi.registerCommand("hashline-config", {
-    description: "Open the hashline settings window (auto-read, auto-read all, ignore folders/files, diff context, grep, path, strict input)",
+    description: "Open the hashline settings window (auto-read, auto-read all, ignore folders/files, diff context, grep, copy/move, path, strict input)",
     handler: async (_args, ctx) => {
       if (!ctx.hasUI) {
         ctx.ui.notify("/hashline-config requires interactive mode", "error");
@@ -150,6 +153,11 @@ export default function (pi: ExtensionAPI): void {
               const enabled = await toggleAnchorGrep();
               const active = pi.getActiveTools();
               pi.setActiveTools(enabled ? [...new Set([...active.filter((t) => t !== "grep"), "anchor_grep"])] : [...new Set([...active.filter((t) => t !== "anchor_grep"), ...(grepWasActive ? ["grep"] : [])])]);
+            }
+            else if (key === "copyMoveEnabled") {
+              const enabled = await toggleCopyMove();
+              const active = pi.getActiveTools();
+              pi.setActiveTools(enabled ? [...new Set([...active, "copy", "move"])] : active.filter((t) => t !== "copy" && t !== "move"));
             }
             else if (key === "requirePath") await toggleRequirePath();
             else if (key === "strictInput") await toggleStrictInput();
