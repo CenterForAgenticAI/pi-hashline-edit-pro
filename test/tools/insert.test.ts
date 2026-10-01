@@ -130,21 +130,19 @@ describe("insert tool", () => {
     });
   });
 
-  it("rejects an empty lines payload", async () => {
+  it("inserts one blank line for an empty lines payload", async () => {
     await withTempFile("sample.ts", "alpha\nbeta\n", async ({ cwd, path }) => {
       const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
       const insertTool = getTool("insert");
       const readResult = await readTool.execute("r1", { path: "sample.ts" }, undefined, undefined, ctx);
       const alphaHash = extractHash(getText(readResult).split("\n").find((l) => l.includes("│alpha"))!);
 
-      await expect(
-        insertTool.execute(
-          "i1",
-          { anchor: alphaHash, direction: "after", lines: [] },
-          undefined, undefined, ctx,
-        ),
-      ).rejects.toThrow(/E_BAD_SHAPE/);
-      expect(await readFile(path, "utf-8")).toBe("alpha\nbeta\n");
+      await insertTool.execute(
+        "i1",
+        { anchor: alphaHash, direction: "after", lines: [] },
+        undefined, undefined, ctx,
+      );
+      expect(await readFile(path, "utf-8")).toBe("alpha\n\nbeta\n");
     });
   });
 

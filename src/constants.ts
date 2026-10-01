@@ -19,9 +19,6 @@ export const NEW_CONTENT_NOT_STRING_MSG =
 export const LINES_NOT_STRING_MSG =
   `[E_BAD_SHAPE] "lines" must be a string holding the exact text to insert. Use "\\n" for one blank line; line breaks inside the string separate lines.`;
 
-export const LINES_EMPTY_MSG =
-  `[E_BAD_SHAPE] "lines" is empty, so nothing would be inserted. Pass the exact text to insert, or a single line break ("\\n") to insert one blank line.`;
-
 export const NUL_CONTENT_MSG =
   `[E_BAD_SHAPE] Content contains a NUL byte (U+0000); a text file cannot contain NUL, and writing it would break further reads and edits. Remove the NUL byte and retry. An empty replacement ([]) deletes a range.`;
 

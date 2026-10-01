@@ -231,9 +231,9 @@ A `replace_within` call is never grouped into a batch; it commits on its own lik
 | --- | --- |
 | `anchor` | 4-char anchor marking the line next to which the lines go. The anchor line is preserved. A pasted `+Hasu│x` diff row or `anchor│` prefix is stripped automatically with a warning. |
 | `direction` | `"after"` inserts below the anchor line, `"before"` above it. |
-| `lines` | The exact text to insert, as one non-empty string (`""` is refused with `[E_BAD_SHAPE]`): `"\n"` is one blank line, and a trailing line break sets the last line's ending instead of adding a blank line. Never include the anchor line. Embedded `\r\n`/`\r`/`\n` are preserved; escapes decode once — `\uXXXX` is the character, `\\uXXXX` the literal text. Legacy arrays are converted to text (elements joined with LF); prefer the string form. |
+| `lines` | The exact text to insert, as one string: `""` inserts one blank line (the same as `"\n"`), and a trailing line break sets the last line's ending instead of adding a blank line. Never include the anchor line. Embedded `\r\n`/`\r`/`\n` are preserved; escapes decode once — `\uXXXX` is the character, `\\uXXXX` the literal text. Legacy arrays are converted to text (elements joined with LF); prefer the string form. |
 
-Nothing is removed and the inserted lines are written exactly as given; the anchor line and every other line stay in place. An empty `lines` payload is refused with `[E_BAD_SHAPE]`; pass a single line break (`"\n"`) to insert one blank line. To seed an empty file, read it and insert after the `anchor│` empty-line row.
+Nothing is removed and the inserted lines are written exactly as given; the anchor line and every other line stay in place. An empty `lines` payload inserts one blank line. To seed an empty file, read it and insert after the `anchor│` empty-line row.
 
 Example: add a line after `Emno│`:
 
@@ -431,7 +431,7 @@ Full reference:
 | Code | Meaning |
 | --- | --- |
 | `[E_CONFIG]` | `PI_HASHLINE_DIR` is nonempty but not an absolute path. |
-| `[E_BAD_SHAPE]` | Request envelope or edit item has unknown, missing, or wrongly-typed fields (for example `replacement_lines` must be a string holding the exact text), content contains a NUL byte (`U+0000`), which would make the file binary, an `insert` `lines` payload is empty, or a grep `glob` has invalid bracket or brace syntax. |
+| `[E_BAD_SHAPE]` | Request envelope or edit item has unknown, missing, or wrongly-typed fields (for example `replacement_lines` must be a string holding the exact text), content contains a NUL byte (`U+0000`), which would make the file binary, or a grep `glob` has invalid bracket or brace syntax. |
 | `[W_BAD_SHAPE]` | Auto-corrected request slip reported as a warning (for example legacy array text that could not be parsed and was kept as one literal line). |
 | `[E_BAD_REF]` | An anchor in `remove_from`/`remove_to` is not a bare 4-character anchor (the anchor table is letters only). |
 | `[E_SUBSTRING_NOT_FOUND]` | `replace_within` did not find `replace_old` in the selected range. The current `anchor│content` rows are returned; copy `replace_old` exactly from the served row and retry. |
