@@ -156,6 +156,13 @@ describe("prompt file packaging", () => {
       }
     }
     expect(refs).toBeGreaterThan(0);
+    const copyMoveSource = readFileSync(resolve(srcDir, "copy-move.ts"), "utf-8");
+    for (const kind of ["copy", "move"]) {
+      for (const suffix of [".md", "-snippet.md", "-guidelines.md"]) {
+        expect(copyMoveSource).toContain("../prompts/${kind}" + suffix);
+        expect(existsSync(resolve(srcDir, "..", "prompts", `${kind}${suffix}`))).toBe(true);
+      }
+    }
   });
 });
 

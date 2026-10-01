@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { loadP, loadGuide } from "../../src/prompts";
 describe("loadP", () => {
 	it("loads a prompt file", () => {
@@ -48,6 +48,15 @@ describe("loadGuide", () => {
 		const guidelines = loadGuide("../prompts/read-guidelines.md");
 		for (const guideline of guidelines) {
 			expect(guideline.length).toBeGreaterThan(0);
+		}
+	});
+	it("returns an empty list with a warning for a missing guidelines file", () => {
+		const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+		try {
+			expect(loadGuide("../prompts/missing-guidelines-file.md")).toEqual([]);
+			expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("missing-guidelines-file.md"));
+		} finally {
+			warnSpy.mockRestore();
 		}
 	});
 });
