@@ -117,6 +117,37 @@ describe("fidelityHints", () => {
     expect(fidelityHints(old, result, [insertSpan(3, 2, 0)], ANCHORS)).toEqual([]);
   });
 
+  it("flags an unindented inserted line that echoes the anchor line", () => {
+    const old = `head\n  - id: checkout-5\ntail\n`;
+    const result = `head\n- id: checkout-11\n  - id: checkout-5\ntail\n`;
+    const hints = fidelityHints(old, result, [insertSpan(1, 2, 1)], ANCHORS);
+    expect(hints).toHaveLength(1);
+    expect(hints[0]).toContain("[H_INDENT_MISMATCH]");
+    expect(hints[0]).toContain("└ expected 2 leading whitespace character(s) at col 1; the new line has 0.");
+    expect(hints[0]).toContain("Bbbb│  - id: checkout-5");
+  });
+
+  it("stays silent when the inserted line keeps the anchor line's indentation", () => {
+    const old = `head\n  - id: checkout-5\ntail\n`;
+    const result = `head\n  - id: checkout-11\n  - id: checkout-5\ntail\n`;
+    expect(fidelityHints(old, result, [insertSpan(1, 2, 1)], ANCHORS)).toEqual([]);
+  });
+
+  it("flags a replaced line that lost the removed line's leading tab", () => {
+    const old = "a\n\t{ID: \"checkout-1\"}\nb\n";
+    const result = "a\n{ID: \"checkout-1\"}\nb\n";
+    const hints = fidelityHints(old, result, [replaceSpan(1, 1, 1)], ANCHORS);
+    expect(hints).toHaveLength(1);
+    expect(hints[0]).toContain("[H_INDENT_MISMATCH]");
+    expect(hints[0]).toContain("expected 1 leading whitespace character(s) at col 1; the new line has 0.");
+  });
+
+  it("does not flag a dedented line that shares no long run with the replaced line", () => {
+    const old = "a\n  const y = 2;\nb\n";
+    const result = "a\nconst x = 1;\nb\n";
+    expect(fidelityHints(old, result, [replaceSpan(1, 1, 1)], ANCHORS)).toEqual([]);
+  });
+
   it("stays silent when an inserted block keeps the joiner", () => {
     const old = `head\n- status: done${WORD_JOINER}\ntail\n`;
     const result = `head\n- status: done${WORD_JOINER}\n- status: new${WORD_JOINER}\ntail\n`;

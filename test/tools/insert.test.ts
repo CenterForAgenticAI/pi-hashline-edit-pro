@@ -468,6 +468,28 @@ describe("insert literal escape hints", () => {
   });
 });
 
+describe("insert indentation hints", () => {
+  it("flags an inserted line that lost the anchor line's indentation", async () => {
+    await withTempFile("routes.yaml", "routes:\n  - id: checkout-5\n    feature: legacyCheckout\n", async ({ cwd, path }) => {
+      const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
+      const text = getText(await readTool.execute("r1", { path: "routes.yaml" }, undefined, undefined, ctx));
+      const anchor = extractHash(text.split("\n").find((line: string) => line.includes("│  - id: checkout-5"))!);
+      const result = await getTool("insert").execute(
+        "i1",
+        { anchor, direction: "before", lines: ["- id: checkout-11\n    feature: stableCheckout"] },
+        undefined,
+        undefined,
+        ctx,
+      );
+      const hint = ((result.details.hints ?? []) as string[]).find((entry) => entry.startsWith("[H_INDENT_MISMATCH]")) ?? "";
+      expect(hint).toContain("[H_INDENT_MISMATCH]");
+      expect(hint).toContain("└ expected 2 leading whitespace character(s) at col 1; the new line has 0.");
+      expect(hint).toContain("│  - id: checkout-5");
+      expect(await readFile(path, "utf-8")).toBe("routes:\n- id: checkout-11\n    feature: stableCheckout\n  - id: checkout-5\n    feature: legacyCheckout\n");
+    });
+  });
+});
+
 describe("insert tool rendering", () => {
   it("computes a diff preview for an insert request", async () => {
     await withTempFile("sample.ts", "alpha\nbeta\ngamma\n", async ({ cwd }) => {

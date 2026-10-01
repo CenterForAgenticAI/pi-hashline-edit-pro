@@ -163,6 +163,25 @@ function trailingWhitespaceHint(oldLine: string, newLine: string, reference: Ref
   ].join("\n");
 }
 
+function leadingWhitespace(line: string): string {
+  const trimmed = line.trimStart();
+  return line.slice(0, line.length - trimmed.length);
+}
+
+function indentMismatchHint(payloadLine: string, reference: ReferenceRow, anchor: string | undefined): string | undefined {
+  const payloadIndent = leadingWhitespace(payloadLine);
+  const referenceIndent = leadingWhitespace(reference.line);
+  if (payloadIndent.length >= referenceIndent.length || !referenceIndent.startsWith(payloadIndent)) return undefined;
+  const grams = gramSet([payloadLine], SIMILARITY_RUN);
+  if (grams === undefined || !sharesRun(reference.line, grams, SIMILARITY_RUN)) return undefined;
+  const label = anchor === undefined ? "the nearby line" : `${anchor}${HASH_SEP}`;
+  return [
+    `[H_INDENT_MISMATCH] The new line is missing leading whitespace that ${label} has.`,
+    renderReferenceRow(reference, anchor),
+    `${REFERENCE_INDENT}└ expected ${referenceIndent.length} leading whitespace character(s) at col 1; the new line has ${payloadIndent.length}.`,
+  ].join("\n");
+}
+
 function referenceRows(lines: string[], start: number, end: number): ReferenceRow[] {
   const from = Math.max(0, start - INSERT_REFERENCE_WINDOW);
   const to = Math.min(lines.length - 1, end + INSERT_REFERENCE_WINDOW);
@@ -321,6 +340,20 @@ export function fidelityHints(
         if (seen.has(key)) continue;
         seen.add(key);
         hints.push(swappedCharHint(candidate.swapped, candidate.reference, originalHashes?.[candidate.reference.index]));
+      }
+      const indentPairs: Array<{ payloadLine: string; reference: ReferenceRow }> = carried !== undefined
+        ? payload.map((payloadLine) => ({ payloadLine, reference: { line: oldLines[span.start] ?? "", index: span.start } }))
+        : removed.length === payload.length
+          ? payload.map((payloadLine, index) => ({ payloadLine, reference: { line: removed[index]!, index: span.start + index } }))
+          : [];
+      for (const { payloadLine, reference } of indentPairs) {
+        if (hints.length >= MAX_FIDELITY_HINTS) break;
+        const indentHint = indentMismatchHint(payloadLine, reference, originalHashes?.[reference.index]);
+        if (indentHint === undefined) continue;
+        const key = `indent:${reference.index}:${payloadLine}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        hints.push(indentHint);
       }
       if (carried === undefined && removed.length === inserted.length) {
         for (let index = 0; index < removed.length; index += 1) {
