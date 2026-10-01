@@ -158,7 +158,8 @@ export function buildTransferEdit(input: {
     );
   }
   assertRangeVerified(fileLines, preload.fileHashes, insertLine, insertLine, served, displayPath);
-  assertRangeVerified(fileLines, preload.fileHashes, sourceStart, sourceEnd, served, displayPath);
+  assertRangeVerified(fileLines, preload.fileHashes, sourceStart, sourceStart, served, displayPath);
+  assertRangeVerified(fileLines, preload.fileHashes, sourceEnd, sourceEnd, served, displayPath);
   const sourceLines = fileLines.slice(sourceStart - 1, sourceEnd);
   const sourceEndings = endingsForRange(preload.endingSeparators, sourceStart, sourceEnd);
   if (kind === "copy") {
@@ -272,7 +273,8 @@ async function prepareCrossTransfer(input: {
     throw error;
   }
   try {
-    assertRangeVerified(sourceLines, sourcePreload.fileHashes, sourceStart, sourceEnd, sourceServed, sourceDisplay);
+    assertRangeVerified(sourceLines, sourcePreload.fileHashes, sourceStart, sourceStart, sourceServed, sourceDisplay);
+    assertRangeVerified(sourceLines, sourcePreload.fileHashes, sourceEnd, sourceEnd, sourceServed, sourceDisplay);
   } catch (error) {
     await adopt(sourcePreload.absolutePath, error);
     throw error;
@@ -567,6 +569,7 @@ async function executeCrossFile(
       signal,
       preloadedNorm: prepared.sourcePreload,
       allowEmpty: true,
+      preserveDeletionSeparators: false,
     });
     return commitMovePair({
       source: { pipe: sourcePipe, displayPath: prepared.sourceDisplay, absolutePath: source.absolute, mutationTargetPath: source.resolved, foldedAnchorLines: 0 },
@@ -631,6 +634,7 @@ export async function transferPreview(kind: TransferKind, request: unknown, cwd:
       noPersist: true,
       preloadedNorm: prepared.sourcePreload,
       allowEmpty: true,
+      preserveDeletionSeparators: false,
       signal,
     });
     const destinationPreview = previewFromPipe(destinationPipe);

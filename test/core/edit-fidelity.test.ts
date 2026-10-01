@@ -3,6 +3,7 @@ import { fidelityHints, isFidelitySensitiveChar } from "../../src/edit-fidelity"
 import type { DiffSpan } from "../../src/replace-diff";
 
 const ZWSP = "\u200b";
+const ZWJ = "\u200d";
 const NBSP = "\u00a0";
 const WORD_JOINER = "\u2060";
 const NB_HYPHEN = "\u2011";
@@ -86,15 +87,10 @@ describe("fidelityHints", () => {
     expect(fidelityHints("say \u201chi\u201d\n", 'say "hi"\n', [replaceSpan(0, 0, 1)], ANCHORS)).toEqual([]);
   });
 
-  it("flags an omitted joiner in an inserted block and renders the nearby row", () => {
+  it("does not compare insert-only spans for hidden characters", () => {
     const old = `head\n- status: done${WORD_JOINER}\ntail\n`;
     const result = `head\n- status: done${WORD_JOINER}\n- status: new\ntail\n`;
-    const row = `- status: done${WORD_JOINER}`;
-    const hints = fidelityHints(old, result, [insertSpan(1, 2, 0)], ANCHORS);
-    expect(hints).toHaveLength(1);
-    expect(hints[0]).toContain(`Bbbb│${row}`);
-    expect(hints[0]).toContain(`└ U+2060 at col ${row.indexOf(WORD_JOINER) + 1}`);
-    expect(hints[0].split("\n")[0]).toContain("U+2060");
+    expect(fidelityHints(old, result, [insertSpan(1, 2, 0)], ANCHORS)).toEqual([]);
   });
 
   it("stays silent when an inserted block keeps the joiner", () => {
@@ -141,5 +137,50 @@ describe("fidelityHints", () => {
     const hints = fidelityHints(old, result, [replaceSpan(0, 0, 1), { start: 1, end: 1, replacementCount: 1 }], ANCHORS);
     expect(hints).toHaveLength(1);
     expect(hints[0].match(/U\+200B/g)).toHaveLength(2);
+  });
+
+  it("flags a swapped invisible character on a replaced line", () => {
+    const old = `keep\nlegacy${ZWSP}Checkout\ntail\n`;
+    const result = `keep\nlegacy${ZWJ}Checkout\ntail\n`;
+    const hints = fidelityHints(old, result, [replaceSpan(1, 1, 1)], ANCHORS);
+    expect(hints).toHaveLength(1);
+    expect(hints[0]).toContain("[H_UNICODE_SWAPPED]");
+    expect(hints[0]).toContain(`Bbbb│legacy${ZWSP}Checkout`);
+    expect(hints[0]).toContain("U+200B");
+    expect(hints[0]).toContain("U+200D");
+  });
+
+  it("flags a swap against a matching line elsewhere in the file", () => {
+    const old = `template${ZWSP}entry\nkeep\nother\n`;
+    const result = `template${ZWSP}entry\nkeep\ntemplate${WORD_JOINER}entry\n`;
+    const hints = fidelityHints(old, result, [replaceSpan(2, 2, 1)], ANCHORS);
+    expect(hints).toHaveLength(1);
+    expect(hints[0]).toContain("[H_UNICODE_SWAPPED]");
+    expect(hints[0]).toContain(`Aaaa│template${ZWSP}entry`);
+  });
+
+  it("stays silent when a replaced line keeps its invisible characters", () => {
+    const old = `keep\nlegacy${ZWSP}Checkout\ntail\n`;
+    const result = `keep\nstable${ZWSP}Checkout\ntail\n`;
+    expect(fidelityHints(old, result, [replaceSpan(1, 1, 1)], ANCHORS)).toEqual([]);
+  });
+
+  it("flags trailing whitespace added to a replaced line", () => {
+    const old = "keep\ntarget\ntail\n";
+    const result = "keep\ntarget \ntail\n";
+    const hints = fidelityHints(old, result, [replaceSpan(1, 1, 1)], ANCHORS);
+    expect(hints).toHaveLength(1);
+    expect(hints[0]).toContain("[H_TRAILING_WHITESPACE]");
+    expect(hints[0]).toContain("Bbbb│target ");
+    expect(hints[0]).toContain("the replaced line had 0");
+  });
+
+  it("flags trailing whitespace removed from a replaced line", () => {
+    const old = "keep\ntarget  \ntail\n";
+    const result = "keep\ntarget\ntail\n";
+    const hints = fidelityHints(old, result, [replaceSpan(1, 1, 1)], ANCHORS);
+    expect(hints).toHaveLength(1);
+    expect(hints[0]).toContain("[H_TRAILING_WHITESPACE]");
+    expect(hints[0]).toContain("the replaced line had 2");
   });
 });

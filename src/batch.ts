@@ -12,6 +12,7 @@ import {
   changedRange,
   lineHashes,
   planEdit,
+  preserveDeletionSeparators,
   MAX_HASH_LINES,
   type HEdit,
   type PlannedEdit,
@@ -482,9 +483,10 @@ export async function executeBatchMember(input: BatchMemberInput): Promise<TResu
     throw error;
   }
   const displayPath = runtime.paths?.displayPath ?? input.targetPath;
+  const effectiveHedit = preserveDeletionSeparators(input.hedit, base.baseLines, base.hashes);
   let planned: PlannedEdit;
   try {
-    planned = planEdit(base.content, input.hedit, base.hashes, {
+    planned = planEdit(base.content, effectiveHedit, base.hashes, {
       filePath: displayPath,
       servedHashes: runtime.served,
       signal: input.signal,
@@ -519,8 +521,8 @@ export async function executeBatchMember(input: BatchMemberInput): Promise<TResu
     ...(carryIndex !== undefined ? { carryIndex } : {}),
     start,
     end,
-    fromHash: input.hedit.hash_bounds[0].hash,
-    toHash: input.hedit.hash_bounds[1].hash,
+    fromHash: planned.resolved.hash_bounds[0].hash,
+    toHash: planned.resolved.hash_bounds[1].hash,
     newLines: [...newLines],
     ...(separators !== undefined ? { separators } : {}),
     warnings: [...input.extraWarnings, ...planned.warnings],

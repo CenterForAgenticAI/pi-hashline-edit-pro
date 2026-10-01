@@ -272,6 +272,27 @@ export function swapReversedRanges(
 	return { ...edit, hash_bounds: [endRef, startRef] as [Anchor, Anchor] };
 }
 
+export function preserveDeletionSeparators(edit: HEdit, fileLines: string[], fileHashes: string[]): HEdit {
+	if (edit.content_lines.length > 0) return edit;
+	const lineByHash = new Map<string, number>();
+	for (let index = 0; index < fileHashes.length; index++) {
+		const hash = fileHashes[index]!;
+		if (!lineByHash.has(hash)) lineByHash.set(hash, index);
+	}
+	const fromLine = lineByHash.get(edit.hash_bounds[0].hash);
+	const toLine = lineByHash.get(edit.hash_bounds[1].hash);
+	if (fromLine === undefined || toLine === undefined) return edit;
+	const rangeStart = Math.min(fromLine, toLine);
+	const rangeEnd = Math.max(fromLine, toLine);
+	const isBlank = (index: number): boolean => (fileLines[index] ?? "").trim().length === 0;
+	let start = rangeStart;
+	let end = rangeEnd;
+	while (start <= end && isBlank(start)) start += 1;
+	while (end >= start && isBlank(end)) end -= 1;
+	if (start > end || (start === rangeStart && end === rangeEnd)) return edit;
+	return { ...edit, hash_bounds: [{ hash: fileHashes[start]! }, { hash: fileHashes[end]! }] };
+}
+
 export function valEdit(
 	edit: HEdit,
 	fileLines: string[],

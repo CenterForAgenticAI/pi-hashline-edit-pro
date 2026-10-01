@@ -16,6 +16,7 @@ import { type FileIdentity } from "./fs-write";
 import { applyEdit,
   lineHashes,
   resEdit,
+  preserveDeletionSeparators,
   MAX_HASH_LINES,
   RangeStaleError,
   AnchorMismatchError,
@@ -84,6 +85,7 @@ export interface ExecPipelineOptions {
   allowEmpty?: boolean;
   stripWarning?: StripWarningLocation;
   endingOverrides?: (LineEnding | undefined)[];
+  preserveDeletionSeparators?: boolean;
 }
 
 export function hashSpan(hashes: string[], from: string, to: string): [number, number] | undefined {
@@ -157,12 +159,15 @@ export async function execPipeline(
     targetPath, cwd, { signal: options?.signal, accessMode: options?.accessMode, maxLines: MAX_HASH_LINES, store: hashStore, noPersist: options?.noPersist, allocation: options?.noPersist ? "shadow" : "real", preloadedNorm: options?.preloadedNorm },
   );
   const displayPath = toDisplayPath(cwd, absolutePath, targetPath);
+  const effectiveEdit = options?.preserveDeletionSeparators === false
+    ? anchoredEdit
+    : preserveDeletionSeparators(anchoredEdit, splitLines(originalNormalized), originalHashes);
 
   let anchorResult: ReturnType<typeof applyEdit>;
   try {
     anchorResult = applyEdit(
       originalNormalized,
-      anchoredEdit,
+      effectiveEdit,
       options?.signal,
       originalHashes,
       displayPath,
@@ -187,10 +192,10 @@ export async function execPipeline(
   const warnings = [...editWarnings, ...(anchorResult.warnings ?? [])];
   await throwIfStrictInput(warnings);
   const { totalAddedLines, totalRemovedLines } = countLineChanges(
-    edit, originalHashes, isNoop,
+    effectiveEdit, originalHashes, isNoop,
   );
 
-  const pipeSpan = isNoop ? undefined : spanForEdit(originalHashes, edit.hash_bounds[0].hash, edit.hash_bounds[1].hash, result);
+  const pipeSpan = isNoop ? undefined : spanForEdit(originalHashes, effectiveEdit.hash_bounds[0].hash, effectiveEdit.hash_bounds[1].hash, result);
   const pipeSpans = pipeSpan ? [pipeSpan] : undefined;
   return {
     path: displayPath,
@@ -210,7 +215,7 @@ export async function execPipeline(
     totalRemovedLines,
     identity,
     ...(pipeSpans ? { spans: pipeSpans } : {}),
-    ...(anchoredEdit.content_separators !== undefined ? { contentSeparators: anchoredEdit.content_separators } : {}),
+    ...(effectiveEdit.content_separators !== undefined ? { contentSeparators: effectiveEdit.content_separators } : {}),
   };
 }
 

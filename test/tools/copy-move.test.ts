@@ -441,6 +441,32 @@ describe("served-range verification", () => {
     });
   });
 
+  it("copies a range whose interior lines were never served", async () => {
+    await withTempFile("sample.txt", "a\nb\nc\nd\ne\n", async ({ cwd, path }) => {
+      const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
+      await readTool.execute("r1", { path: "sample.txt", limit: 1 }, undefined, undefined, ctx);
+      await readTool.execute("r2", { path: "sample.txt", offset: 4, limit: 1 }, undefined, undefined, ctx);
+      await readTool.execute("r3", { path: "sample.txt", offset: 5, limit: 1 }, undefined, undefined, ctx);
+      const abs = await resolveTarget(join(cwd, "sample.txt"));
+      const hashes = await lineHashes("a\nb\nc\nd\ne\n", abs);
+      await getTool("copy").execute("c1", { source_from: hashes[0]!, source_to: hashes[3]!, insert_after: hashes[4]! }, undefined, undefined, ctx);
+      expect(await readFile(path, "utf-8")).toBe("a\nb\nc\nd\ne\na\nb\nc\nd\n");
+    });
+  });
+
+  it("moves a range whose interior lines were never served", async () => {
+    await withTempFile("sample.txt", "a\nb\nc\nd\ne\n", async ({ cwd, path }) => {
+      const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
+      await readTool.execute("r1", { path: "sample.txt", limit: 1 }, undefined, undefined, ctx);
+      await readTool.execute("r2", { path: "sample.txt", offset: 4, limit: 1 }, undefined, undefined, ctx);
+      await readTool.execute("r3", { path: "sample.txt", offset: 5, limit: 1 }, undefined, undefined, ctx);
+      const abs = await resolveTarget(join(cwd, "sample.txt"));
+      const hashes = await lineHashes("a\nb\nc\nd\ne\n", abs);
+      await getTool("move").execute("m1", { source_from: hashes[0]!, source_to: hashes[3]!, insert_after: hashes[4]! }, undefined, undefined, ctx);
+      expect(await readFile(path, "utf-8")).toBe("e\na\nb\nc\nd\n");
+    });
+  });
+
   it("keeps the no-served-record path working when callers pass no served map", async () => {
     await withTempDir("transfer-unserved-", async (dir) => {
       const abs = await resolveTarget(join(dir, "synthetic.txt"));

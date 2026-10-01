@@ -2,7 +2,7 @@ import { join } from "path";
 import { describe, expect, it, vi } from "vitest";
 import { readFile } from "fs/promises";
 import { lineHashes } from "../../src/hashline";
-import { withTempFile, setupIntegrationTest, useTestHome } from "../support/fixtures";
+import { withTempFile, setupIntegrationTest, useTestHome, getText, extractHash } from "../support/fixtures";
 
 useTestHome();
 
@@ -352,6 +352,67 @@ describe("provided line endings", () => {
         undefined, undefined, ctx,
       );
       expect(await readFile(path, "utf-8")).toBe("aaa\nB1\rB2\nccc\n");
+    });
+  });
+});
+
+describe("replace deletion keeps block separators", () => {
+  it("keeps a trailing separator blank included in the deleted range", async () => {
+    await withTempFile("sample.ts", "aaa\n\nbbb\n\nccc\n", async ({ cwd, path }) => {
+      const { ctx, readTool, editTool } = setupIntegrationTest(cwd);
+      const rows = getText(await readTool.execute("r1", { path: "sample.ts" }, undefined, undefined, ctx)).split("\n");
+      const bbbIndex = rows.findIndex((row) => row.includes("│bbb"));
+      const bbb = extractHash(rows[bbbIndex]!);
+      const blankAfter = extractHash(rows[bbbIndex + 1]!);
+      const result = await editTool.execute("e1", { remove_from: bbb, remove_to: blankAfter, replacement_lines: [] }, undefined, undefined, ctx);
+      expect(result.content[0].text).toContain("Added 0 line(s), removed 1 line(s).");
+      expect(await readFile(path, "utf-8")).toBe("aaa\n\n\nccc\n");
+    });
+  });
+
+  it("keeps a leading separator blank included in the deleted range", async () => {
+    await withTempFile("sample.ts", "aaa\n\nbbb\nccc\n", async ({ cwd, path }) => {
+      const { ctx, readTool, editTool } = setupIntegrationTest(cwd);
+      const rows = getText(await readTool.execute("r1", { path: "sample.ts" }, undefined, undefined, ctx)).split("\n");
+      const bbbIndex = rows.findIndex((row) => row.includes("│bbb"));
+      const blankBefore = extractHash(rows[bbbIndex - 1]!);
+      const bbb = extractHash(rows[bbbIndex]!);
+      await editTool.execute("e1", { remove_from: blankBefore, remove_to: bbb, replacement_lines: [] }, undefined, undefined, ctx);
+      expect(await readFile(path, "utf-8")).toBe("aaa\n\nccc\n");
+    });
+  });
+
+  it("still deletes a blank line when the range is blank", async () => {
+    await withTempFile("sample.ts", "aaa\n\nccc\n", async ({ cwd, path }) => {
+      const { ctx, readTool, editTool } = setupIntegrationTest(cwd);
+      const rows = getText(await readTool.execute("r1", { path: "sample.ts" }, undefined, undefined, ctx)).split("\n");
+      const blank = extractHash(rows[1]!);
+      await editTool.execute("e1", { remove_from: blank, remove_to: blank, replacement_lines: [] }, undefined, undefined, ctx);
+      expect(await readFile(path, "utf-8")).toBe("aaa\nccc\n");
+    });
+  });
+
+  it("keeps separator blanks on both edges of a deleted range", async () => {
+    await withTempFile("sample.ts", "aaa\n\nbbb\n\nccc\n", async ({ cwd, path }) => {
+      const { ctx, readTool, editTool } = setupIntegrationTest(cwd);
+      const rows = getText(await readTool.execute("r1", { path: "sample.ts" }, undefined, undefined, ctx)).split("\n");
+      const bbbIndex = rows.findIndex((row) => row.includes("│bbb"));
+      const blankBefore = extractHash(rows[bbbIndex - 1]!);
+      const blankAfter = extractHash(rows[bbbIndex + 1]!);
+      await editTool.execute("e1", { remove_from: blankBefore, remove_to: blankAfter, replacement_lines: [] }, undefined, undefined, ctx);
+      expect(await readFile(path, "utf-8")).toBe("aaa\n\n\nccc\n");
+    });
+  });
+
+  it("does not keep boundary blanks when the replacement is not empty", async () => {
+    await withTempFile("sample.ts", "aaa\n\nbbb\n\nccc\n", async ({ cwd, path }) => {
+      const { ctx, readTool, editTool } = setupIntegrationTest(cwd);
+      const rows = getText(await readTool.execute("r1", { path: "sample.ts" }, undefined, undefined, ctx)).split("\n");
+      const bbbIndex = rows.findIndex((row) => row.includes("│bbb"));
+      const blankBefore = extractHash(rows[bbbIndex - 1]!);
+      const blankAfter = extractHash(rows[bbbIndex + 1]!);
+      await editTool.execute("e1", { remove_from: blankBefore, remove_to: blankAfter, replacement_lines: ["X"] }, undefined, undefined, ctx);
+      expect(await readFile(path, "utf-8")).toBe("aaa\nX\nccc\n");
     });
   });
 });

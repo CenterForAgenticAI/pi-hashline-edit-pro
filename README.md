@@ -201,6 +201,7 @@ Example: read showed `Hasu│old` and `arvm│old2`; to replace both:
 ```
 
 Single line: use the same anchor for `remove_from` and `remove_to`. `replace_from`/`replace_to` and `from`/`to` work as aliases.
+A deletion keeps blank lines at the edges of the removed range, so the separators around a block survive the edit; target a blank line on its own to delete it.
 
 The extension checks the request before any file I/O, so a bad request never touches the file.
 
@@ -244,7 +245,7 @@ The same safety machinery as `replace` applies: undo is saved before the write (
 
 ### copy
 
-`copy` duplicates a range of lines to another position without removing the source. `source_from` and `source_to` select lines in the source file; `insert_after` selects the destination line, and it may live in a different file. An empty destination file is seeded with the copied lines. It is a served-anchor edit like `replace` and `insert`: the source lines and the destination anchor line must come from rows you were shown, and the request is refused if they changed on disk or were never served. With `requirePath` on, `path` must match the source or the destination file.
+`copy` duplicates a range of lines to another position without removing the source. `source_from` and `source_to` select lines in the source file; `insert_after` selects the destination line, and it may live in a different file. An empty destination file is seeded with the copied lines. It is a served-anchor edit like `replace` and `insert`: the source's first and last lines and the destination anchor line must come from rows you were shown, and the request is refused if they changed on disk or were never served; the interior of the range is transferred verbatim and does not need to have been shown. With `requirePath` on, `path` must match the source or the destination file.
 
 | Field | Description |
 | --- | --- |
@@ -441,7 +442,9 @@ Full reference:
 | `[W_BARE_HASH_PREFIX]` | A `replacement_lines` line starts with an `anchor│` prefix. The prefix is stripped automatically with a warning. |
 | `[W_ANCHOR_RECLAIMED]` | The session's anchor quota was exhausted, so all anchors of the listed files (the least recently read or edited) were freed to make room. Read those files again before editing them. |
 | `[H_LITERAL_ESCAPE]` | `lines` or `replacement_lines` contains literal escaped text such as `\uXXXX` or `\n`; the file receives those backslash characters as written. Escapes decode once in the tool call (`\uXXXX` → the character), so a doubled escape (`\\uXXXX`) lands literally — resend with the real character if that was not intended. |
-| `[H_UNICODE_LOST]` | The new text is missing an invisible or look-alike character (for example `U+200B`, `U+2060`, `U+00A0`, or a smart quote) that a replaced row or a nearby row has. The edit applied as sent; the hint renders the row and column, for example `[H_UNICODE_LOST] The new text is missing U+2060.` followed by `Kq3f│…` and `└ U+2060 at col 31`. |
+| `[H_UNICODE_LOST]` | The new text is missing an invisible or look-alike character (for example `U+200B`, `U+2060`, `U+00A0`, or a smart quote) that a replaced row has. The edit applied as sent; the hint renders the row and column, for example `[H_UNICODE_LOST] The new text is missing U+2060.` followed by `Kq3f│…` and `└ U+2060 at col 31`. |
+| `[H_UNICODE_SWAPPED]` | The new text uses a different invisible or look-alike character than the line it matches (for example `U+200D` where that line has `U+200B`). The edit applied as sent; the hint names both code points and renders the row and column, for example `[H_UNICODE_SWAPPED] The new text uses U+200D where Kq3f│ uses U+200B.` followed by `└ U+200B at col 21 → U+200D`. |
+| `[H_TRAILING_WHITESPACE]` | The new text differs from the replaced line only in trailing whitespace. Anchor checksums trim trailing whitespace, so the change does not invalidate the anchor; the hint names the column and the old and new trailing-whitespace counts. |
 | `[E_WOULD_EMPTY]` | An edit would empty a non-empty file; use `write` instead. A cross-file `move` may empty its source file. |
 | `[E_NOT_FOUND]` | The path does not exist. |
 | `[E_ACCESS]` | The file is not readable or writable. |

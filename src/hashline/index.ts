@@ -38,6 +38,7 @@ export {
 	stripDiffPrefixes,
 	type StripWarningLocation,
 	swapReversedRanges,
+	preserveDeletionSeparators,
 	assertRangeServed,
 	RangeStaleError,
 	AnchorMismatchError,

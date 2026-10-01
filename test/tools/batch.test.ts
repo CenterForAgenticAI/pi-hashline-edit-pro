@@ -5,7 +5,7 @@ import { Value } from "typebox/value";
 import register from "../../index";
 import { initRegistry, resetRegistryForTests } from "../../src/anchor-registry";
 import { resetBatchStateForTests } from "../../src/batch";
-import { makeFakePiRegistry, withTempDir, withTempFile, toolCall, assistantMessage, anchorFor } from "../support/fixtures";
+import { makeFakePiRegistry, withTempDir, withTempFile, toolCall, assistantMessage, anchorFor, extractHash } from "../support/fixtures";
 function withHostCoercion(schema: unknown, args: Record<string, unknown>): Record<string, unknown> {
   const coerced = structuredClone(args);
   Value.Convert(schema as never, coerced);
@@ -1094,6 +1094,25 @@ describe("same-turn edit batches", () => {
         { type: "turn_end", turnIndex: 0, message, toolResults: [{ toolCallId: "s1" }, { toolCallId: "s2" }] },
         ctx,
       ) as Promise<unknown>);
+    });
+  });
+
+  it("keeps separator blanks for batched deletions", async () => {
+    await withTempFile("sample.txt", "a\n\nb\n\nc\n\nd\n", async ({ cwd, path }) => {
+      const { getTool, handlers, ctx } = await setupBatchTools(cwd);
+      const readTool = getTool("read");
+      const editTool = getTool("replace");
+      const rows = ((await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx)).content[0].text as string).split("\n");
+      const bIndex = rows.findIndex((row) => row.includes("│b"));
+      const cIndex = rows.findIndex((row) => row.includes("│c"));
+      const bArgs = { remove_from: extractHash(rows[bIndex]!), remove_to: extractHash(rows[bIndex + 1]!), replacement_lines: [] };
+      const cArgs = { remove_from: extractHash(rows[cIndex]!), remove_to: extractHash(rows[cIndex + 1]!), replacement_lines: [] };
+      const message = assistantMessage([toolCall("d1", "replace", bArgs), toolCall("d2", "replace", cArgs)]);
+      await (handlers.get("message_end")!({ type: "message_end", message }, ctx) as Promise<unknown>);
+      await editTool.execute("d1", bArgs, undefined, undefined, ctx);
+      const last = await editTool.execute("d2", cArgs, undefined, undefined, ctx);
+      expect(last.content[0].text).toContain("Batch 1: 2 edits applied as one commit");
+      expect(await readFile(path, "utf-8")).toBe("a\n\n\n\nd\n");
     });
   });
 });
