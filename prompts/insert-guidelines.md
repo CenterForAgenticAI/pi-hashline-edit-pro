@@ -1,1 +1,1 @@
-- `insert`: after inserting a quoted payload, check the post-edit diff for an extra `+anchor│` blank row before the next line.
+- `insert`: compare both edges of the inserted block in the post-edit diff against the request; a missing or extra `+anchor│` blank row at either boundary is the classic insert slip.

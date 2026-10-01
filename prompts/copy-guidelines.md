@@ -1,1 +1,2 @@
 - `copy`: the same anchor in `source_from` and `source_to` copies one line; copied lines get fresh anchors in the post-edit diff and the source rows keep theirs.
+- `copy`: for a block copy, use this tool instead of rebuilding the file with shell commands; to append at the end, use the destination's last served line as `insert_after`. Shell edits bypass range verification, the post-edit diff, and undo.
