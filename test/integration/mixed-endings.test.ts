@@ -60,7 +60,7 @@ describe("mixed line endings", () => {
 			);
 			const replace = getTool("replace");
 			const first = await replace.execute("x1", bArgs, undefined, undefined, ctx);
-			expect(first.content[0].text).toBe("In batch 1");
+			expect(first.content[0].text).toBe("In batch 1 (queued)");
 			await replace.execute("x2", dArgs, undefined, undefined, ctx);
 			expect(await readFile(path, "utf-8")).toBe("AAA\r\nB2\nCCC\r\n");
 			await handlers.get("turn_end")!(

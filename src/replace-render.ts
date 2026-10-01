@@ -380,7 +380,7 @@ export function renderEditResult(
 		if (abortedMessage !== undefined) {
 			return reuseText(context, `\n${highlightBatchRefs(abortedMessage, theme)}`);
 		}
-		return reuseText(context, theme.fg("warning", `In batch ${batch.id}`));
+		return reuseText(context, theme.fg("warning", `In batch ${batch.id} (queued)`));
 	}
 	if (context.isError) {
 		return renderedText

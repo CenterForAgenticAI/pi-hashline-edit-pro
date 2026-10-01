@@ -48,7 +48,7 @@ describe("same-turn edit batches", () => {
         undefined,
         ctx,
       );
-      expect(first.content[0].text).toBe("In batch 1");
+      expect(first.content[0].text).toBe("In batch 1 (queued)");
       expect(first.details.batch?.aborted).toBeUndefined();
 
       const second = await editTool.execute(
@@ -103,7 +103,7 @@ describe("same-turn edit batches", () => {
       await (handlers.get("message_end")!({ type: "message_end", message }, ctx) as Promise<unknown>);
 
       const first = await editTool.execute("b1", firstArgs, undefined, undefined, ctx);
-      expect(first.content[0].text).toBe("In batch 1");
+      expect(first.content[0].text).toBe("In batch 1 (queued)");
 
       const second = await editTool.execute("b2", secondArgs, undefined, undefined, ctx);
       expect(second.details.metrics.classification).toBe("applied");
@@ -136,7 +136,7 @@ describe("same-turn edit batches", () => {
         undefined,
         ctx,
       );
-      expect(first.content[0].text).toBe("In batch 1");
+      expect(first.content[0].text).toBe("In batch 1 (queued)");
 
       const second = await insertTool.execute(
         "m2",
@@ -220,7 +220,7 @@ describe("same-turn edit batches", () => {
       await (handlers.get("message_end")!({ type: "message_end", message }, ctx) as Promise<unknown>);
 
       const first = await insertTool.execute("s1", afterArgs, undefined, undefined, ctx);
-      expect(first.content[0].text).toBe("In batch 1");
+      expect(first.content[0].text).toBe("In batch 1 (queued)");
       const last = await insertTool.execute("s2", beforeArgs, undefined, undefined, ctx);
       expect(last.content[0].text).toContain("Batch 1: 2 edits applied as one commit");
       expect(await readFile(path, "utf-8")).toBe("one\nONE-A\ntwo\nTWO-A\nthree\n");
@@ -244,7 +244,7 @@ describe("same-turn edit batches", () => {
       await (handlers.get("message_end")!({ type: "message_end", message }, ctx) as Promise<unknown>);
 
       const first = await insertTool.execute("t1", firstArgs, undefined, undefined, ctx);
-      expect(first.content[0].text).toBe("In batch 1");
+      expect(first.content[0].text).toBe("In batch 1 (queued)");
       let failure = "";
       try {
         await insertTool.execute("t2", secondArgs, undefined, undefined, ctx);
@@ -273,7 +273,7 @@ describe("same-turn edit batches", () => {
       await (handlers.get("message_end")!({ type: "message_end", message }, ctx) as Promise<unknown>);
 
       const first = await insertTool.execute("e1", beforeArgs, undefined, undefined, ctx);
-      expect(first.content[0].text).toBe("In batch 1");
+      expect(first.content[0].text).toBe("In batch 1 (queued)");
       let failure = "";
       try {
         await insertTool.execute("e2", afterArgs, undefined, undefined, ctx);
@@ -315,7 +315,7 @@ describe("same-turn edit batches", () => {
         undefined,
         ctx,
       );
-      expect(firstA.content[0].text).toBe("In batch 1");
+      expect(firstA.content[0].text).toBe("In batch 1 (queued)");
 
       const firstB = await editTool.execute(
         "b1",
@@ -324,7 +324,7 @@ describe("same-turn edit batches", () => {
         undefined,
         ctx,
       );
-      expect(firstB.content[0].text).toBe("In batch 2");
+      expect(firstB.content[0].text).toBe("In batch 2 (queued)");
       const lastB = await editTool.execute(
         "b2",
         { remove_from: b2Ref, remove_to: b2Ref, replacement_lines: ["B2"] },
@@ -382,7 +382,7 @@ describe("same-turn edit batches", () => {
           toolName: "replace",
           toolCallId: "b1",
           input: {},
-          content: [{ type: "text", text: "In batch 1" }],
+          content: [{ type: "text", text: "In batch 1 (queued)" }],
           details: { diff: "", metrics: { classification: "applied" }, batch: { id: 1, size: 2, last: false } },
           isError: false,
         },
@@ -416,7 +416,7 @@ describe("same-turn edit batches", () => {
         undefined,
         ctx,
       );
-      expect(first.content[0].text).toBe("In batch 1");
+      expect(first.content[0].text).toBe("In batch 1 (queued)");
 
       const second = await insertTool.execute(
         "i2",
@@ -467,7 +467,7 @@ describe("same-turn edit batches", () => {
         undefined,
         ctx,
       );
-      expect(first.content[0].text).toBe("In batch 1");
+      expect(first.content[0].text).toBe("In batch 1 (queued)");
 
       const second = await editTool.execute(
         "n2",
@@ -515,7 +515,7 @@ describe("same-turn edit batches", () => {
         undefined,
         ctx,
       );
-      expect(first.content[0].text).toBe("In batch 1");
+      expect(first.content[0].text).toBe("In batch 1 (queued)");
 
       let failure = "";
       try {
@@ -679,7 +679,7 @@ describe("same-turn edit batches", () => {
         undefined,
         ctx,
       );
-      expect(first.content[0].text).toBe("In batch 1");
+      expect(first.content[0].text).toBe("In batch 1 (queued)");
 
       await writeFile(path, "a\nb\nEXTERNAL\n", "utf-8");
 
@@ -735,7 +735,7 @@ describe("same-turn edit batches", () => {
         undefined,
         ctx,
       );
-      expect(first.content[0].text).toBe("In batch 1");
+      expect(first.content[0].text).toBe("In batch 1 (queued)");
 
       let failure = "";
       try {
@@ -783,7 +783,7 @@ describe("same-turn edit batches", () => {
         undefined,
         ctx,
       );
-      expect(first.content[0].text).toBe("In batch 1");
+      expect(first.content[0].text).toBe("In batch 1 (queued)");
 
       let failure = "";
       try {
@@ -871,7 +871,7 @@ describe("same-turn edit batches", () => {
       await (handlers.get("message_end")!({ type: "message_end", message }, ctx) as Promise<unknown>);
 
       const first = await editTool.execute("c1", withHostCoercion(editTool.parameters, firstArgs), undefined, undefined, ctx);
-      expect(first.content[0].text).toBe("In batch 1");
+      expect(first.content[0].text).toBe("In batch 1 (queued)");
 
       const second = await editTool.execute("c2", secondArgs, undefined, undefined, ctx);
       expect(second.content[0].text).toContain("Batch 1: 2 edits applied as one commit");
@@ -898,7 +898,7 @@ describe("same-turn edit batches", () => {
       await (handlers.get("message_end")!({ type: "message_end", message }, ctx) as Promise<unknown>);
 
       const first = await editTool.execute("m1", firstArgs, undefined, undefined, ctx);
-      expect(first.content[0].text).toBe("In batch 1");
+      expect(first.content[0].text).toBe("In batch 1 (queued)");
 
       const second = await editTool.execute("m2", secondArgs, undefined, undefined, ctx);
       expect(second.content[0].text).toContain("Batch 1: 2 edits applied as one commit");
@@ -926,7 +926,7 @@ describe("same-turn edit batches", () => {
       await (handlers.get("message_end")!({ type: "message_end", message }, ctx) as Promise<unknown>);
 
       const first = await insertTool.execute("n1", withHostCoercion(insertTool.parameters, insertArgs), undefined, undefined, ctx);
-      expect(first.content[0].text).toBe("In batch 1");
+      expect(first.content[0].text).toBe("In batch 1 (queued)");
 
       const second = await editTool.execute("n2", editArgs, undefined, undefined, ctx);
       expect(second.content[0].text).toContain("Batch 1: 2 edits applied as one commit");
@@ -955,7 +955,7 @@ describe("same-turn edit batches", () => {
       await (handlers.get("message_end")!({ type: "message_end", message }, ctx) as Promise<unknown>);
 
       const first = await editTool.execute("x1", firstArgs, undefined, undefined, ctx);
-      expect(first.content[0].text).toBe("In batch 1");
+      expect(first.content[0].text).toBe("In batch 1 (queued)");
 
       let failure = "";
       try {
@@ -963,7 +963,7 @@ describe("same-turn edit batches", () => {
       } catch (error) {
         failure = error instanceof Error ? error.message : String(error);
       }
-      expect(failure).toBe("[E_OP_ABORTED] Batch 1 aborted: [insert] Call Nr 2 errored [E_BAD_SHAPE]");
+      expect(failure).toBe("[E_OP_ABORTED] Batch 1 aborted: [insert] Call Nr 2 errored [E_BAD_SHAPE]. Nothing was written; the whole batch was discarded.");
       expect(first.details.batch).toMatchObject({ aborted: true, abortMessage: failure });
       expect(await readFile(path, "utf-8")).toBe("a\nb\nc\n");
     });
@@ -996,6 +996,7 @@ describe("same-turn edit batches", () => {
       }
       expect(firstFailure).toMatch(/^\[E_STALE_ANCHOR\]/);
       expect(firstFailure).toContain("Aborts batch 1.");
+      expect(firstFailure).toContain("Nothing was written");
 
       let secondFailure = "";
       try {
@@ -1003,7 +1004,7 @@ describe("same-turn edit batches", () => {
       } catch (error) {
         secondFailure = error instanceof Error ? error.message : String(error);
       }
-      expect(secondFailure).toBe("[E_OP_ABORTED] Batch 1 aborted: [replace] Call Nr 1 errored [E_STALE_ANCHOR]");
+      expect(secondFailure).toBe("[E_OP_ABORTED] Batch 1 aborted: [replace] Call Nr 1 errored [E_STALE_ANCHOR]. Nothing was written; the whole batch was discarded.");
       expect(await readFile(path, "utf-8")).toBe("alpha\nBETA\ngamma\n");
     });
   });
@@ -1025,12 +1026,12 @@ describe("same-turn edit batches", () => {
       await (handlers.get("message_end")!({ type: "message_end", message }, ctx) as Promise<unknown>);
 
       const first = await editTool.execute("v1a", firstArgs, undefined, undefined, ctx);
-      expect(first.content[0].text).toBe("In batch 1");
+      expect(first.content[0].text).toBe("In batch 1 (queued)");
 
       const theme = { fg: (_name: string, row: string) => row, bold: (row: string) => row };
       const context = { toolCallId: "v1a", lastComponent: undefined, state: {}, expanded: false, isError: false };
       const pending = (editTool.renderResult!(first, { isPartial: false }, theme, context) as any);
-      expect(pending.text).toBe("In batch 1");
+      expect(pending.text).toBe("In batch 1 (queued)");
 
       let failure = "";
       try {
@@ -1079,6 +1080,7 @@ describe("same-turn edit batches", () => {
         firstFailure = error instanceof Error ? error.message : String(error);
       }
       expect(firstFailure).toContain("Current range with fresh anchors");
+      expect(firstFailure).toContain("Nothing was written");
 
       let secondFailure = "";
       try {
@@ -1086,7 +1088,7 @@ describe("same-turn edit batches", () => {
       } catch (error) {
         secondFailure = error instanceof Error ? error.message : String(error);
       }
-      expect(secondFailure).toBe("[E_OP_ABORTED] Batch 1 aborted: [replace] Call Nr 1 errored [E_RANGE_STALE]");
+      expect(secondFailure).toBe("[E_OP_ABORTED] Batch 1 aborted: [replace] Call Nr 1 errored [E_RANGE_STALE]. Nothing was written; the whole batch was discarded.");
       expect(secondFailure).not.toContain("Current range with fresh anchors");
       expect(await readFile(path, "utf-8")).toBe("a\nB\nc\n");
 

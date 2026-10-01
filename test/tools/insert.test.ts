@@ -130,19 +130,20 @@ describe("insert tool", () => {
     });
   });
 
-  it("reports a noop when inserting nothing", async () => {
+  it("rejects an empty lines payload", async () => {
     await withTempFile("sample.ts", "alpha\nbeta\n", async ({ cwd, path }) => {
       const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
       const insertTool = getTool("insert");
       const readResult = await readTool.execute("r1", { path: "sample.ts" }, undefined, undefined, ctx);
       const alphaHash = extractHash(getText(readResult).split("\n").find((l) => l.includes("│alpha"))!);
 
-      const result = await insertTool.execute(
-        "i1",
-        { anchor: alphaHash, direction: "after", lines: [] },
-        undefined, undefined, ctx,
-      );
-      expect(result.details.classification).toBe("noop");
+      await expect(
+        insertTool.execute(
+          "i1",
+          { anchor: alphaHash, direction: "after", lines: [] },
+          undefined, undefined, ctx,
+        ),
+      ).rejects.toThrow(/E_BAD_SHAPE/);
       expect(await readFile(path, "utf-8")).toBe("alpha\nbeta\n");
     });
   });

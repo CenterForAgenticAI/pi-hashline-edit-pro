@@ -122,6 +122,7 @@ type NormalizedEditArgs =
   | { kind: "insert"; anchor: string; path?: string };
 
 const MAX_TRACKED_BATCHES = 256;
+const BATCH_DISCARDED_NOTE = "Nothing was written; the whole batch was discarded.";
 
 const plan = new Map<string, PlannedMember>();
 const batches = new Map<number, BatchState>();
@@ -347,7 +348,7 @@ function batchPlaceholder(member: PlannedMember, piece: BatchPiece, snapshotId: 
     content: [
       {
         type: "text",
-        text: `In batch ${member.display}`,
+        text: `In batch ${member.display} (queued)`,
       },
     ],
     details: {
@@ -365,7 +366,8 @@ function batchPlaceholder(member: PlannedMember, piece: BatchPiece, snapshotId: 
 export function withAbortSuffix(message: string, display: number): string {
   const suffix = `Aborts batch ${display}.`;
   if (message.includes(suffix)) return message;
-  return message.endsWith(".") ? `${message} ${suffix}` : `${message}. ${suffix}`;
+  const ended = message.endsWith(".") ? `${message} ${suffix}` : `${message}. ${suffix}`;
+  return `${ended} ${BATCH_DISCARDED_NOTE}`;
 }
 
 const ERROR_CODE_RE = /\[(E_[A-Z0-9_]+)\]/;
@@ -394,7 +396,9 @@ function firstFailureCause(runtime: BatchState): string | undefined {
   const error = runtime.firstError;
   if (!(error instanceof Error)) return undefined;
   const suffix = ` Aborts batch ${runtime.display}.`;
-  const message = error.message.endsWith(suffix) ? error.message.slice(0, -suffix.length) : error.message;
+  const discarded = ` ${BATCH_DISCARDED_NOTE}`;
+  const withoutDiscarded = error.message.endsWith(discarded) ? error.message.slice(0, -discarded.length) : error.message;
+  const message = withoutDiscarded.endsWith(suffix) ? withoutDiscarded.slice(0, -suffix.length) : withoutDiscarded;
   const firstLine = message.split("\n")[0]?.trim() ?? "";
   if (firstLine.length === 0) return undefined;
   if (!firstLine.endsWith(":")) return firstLine;
@@ -405,10 +409,12 @@ function firstFailureCause(runtime: BatchState): string | undefined {
 function abortedBatchMessage(runtime: BatchState): string {
   const failure = runtime.failure;
   if (failure?.code !== undefined) {
-    return `[E_OP_ABORTED] Batch ${runtime.display} aborted: [${failure.kind}] Call Nr ${failure.order} errored [${failure.code}]`;
+    return `[E_OP_ABORTED] Batch ${runtime.display} aborted: [${failure.kind}] Call Nr ${failure.order} errored [${failure.code}]. ${BATCH_DISCARDED_NOTE}`;
   }
   const cause = firstFailureCause(runtime);
-  return cause ? `[E_OP_ABORTED] Batch ${runtime.display} aborted: ${cause}` : `[E_OP_ABORTED] Batch ${runtime.display} aborted.`;
+  if (cause === undefined) return `[E_OP_ABORTED] Batch ${runtime.display} aborted. ${BATCH_DISCARDED_NOTE}`;
+  const ended = cause.endsWith(".") || cause.endsWith("!") || cause.endsWith("?") ? cause : `${cause}.`;
+  return `[E_OP_ABORTED] Batch ${runtime.display} aborted: ${ended} ${BATCH_DISCARDED_NOTE}`;
 }
 
 function batchAbortedError(runtime: BatchState): Error {

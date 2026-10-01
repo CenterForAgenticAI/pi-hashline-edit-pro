@@ -132,7 +132,7 @@ describe("line endings via embedded breaks", () => {
       const message = assistantMessage([toolCall("b1", "replace", firstArgs), toolCall("b2", "replace", secondArgs)]);
       await handlers.get("message_end")!({ type: "message_end", message }, ctx);
       const first = await getTool("replace").execute("b1", firstArgs, undefined, undefined, ctx);
-      expect(getText(first)).toBe("In batch 1");
+      expect(getText(first)).toBe("In batch 1 (queued)");
       const last = await getTool("replace").execute("b2", secondArgs, undefined, undefined, ctx);
       expect(last.details.metrics?.classification).toBe("applied");
       expect(await readFile(path, "utf-8")).toBe("alpha\nbeta\ngamma\r\n");

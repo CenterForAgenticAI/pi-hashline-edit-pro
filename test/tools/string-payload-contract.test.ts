@@ -27,13 +27,14 @@ describe("string payload contract", () => {
     });
   });
 
-  it("inserts nothing for an empty lines string", async () => {
+  it("refuses an empty lines string with an actionable message", async () => {
     await withTempFile("sample.ts", "alpha\nbeta\n", async ({ cwd, path }) => {
       const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
       const text = getText(await readTool.execute("r1", { path: "sample.ts" }, undefined, undefined, ctx));
       const alpha = anchorFor(text, "alpha");
-      const result = await getTool("insert").execute("i1", { anchor: alpha, direction: "after", lines: "" }, undefined, undefined, ctx);
-      expect(result.content[0].text).toContain("No changes made");
+      await expect(
+        getTool("insert").execute("i1", { anchor: alpha, direction: "after", lines: "" }, undefined, undefined, ctx),
+      ).rejects.toThrow(/single line break/);
       expect(await readFile(path, "utf-8")).toBe("alpha\nbeta\n");
     });
   });

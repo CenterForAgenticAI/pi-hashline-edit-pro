@@ -156,7 +156,7 @@ describe("batch hardening", () => {
       await editTool.execute("v1", { remove_from: gammaRef, remove_to: gammaRef, replacement_lines: ["GAMMA"] }, undefined, undefined, ctx);
       await expect(
         editTool.execute("m1", { remove_from: betaRef, remove_to: "ZZZZ", replacement_lines: ["MIXED"] }, undefined, undefined, ctx)
-      ).rejects.toThrow(/Aborts batch 1\.$/);
+      ).rejects.toThrow(/Aborts batch 1\./);
       expect(await readFile(path, "utf-8")).toBe("alpha\nbeta\ngamma\n");
     });
   });
@@ -224,7 +224,7 @@ describe("batch hardening", () => {
       expect(batchMemberFor("v1")?.display).toBe(1);
       expect(batchMemberFor("v3")?.last).toBe(true);
       const first = getText(await editTool.execute("v1", { remove_from: aaaRef, remove_to: aaaRef, replacement_lines: ["AAA"] }, undefined, undefined, ctx));
-      expect(first).toBe("In batch 1");
+      expect(first).toBe("In batch 1 (queued)");
       await expect(
         editTool.execute("s1", { remove_from: "ZZZZ", remove_to: "ZZZZ", replacement_lines: ["XXX"] }, undefined, undefined, ctx)
       ).rejects.toThrow(/\[E_STALE_ANCHOR\]/);
@@ -256,7 +256,7 @@ describe("batch hardening", () => {
       expect(failure).toMatch(/^\[E_STALE_ANCHOR\]/);
       expect(failure).not.toContain("Aborts batch");
       const first = getText(await editTool.execute("v1", { remove_from: aaaRef, remove_to: aaaRef, replacement_lines: ["AAA"] }, undefined, undefined, ctx));
-      expect(first).toBe("In batch 1");
+      expect(first).toBe("In batch 1 (queued)");
       const last = await editTool.execute("v2", { remove_from: bbbRef, remove_to: bbbRef, replacement_lines: ["BBB"] }, undefined, undefined, ctx);
       expect(getText(last)).toContain("Batch 1: 2 edits applied as one commit");
       expect(await readFile(path, "utf-8")).toBe("AAA\nBBB\nccc\n");
@@ -300,7 +300,7 @@ describe("batch hardening", () => {
       ]) }, ctx) as Promise<unknown>);
       await expect(
         editTool.execute("s1", { remove_from: valid, remove_to: "ZZZZ", replacement_lines: ["XXX"] }, undefined, undefined, ctx)
-      ).rejects.toThrow(/Aborts batch 1\.$/);
+      ).rejects.toThrow(/Aborts batch 1\./);
       await expect(
         editTool.execute("v1", { remove_from: valid, remove_to: valid, replacement_lines: ["AAA"] }, undefined, undefined, ctx)
       ).rejects.toThrow(/\[E_OP_ABORTED\]/);

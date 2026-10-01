@@ -221,6 +221,49 @@ describe("served-state range verification", () => {
     });
   });
 
+  it("deletes a range whose interior lines were never served", async () => {
+    await withTempFile("sample.ts", "a\nb\nc\nd\ne\n", async ({ cwd, path }) => {
+      const { ctx, readTool, editTool } = setupIntegrationTest(cwd);
+
+      const first = await readTool.execute("r1", { path: "sample.ts", offset: 1, limit: 1 }, undefined, undefined, ctx);
+      const last = await readTool.execute("r2", { path: "sample.ts", offset: 4, limit: 1 }, undefined, undefined, ctx);
+      const aHash = extractHash(getText(first));
+      const dHash = extractHash(getText(last));
+
+      const result = await editTool.execute(
+        "e1",
+        { remove_from: aHash, remove_to: dHash, replacement_lines: [] },
+        undefined,
+        undefined,
+        ctx,
+      );
+      expect(result.content[0].text).toContain("Successfully replaced");
+      expect(await readFile(path, "utf-8")).toBe("e\n");
+    });
+  });
+
+  it("rejects a deletion whose boundary line was never served", async () => {
+    await withTempFile("sample.ts", "a\nb\nc\nd\ne\n", async ({ cwd, path }) => {
+      const { ctx, readTool, editTool } = setupIntegrationTest(cwd);
+
+      const first = await readTool.execute("r1", { path: "sample.ts", offset: 1, limit: 1 }, undefined, undefined, ctx);
+      const aHash = extractHash(getText(first));
+      const abs = await resolveTarget(toCwd("sample.ts", cwd));
+      const hashes = await lineHashes("a\nb\nc\nd\ne\n", abs);
+
+      await expect(
+        editTool.execute(
+          "e1",
+          { remove_from: aHash, remove_to: hashes[3]!, replacement_lines: [] },
+          undefined,
+          undefined,
+          ctx,
+        ),
+      ).rejects.toThrow(/E_RANGE_STALE/);
+      expect(await readFile(path, "utf-8")).toBe("a\nb\nc\nd\ne\n");
+    });
+  });
+
   it("rejects when interior lines were never served (anchors from disjoint diff hunks)", async () => {
     await withTempFile("sample.ts", "a\nb\nc\nd\ne\nf\ng\nh\ni\nj\n", async ({ cwd, path }) => {
       const { ctx, readTool, editTool } = setupIntegrationTest(cwd);

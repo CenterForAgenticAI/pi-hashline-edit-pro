@@ -209,7 +209,7 @@ Auto-fixable slips fall into two groups. Fixed silently: a reversed range, embed
 
 Content containing a NUL byte (`U+0000`) is rejected with `[E_BAD_SHAPE]` before any file I/O: writing it would make the file binary, so use an empty replacement to delete. This applies to `replace`'s `replacement_lines` and `insert`'s `lines`.
 
-Every line in the removed range must match what was last shown to you. The extension records the `anchor│content` rows it serves (`read` output, `anchor_grep` output, the auto-read block after `write`, the `+anchor│` and ` anchor│` rows of post-edit diffs, the current-range rows of `[E_RANGE_STALE]` feedback, and the context rows of stale-anchor feedback) and verifies the whole range against that record before writing. A line that changed on disk since it was shown, or an anchor that is not owned in this session, refuses the edit with `[E_RANGE_STALE]` or `[E_STALE_ANCHOR]` and returns the current range with fresh anchors, so the retry needs no `read`. An owned anchor enters the served record when its row is shown (after a restart, restored ownership counts as shown), so a file with no owned anchors cannot be edited by anchor at all; call `read` first. An owned line that was never shown, for example beyond an auto-read preview's truncation cap, is refused with `[E_RANGE_STALE]` and returns the current range, so the retry still needs no `read`.
+Every line in the removed range must match what was last shown to you, except that a pure deletion (an empty replacement) verifies only the first and last line of the range and removes the interior as it currently stands. The extension records the `anchor│content` rows it serves (`read` output, `anchor_grep` output, the auto-read block after `write`, the `+anchor│` and ` anchor│` rows of post-edit diffs, the current-range rows of `[E_RANGE_STALE]` feedback, and the context rows of stale-anchor feedback) and verifies the whole range against that record before writing. A line that changed on disk since it was shown, or an anchor that is not owned in this session, refuses the edit with `[E_RANGE_STALE]` or `[E_STALE_ANCHOR]` and returns the current range with fresh anchors, so the retry needs no `read`. An owned anchor enters the served record when its row is shown (after a restart, restored ownership counts as shown), so a file with no owned anchors cannot be edited by anchor at all; call `read` first. An owned line that was never shown, for example beyond an auto-read preview's truncation cap, is refused with `[E_RANGE_STALE]` and returns the current range, so the retry still needs no `read`; only lines strictly between the boundaries of a pure deletion are exempt.
 
 An edit that changes neither content nor line endings reports `No changes made` and leaves the anchors alone.
 
@@ -231,9 +231,9 @@ A `replace_within` call is never grouped into a batch; it commits on its own lik
 | --- | --- |
 | `anchor` | 4-char anchor marking the line next to which the lines go. The anchor line is preserved. A pasted `+Hasu│x` diff row or `anchor│` prefix is stripped automatically with a warning. |
 | `direction` | `"after"` inserts below the anchor line, `"before"` above it. |
-| `lines` | The exact text to insert, as one string: `""` inserts nothing, `"\n"` is one blank line, and a trailing line break sets the last line's ending instead of adding a blank line. Never include the anchor line. Embedded `\r\n`/`\r`/`\n` are preserved; escapes decode once — `\uXXXX` is the character, `\\uXXXX` the literal text. Legacy arrays are converted to text (elements joined with LF); prefer the string form. |
+| `lines` | The exact text to insert, as one non-empty string (`""` is refused with `[E_BAD_SHAPE]`): `"\n"` is one blank line, and a trailing line break sets the last line's ending instead of adding a blank line. Never include the anchor line. Embedded `\r\n`/`\r`/`\n` are preserved; escapes decode once — `\uXXXX` is the character, `\\uXXXX` the literal text. Legacy arrays are converted to text (elements joined with LF); prefer the string form. |
 
-Nothing is removed and the inserted lines are written exactly as given; the anchor line and every other line stay in place. Inserting nothing (`lines: ""`) reports a noop. To seed an empty file, read it and insert after the `anchor│` empty-line row.
+Nothing is removed and the inserted lines are written exactly as given; the anchor line and every other line stay in place. An empty `lines` payload is refused with `[E_BAD_SHAPE]`; pass a single line break (`"\n"`) to insert one blank line. To seed an empty file, read it and insert after the `anchor│` empty-line row.
 
 Example: add a line after `Emno│`:
 
@@ -309,8 +309,8 @@ Multiple `replace` and `insert` calls on the same file in one assistant message 
 
 - A call outside a batch commits before its result returns.
 - A `copy`, `move`, or `replace_within` call is never grouped into a batch: it commits on its own, and a pending same-file batch aborts safely with `[E_OP_ABORTED]` if the file changed under it.
-- A batch validates every call against the pre-batch state and commits once, during the batch's last call: earlier calls reply `In batch N`, and the batch's last call shows the combined diff, with one undo reverting the whole batch.
-- If a batch aborts, an earlier member's row renders the abort message instead of the placeholder. Nothing commits until the last call succeeds.
+- A batch validates every call against the pre-batch state and commits once, during the batch's last call: earlier calls reply `In batch N (queued)`, and the batch's last call shows the combined diff, with one undo reverting the whole batch.
+- If a batch aborts, nothing is written: the failing call's error ends with `Aborts batch N.` and reports that the whole batch was discarded, and an earlier member's row renders the abort message instead of the queued placeholder. Nothing commits until the last call succeeds.
 - A batch member accepts the same request shapes and auto-fixes as a standalone call.
 
 Batched calls must target disjoint ranges; overlapping ranges, or any failing call, aborts the whole batch unwritten. One `insert` with `direction: "before"` and one with `direction: "after"` may target the same anchor line: the pair composes into a single insertion. A batch member that fails aborts its batch-mates with `[E_OP_ABORTED]`.
@@ -323,7 +323,7 @@ The hashline tools are sequential in pi, so a message that contains one runs all
 
 Auto-read is enabled by default. After a successful `write`, the extension reads the file and appends an `--- Auto-read (hashline anchors) ---` block, so you get fresh `anchor│content` anchors without a separate `read` call.
 
-After `replace`, `replace_within`, `insert`, `copy`, `move`, and `undo_last_change`, the result shows the post-edit diff. Inside a same-message batch, only the batch's last call shows the combined diff, headed by a `batch N:` line; earlier calls reply `In batch N`. The `+anchor│` and ` anchor│` rows carry the current anchors, so follow-up edits can anchor on the diff directly. The `-anchor│` rows show removed lines with their old anchors, which are stale after the edit. When the context line next to a change is blank or whitespace-only, one more context line is shown in that direction, so the change stays anchored to visible content. Call `read` when you want the full file's anchors.
+After `replace`, `replace_within`, `insert`, `copy`, `move`, and `undo_last_change`, the result shows the post-edit diff. Inside a same-message batch, only the batch's last call shows the combined diff, headed by a `batch N:` line; earlier calls reply `In batch N (queued)`. The `+anchor│` and ` anchor│` rows carry the current anchors, so follow-up edits can anchor on the diff directly. The `-anchor│` rows show removed lines with their old anchors, which are stale after the edit. When the context line next to a change is blank or whitespace-only, one more context line is shown in that direction, so the change stays anchored to visible content. Call `read` when you want the full file's anchors.
 
 An edit that changes only line endings has no content diff; the result still reports `applied`, and one `undo_last_change` reverts it.
 
@@ -420,7 +420,7 @@ Codes starting with `E_` are errors: nothing was written, with one exception. `F
 Most common, with the fix:
 
 - `[E_STALE_ANCHOR]`: the anchor is not owned in this session. Call `read` for fresh anchors and retry.
-- `[E_RANGE_STALE]`: a line in the replaced range changed on disk or was never shown. The error already returns the current range with fresh anchors; retry with those.
+- `[E_RANGE_STALE]`: a line in the replaced range changed on disk or was never shown (a pure deletion checks only its first and last line). The error already returns the current range with fresh anchors; retry with those.
 - `[E_FILE_TOO_LARGE]`: the file exceeds the 1,353,139-line hashline limit or the 100MB size limit. Use `write` for very large files.
 - `[E_STORE_UNAVAILABLE]`: no SQLite runtime. Run pi under Node 22.19+ or a Bun build that ships `bun:sqlite`.
 - `[E_WRITE_HASH_ECHO]`: a `write` content line contains a copied served row. Remove the anchors and retry.
@@ -431,7 +431,7 @@ Full reference:
 | Code | Meaning |
 | --- | --- |
 | `[E_CONFIG]` | `PI_HASHLINE_DIR` is nonempty but not an absolute path. |
-| `[E_BAD_SHAPE]` | Request envelope or edit item has unknown, missing, or wrongly-typed fields (for example `replacement_lines` must be a string holding the exact text), content contains a NUL byte (`U+0000`), which would make the file binary, or a grep `glob` has invalid bracket or brace syntax. |
+| `[E_BAD_SHAPE]` | Request envelope or edit item has unknown, missing, or wrongly-typed fields (for example `replacement_lines` must be a string holding the exact text), content contains a NUL byte (`U+0000`), which would make the file binary, an `insert` `lines` payload is empty, or a grep `glob` has invalid bracket or brace syntax. |
 | `[W_BAD_SHAPE]` | Auto-corrected request slip reported as a warning (for example legacy array text that could not be parsed and was kept as one literal line). |
 | `[E_BAD_REF]` | An anchor in `remove_from`/`remove_to` is not a bare 4-character anchor (the anchor table is letters only). |
 | `[E_SUBSTRING_NOT_FOUND]` | `replace_within` did not find `replace_old` in the selected range. The current `anchor│content` rows are returned; copy `replace_old` exactly from the served row and retry. |
@@ -453,7 +453,7 @@ Full reference:
 | `[E_NOT_TEXT]` | The path is a directory, binary file, image, or UTF-16/UTF-32 encoded text; hashline editing only supports text files. |
 | `[E_UNDO_STALE]` | `undo_last_change` refused: the file was modified after the last edit. The undo record is kept until the file matches the edited state again or a new edit replaces it. |
 | `[E_UNDO_UNAVAILABLE]` | Undo history could not be persisted to the hash store; the edit was refused and the file was left unchanged. |
-| `[E_RANGE_STALE]` | A line in the replaced range no longer matches what was last shown (the file changed on disk, or the line was never shown). The edit was refused; the current range is returned with fresh anchors. |
+| `[E_RANGE_STALE]` | A line in the replaced range no longer matches what was last shown (the file changed on disk, or the line was never shown; a pure deletion checks only its first and last line). The edit was refused; the current range is returned with fresh anchors. |
 | `[E_FILE_TOO_LARGE]` | The file exceeds the 1,353,139-line hashline limit or the 100MB size limit. |
 | `[E_REGISTRY]` | The anchor registry was not initialized; a serve or edit ran outside an initialized session. |
 | `[E_STORE_UNAVAILABLE]` | No SQLite runtime could be loaded: the host exposes neither `node:sqlite` (Node 22.19+) nor `bun:sqlite`. The pi release binary's bundled Bun lacks `node:sqlite`; run pi under Node or a Bun build that ships SQLite. |
@@ -469,7 +469,7 @@ Full reference:
 ## Troubleshooting
 
 - Stale anchors. `[E_STALE_ANCHOR]` means an anchor is not owned in this session: it was never shown to you, or its line was edited or the file was rewritten since. Call `read` for fresh anchors and retry.
-- Range changed on disk. `[E_RANGE_STALE]` means a line inside the replaced range changed after it was last shown to you (or was never shown). Nothing was modified; the error carries the current range with fresh anchors, so retry with those without a `read`.
+- Range changed on disk. `[E_RANGE_STALE]` means a line inside the replaced range changed after it was last shown to you (or was never shown; a pure deletion only needs its first and last line shown). Nothing was modified; the error carries the current range with fresh anchors, so retry with those without a `read`.
 - Multi-conversation hosts. Anchors, served records, and ownership logs are resolved per calling session, so a tool call in one conversation is never answered by another conversation's registry; a foreign anchor fails with `[E_STALE_ANCHOR]`. Interactive previews are the one exception: pi does not pass the session into render callbacks, so when one process serves several conversations at once a preview can fall back to the most recently active session and show a stale or wrong-file diff. Previews never write files or claim anchors; run the call for the authoritative result.
 - Undo scope. `undo_last_change` records are keyed by file path, not by session, so in a multi-conversation host any conversation that names the file can revert its most recent `replace` or `insert`, even one made by another conversation. Anchor ownership remains session-scoped; only undo is shared.
 - Reset the anchor state. Anchors live in `~/.config/pi-hashline-edit-pro/hash-store.sqlite` (with `-wal`/`-shm` sidecars) and in per-session ownership logs under `~/.config/pi-hashline-edit-pro/sessions/`. Quit pi, delete those files, and everything is rebuilt on the next session. Anchor history is lost, but no project files are touched.

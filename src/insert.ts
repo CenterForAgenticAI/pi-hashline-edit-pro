@@ -27,7 +27,7 @@ const insertDirectionSchema = Type.Union(
 );
 const insertLinesSchema = Type.String({
   description:
-    'The exact text to insert. "" inserts nothing, "\\n" is one blank line, and a trailing line break sets the last line\'s ending instead of adding a blank line. Never include the anchor line.',
+    'The exact text to insert; an empty string is refused. "\\n" is one blank line, and a trailing line break sets the last line\'s ending instead of adding a blank line. Never include the anchor line.',
 });
 
 const insertPathRequiredSchema = Type.String({

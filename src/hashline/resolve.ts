@@ -401,10 +401,12 @@ export function assertRangeServed(
   const startLine = resolved.hash_bounds[0].line;
   const endLine = resolved.hash_bounds[1].line;
   const mismatchLines: number[] = [];
+  const deletion = resolved.content_lines.length === 0;
   for (let line = startLine; line <= endLine; line++) {
     const hash = fileHashes[line - 1]!;
     const content = fileLines[line - 1]!;
     const servedContent = served?.get(hash);
+    if (servedContent === undefined && deletion && line !== startLine && line !== endLine) continue;
     if (servedContent === undefined || servedContent !== lineChecksum(content)) mismatchLines.push(line);
   }
   if (mismatchLines.length === 0) return;

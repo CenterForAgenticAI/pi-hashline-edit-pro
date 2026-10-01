@@ -1,6 +1,6 @@
 import { Type } from "typebox";
 import { isRec, normalizeFilePath, normalizeRequest, rejectUnknownFields, assertNoNul } from "./utils";
-import { LINES_NOT_STRING_MSG, NEW_CONTENT_NOT_STRING_MSG } from "./constants";
+import { LINES_EMPTY_MSG, LINES_NOT_STRING_MSG, NEW_CONTENT_NOT_STRING_MSG } from "./constants";
 
 const replacementLinesSchema = Type.String({
   description:
@@ -130,6 +130,9 @@ export function assertInsertReq(request: unknown): asserts request is InsertReq 
   }
   if (typeof request.lines !== "string") {
     throw new Error(LINES_NOT_STRING_MSG);
+  }
+  if (request.lines.length === 0) {
+    throw new Error(LINES_EMPTY_MSG);
   }
   assertNoNul([request.lines]);
 }
