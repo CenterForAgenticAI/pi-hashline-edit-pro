@@ -446,6 +446,7 @@ Full reference:
 | `[H_UNICODE_SWAPPED]` | The new text uses a different invisible or look-alike character than the line it matches (for example `U+200D` where that line has `U+200B`). The edit applied as sent; the hint names both code points and the column, for example `[H_UNICODE_SWAPPED] The new text uses U+200D where Kq3f│ uses U+200B.` followed by `└ U+200B at col 21 → U+200D`. |
 | `[H_TRAILING_WHITESPACE]` | The new text differs from the replaced line only in trailing whitespace. Anchor checksums trim trailing whitespace, so the change does not invalidate the anchor; the hint names the column and the old and new trailing-whitespace counts. |
 | `[H_INDENT_MISMATCH]` | The new line is missing leading whitespace that a structurally similar row has (a reference row near the anchor line for an insert, or the replaced line). The edit applied as sent; the hint names the reference anchor and the expected and actual leading-whitespace counts. |
+| `[H_SEPARATOR_MOVED]` | An insert landed its text directly against the anchor line, and the blank line that separated the anchor from its neighbor now sits on the other side of the inserted text. The edit applied as sent; the hint names the anchor and which side lost the blank line. |
 | `[E_WOULD_EMPTY]` | An edit would empty a non-empty file; use `write` instead. A cross-file `move` may empty its source file. |
 | `[E_NOT_FOUND]` | The path does not exist. |
 | `[E_ACCESS]` | The file is not readable or writable. |

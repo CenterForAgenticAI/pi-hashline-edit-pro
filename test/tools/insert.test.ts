@@ -506,6 +506,26 @@ describe("insert indentation hints", () => {
       expect(hint).toContain("│ has.");
     });
   });
+
+  it("flags an inserted block that landed against a blank-separated anchor", async () => {
+    await withTempFile("doc.md", "intro\n\n## Next\nend\n", async ({ cwd, path }) => {
+      const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
+      const text = getText(await readTool.execute("r1", { path: "doc.md" }, undefined, undefined, ctx));
+      const anchor = extractHash(text.split("\n").find((line: string) => line.includes("│## Next"))!);
+      const result = await getTool("insert").execute(
+        "i1",
+        { anchor, direction: "before", lines: "## Added\n\nbody" },
+        undefined,
+        undefined,
+        ctx,
+      );
+      const hint = ((result.details.hints ?? []) as string[]).find((entry) => entry.startsWith("[H_SEPARATOR_MOVED]")) ?? "";
+      expect(hint).toContain("[H_SEPARATOR_MOVED]");
+      expect(hint).toContain("are adjacent");
+      expect(hint).toContain("may need its own trailing blank line");
+      expect(await readFile(path, "utf-8")).toBe("intro\n\n## Added\n\nbody\n## Next\nend\n");
+    });
+  });
 });
 
 describe("insert tool rendering", () => {

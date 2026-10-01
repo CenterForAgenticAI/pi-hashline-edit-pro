@@ -31,7 +31,7 @@ const LOOKALIKE_PUNCT_RE = new RegExp(
   "u",
 );
 const MAX_FIDELITY_HINTS = 3;
-const INSERT_REFERENCE_WINDOW = 5;
+const INSERT_REFERENCE_WINDOW = 12;
 const SIMILARITY_RUN = 10;
 const INDENT_SIMILARITY_RUN = 8;
 const INSERT_GRAM_BUDGET = 200_000;
@@ -205,6 +205,42 @@ function referenceRows(lines: string[], start: number, end: number): ReferenceRo
   return rows;
 }
 
+function isBlankLine(line: string | undefined): boolean {
+  return (line ?? "").trim().length === 0;
+}
+
+function separatorMovedHint(
+  oldLines: string[],
+  anchorIndex: number,
+  carried: number | undefined,
+  payload: string[],
+  anchor: string | undefined,
+): string | undefined {
+  if (carried === undefined || payload.length < 2) return undefined;
+  const anchorLine = oldLines[anchorIndex] ?? "";
+  if (anchorLine.trim().length === 0) return undefined;
+  let side: "before" | "after";
+  if (carried === 0) {
+    if (anchorIndex + 1 >= oldLines.length || !isBlankLine(oldLines[anchorIndex + 1])) return undefined;
+    if ((payload[0] ?? "").trim().length === 0) return undefined;
+    side = "after";
+  } else if (carried === payload.length) {
+    if (anchorIndex === 0 || !isBlankLine(oldLines[anchorIndex - 1])) return undefined;
+    if ((payload[payload.length - 1] ?? "").trim().length === 0) return undefined;
+    side = "before";
+  } else {
+    return undefined;
+  }
+  const label = anchor === undefined ? "the anchor line" : `${anchor}${HASH_SEP}`;
+  const observation = side === "before"
+    ? `The blank line above ${label} now separates the previous block from the inserted text; the inserted text and ${label} are adjacent.`
+    : `The blank line below ${label} now follows the inserted text; the inserted text and ${label} are adjacent.`;
+  const remedy = side === "before"
+    ? "the inserted block may need its own trailing blank line"
+    : "the inserted block may need its own leading blank line";
+  return [`[H_SEPARATOR_MOVED] ${observation}`, `${REFERENCE_INDENT}└ ${remedy}`].join("\n");
+}
+
 function gramSet(lines: readonly string[], size: number): Set<string> | undefined {
   const grams = new Set<string>();
   let total = 0;
@@ -283,6 +319,7 @@ export function fidelityHints(
   resultContent: string,
   spans: readonly DiffSpan[] | undefined,
   originalHashes?: readonly string[],
+  options?: { separatorMoved?: boolean },
 ): string[] {
   if (spans === undefined || spans.length === 0) return [];
   const oldLines = splitLines(originalContent);
@@ -376,6 +413,10 @@ export function fidelityHints(
         if (seen.has(key)) continue;
         seen.add(key);
         hints.push(indentHint);
+      }
+      if (options?.separatorMoved) {
+        const separatorHint = separatorMovedHint(oldLines, span.start, carried, payload, originalHashes?.[span.start]);
+        if (separatorHint !== undefined && hints.length < MAX_FIDELITY_HINTS) hints.push(separatorHint);
       }
       if (carried === undefined && removed.length === inserted.length) {
         for (let index = 0; index < removed.length; index += 1) {
