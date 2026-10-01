@@ -441,7 +441,7 @@ Full reference:
 | `[W_BARE_HASH_PREFIX]` | A `replacement_lines` line starts with an `anchor│` prefix. The prefix is stripped automatically with a warning. |
 | `[W_ANCHOR_RECLAIMED]` | The session's anchor quota was exhausted, so all anchors of the listed files (the least recently read or edited) were freed to make room. Read those files again before editing them. |
 | `[H_LITERAL_ESCAPE]` | `lines` or `replacement_lines` contains literal escaped text such as `\uXXXX` or `\n`; the file receives those backslash characters as written. Escapes decode once in the tool call (`\uXXXX` → the character), so a doubled escape (`\\uXXXX`) lands literally — resend with the real character if that was not intended. |
-| `[H_UNICODE_LOST]` | The removed line contained an invisible or look-alike character (for example `U+200B` zero-width space, `U+00A0` no-break space, or a smart quote) that the replacement does not. The edit applied as sent; copy the character from the served row if the request did not ask to remove it. |
+| `[H_UNICODE_LOST]` | The new text is missing an invisible or look-alike character (for example `U+200B`, `U+2060`, `U+00A0`, or a smart quote) that a replaced row or a nearby row has. The edit applied as sent; the hint renders the row and column, for example `[H_UNICODE_LOST] The new text is missing U+2060.` followed by `Kq3f│…` and `└ U+2060 at col 31`. |
 | `[E_WOULD_EMPTY]` | An edit would empty a non-empty file; use `write` instead. A cross-file `move` may empty its source file. |
 | `[E_NOT_FOUND]` | The path does not exist. |
 | `[E_ACCESS]` | The file is not readable or writable. |

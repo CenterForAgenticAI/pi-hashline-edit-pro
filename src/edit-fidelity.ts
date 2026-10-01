@@ -1,24 +1,14 @@
 import { splitLines } from "./utils";
+import { HASH_LEN, HASH_SEP } from "./hashline";
 import type { DiffSpan } from "./replace-diff";
 
 const INVISIBLE_RE = /\p{Default_Ignorable_Code_Point}/u;
 const LOOKALIKE_SPACE_RE = /[\u00a0\u1680\u2000-\u200a\u202f\u205f\u3000]/u;
 const LOOKALIKE_DASH_RE = /[\u2010-\u2015\u2212]/u;
 const LOOKALIKE_QUOTE_RE = /[\u2018\u2019\u201c\u201d]/u;
-const MAX_LISTED_CHARS = 3;
-
-const CHAR_NAMES: Readonly<Record<number, string>> = {
-  0x00a0: "no-break space",
-  0x200b: "zero-width space",
-  0x200c: "zero-width non-joiner",
-  0x200d: "zero-width joiner",
-  0x200e: "left-to-right mark",
-  0x200f: "right-to-left mark",
-  0x2011: "non-breaking hyphen",
-  0x202f: "narrow no-break space",
-  0x2060: "word joiner",
-  0xfeff: "zero-width no-break space",
-};
+const MAX_MISSING_HINTS = 3;
+const INSERT_REFERENCE_WINDOW = 5;
+const REFERENCE_INDENT = " ".repeat(HASH_LEN + HASH_SEP.length);
 
 const LOOKALIKE_SUBSTITUTES: Readonly<Record<string, string>> = {
   "\u00a0": " ",
@@ -54,17 +44,35 @@ export function isFidelitySensitiveChar(char: string): boolean {
   return INVISIBLE_RE.test(char) || LOOKALIKE_SPACE_RE.test(char) || LOOKALIKE_DASH_RE.test(char) || LOOKALIKE_QUOTE_RE.test(char);
 }
 
-function describeChar(char: string): string {
-  const codePoint = char.codePointAt(0)!;
-  const hex = `U+${codePoint.toString(16).toUpperCase().padStart(4, "0")}`;
-  const name = CHAR_NAMES[codePoint];
-  return name === undefined ? hex : `${hex} (${name})`;
+function formatCodePoint(char: string): string {
+  return `U+${char.codePointAt(0)!.toString(16).toUpperCase().padStart(4, "0")}`;
 }
 
-function unicodeLostHint(chars: string[]): string {
-  const listed = chars.slice(0, MAX_LISTED_CHARS).map(describeChar).join(", ");
-  const more = chars.length > MAX_LISTED_CHARS ? ` (+${chars.length - MAX_LISTED_CHARS} more)` : "";
-  return `[H_UNICODE_LOST] The removed line contained ${listed}${more}, which the replacement does not. If the request did not ask to remove it, copy the character from the served row.`;
+interface ReferenceRow {
+  line: string;
+  index: number;
+}
+
+function renderReferenceRow(reference: ReferenceRow, anchor: string | undefined): string {
+  const prefix = anchor === undefined ? " ".repeat(HASH_LEN) : anchor;
+  return `${prefix}${HASH_SEP}${reference.line}`;
+}
+
+function hiddenCharHint(char: string, reference: ReferenceRow, anchor: string | undefined): string {
+  const column = [...reference.line].indexOf(char) + 1;
+  return [
+    `[H_UNICODE_LOST] The new text is missing ${formatCodePoint(char)}.`,
+    renderReferenceRow(reference, anchor),
+    `${REFERENCE_INDENT}└ ${formatCodePoint(char)} at col ${column}`,
+  ].join("\n");
+}
+
+function referenceRows(lines: string[], start: number, end: number): ReferenceRow[] {
+  const from = Math.max(0, start - INSERT_REFERENCE_WINDOW);
+  const to = Math.min(lines.length - 1, end + INSERT_REFERENCE_WINDOW);
+  const rows: ReferenceRow[] = [];
+  for (let index = from; index <= to; index++) rows.push({ line: lines[index]!, index });
+  return rows;
 }
 
 function withCharsRestored(line: string, chars: readonly string[], replacementFor: (char: string) => string): string {
@@ -79,30 +87,47 @@ function isDeliberateCharFix(oldLine: string, newLine: string, lostChars: readon
   return withCharsRestored(oldLine, lostChars, () => "") === newLine;
 }
 
-export function fidelityHints(originalContent: string, resultContent: string, spans: readonly DiffSpan[] | undefined): string[] {
+export function fidelityHints(
+  originalContent: string,
+  resultContent: string,
+  spans: readonly DiffSpan[] | undefined,
+  originalHashes?: readonly string[],
+): string[] {
   if (spans === undefined || spans.length === 0) return [];
   const oldLines = splitLines(originalContent);
   const newLines = splitLines(resultContent);
-  const lost = new Set<string>();
+  const hints: string[] = [];
+  const seen = new Set<string>();
   let offset = 0;
   for (const span of [...spans].sort((a, b) => a.start - b.start)) {
     const removedCount = span.end >= span.start ? span.end - span.start + 1 : 0;
     const removed = removedCount > 0 ? oldLines.slice(span.start, span.end + 1) : [];
     const inserted = newLines.slice(span.start + offset, span.start + offset + span.replacementCount);
     if (removed.length > 0 && inserted.length > 0) {
-      const insertedText = inserted.join("\n");
-      const dropped: string[] = [];
-      for (const line of removed) {
-        for (const char of line) {
-          if (!dropped.includes(char) && isFidelitySensitiveChar(char) && !insertedText.includes(char)) dropped.push(char);
+      const carried = span.carry;
+      const payload = carried === undefined ? inserted : inserted.filter((_, index) => index !== carried);
+      const payloadText = payload.join("\n");
+      const references: ReferenceRow[] = carried === undefined
+        ? removed.map((line, index) => ({ line, index: span.start + index }))
+        : referenceRows(oldLines, span.start, span.end);
+      const missing = new Map<string, ReferenceRow>();
+      for (const reference of references) {
+        for (const char of reference.line) {
+          if (missing.has(char) || !isFidelitySensitiveChar(char) || payloadText.includes(char)) continue;
+          missing.set(char, reference);
         }
       }
-      const deliberateFix = removed.length === 1 && inserted.length === 1 && isDeliberateCharFix(removed[0]!, inserted[0]!, dropped);
-      if (!deliberateFix) {
-        for (const char of dropped) lost.add(char);
+      if (carried === undefined && removed.length === 1 && inserted.length === 1) {
+        const chars = [...missing.keys()];
+        if (isDeliberateCharFix(removed[0]!, inserted[0]!, chars)) missing.clear();
+      }
+      for (const [char, reference] of missing) {
+        if (seen.has(char) || hints.length >= MAX_MISSING_HINTS) continue;
+        seen.add(char);
+        hints.push(hiddenCharHint(char, reference, originalHashes?.[reference.index]));
       }
     }
     offset += span.replacementCount - removedCount;
   }
-  return lost.size > 0 ? [unicodeLostHint([...lost].sort())] : [];
+  return hints;
 }
