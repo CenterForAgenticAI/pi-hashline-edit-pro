@@ -2,7 +2,7 @@ import type { NEdit } from "./hashline";
 import type { ReplaceDetails } from "./replace";
 import { genDiff, genPatch, type DiffSpan } from "./replace-diff";
 import { visLines, clipLine } from "./utils";
-import { fidelityHints } from "./edit-fidelity";
+import { annotateLiteralEscapeHints, fidelityHints } from "./edit-fidelity";
 
 export type TResult = {
 	content: Array<{ type: "text"; text: string }>;
@@ -142,7 +142,8 @@ export function buildChanged(input: SuccessInput, verb = "replaced", diffContext
   const removedLines = editMeta.removedLines;
   const fidelity = fidelityHints(originalNormalized, result, spans, originalHashes);
   const { warnings: noticeWarnings, hints } = splitNotices(fidelity.length > 0 ? [...(warnings ?? []), ...fidelity] : warnings);
-  const noticesBlock = `${warnBlock(noticeWarnings)}${hintBlock(hints)}`;
+  const annotatedHints = annotateLiteralEscapeHints(hints, result, spans, resultHashes);
+  const noticesBlock = `${warnBlock(noticeWarnings)}${hintBlock(annotatedHints)}`;
   const successPrefix = `Successfully ${verb} in ${path}.`;
   const lineSummary = addedLines > 0 || removedLines > 0
     ? ` Added ${addedLines} line(s), removed ${removedLines} line(s).`
@@ -177,7 +178,7 @@ export function buildChanged(input: SuccessInput, verb = "replaced", diffContext
       metrics,
       diffLineNumbers: diffResult.lineNumbers.map((line) => line ?? null),
       ...(noticeWarnings.length ? { warnings: [...noticeWarnings] } : {}),
-      ...(hints.length ? { hints: [...hints] } : {}),
+      ...(annotatedHints.length ? { hints: [...annotatedHints] } : {}),
     },
   };
 }

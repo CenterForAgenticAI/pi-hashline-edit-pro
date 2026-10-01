@@ -28,6 +28,9 @@ describe("isFidelitySensitiveChar", () => {
     expect(isFidelitySensitiveChar(NNBSP)).toBe(true);
     expect(isFidelitySensitiveChar("\u201c")).toBe(true);
     expect(isFidelitySensitiveChar("\u2212")).toBe(true);
+    expect(isFidelitySensitiveChar("\u3002")).toBe(true);
+    expect(isFidelitySensitiveChar("\uff0e")).toBe(true);
+    expect(isFidelitySensitiveChar("\uff61")).toBe(true);
   });
 
   it("leaves plain text and regular punctuation alone", () => {
@@ -87,10 +90,31 @@ describe("fidelityHints", () => {
     expect(fidelityHints("say \u201chi\u201d\n", 'say "hi"\n', [replaceSpan(0, 0, 1)], ANCHORS)).toEqual([]);
   });
 
-  it("does not compare insert-only spans for hidden characters", () => {
+  it("flags an omitted joiner in an inserted block that echoes the nearby row", () => {
     const old = `head\n- status: done${WORD_JOINER}\ntail\n`;
     const result = `head\n- status: done${WORD_JOINER}\n- status: new\ntail\n`;
-    expect(fidelityHints(old, result, [insertSpan(1, 2, 0)], ANCHORS)).toEqual([]);
+    const row = `- status: done${WORD_JOINER}`;
+    const hints = fidelityHints(old, result, [insertSpan(1, 2, 0)], ANCHORS);
+    expect(hints).toHaveLength(1);
+    expect(hints[0]).toContain(`Bbbb│${row}`);
+    expect(hints[0]).toContain(`└ U+2060 at col ${row.indexOf(WORD_JOINER) + 1}`);
+    expect(hints[0].split("\n")[0]).toContain("U+2060");
+  });
+
+  it("flags a dropped non-breaking space in an inserted line that echoes another row", () => {
+    const old = `head\n// END serializes checkout\u2011payload\u00a00042\ntail\n`;
+    const result = `head\ntest("serializes checkout\u2011payload 9004", () => {\n// END serializes checkout\u2011payload\u00a00042\ntail\n`;
+    const hints = fidelityHints(old, result, [insertSpan(0, 2, 0)], ANCHORS);
+    expect(hints).toHaveLength(1);
+    expect(hints[0]).toContain("[H_UNICODE_LOST]");
+    expect(hints[0]).toContain("U+00A0");
+    expect(hints[0]).toContain("// END serializes checkout");
+  });
+
+  it("does not flag hidden characters for inserted lines that do not match the context", () => {
+    const old = `head\n    feature: "legacy${ZWSP}Checkout",\ntest("serializes checkout\u2011payload\u00a00002", () => {\ntail\n`;
+    const result = `head\n    feature: "legacy${ZWSP}Checkout",\ntest("serializes checkout\u2011payload\u00a00002", () => {\ntail\n  expect(encoded).toContain("feature");\n`;
+    expect(fidelityHints(old, result, [insertSpan(3, 2, 0)], ANCHORS)).toEqual([]);
   });
 
   it("stays silent when an inserted block keeps the joiner", () => {
@@ -157,6 +181,23 @@ describe("fidelityHints", () => {
     expect(hints).toHaveLength(1);
     expect(hints[0]).toContain("[H_UNICODE_SWAPPED]");
     expect(hints[0]).toContain(`Aaaa│template${ZWSP}entry`);
+  });
+
+  it("flags a full-width full stop where a neighboring row uses an ASCII period", () => {
+    const clean = "Vérifiez le reçu. Проверьте чек. 检查收据. تحقق من الإيصال.";
+    const swapped = "Vérifiez le reçu. Проверьте чек. 检查收据。 تحقق من الإيصال.";
+    const old = `head\n${clean}\ntail\n`;
+    const result = `head\n${swapped}\ntail\n`;
+    const hints = fidelityHints(old, result, [insertSpan(0, 2, 0)], ANCHORS);
+    expect(hints).toHaveLength(1);
+    expect(hints[0]).toContain("[H_UNICODE_SWAPPED]");
+    expect(hints[0]).toContain("U+3002");
+    expect(hints[0]).toContain("U+002E");
+    expect(hints[0]).toContain(`Bbbb│${clean}`);
+  });
+
+  it("stays silent when a full-width full stop is normalized to an ASCII period", () => {
+    expect(fidelityHints("say 完了。\n", "say 完了.\n", [replaceSpan(0, 0, 1)], ANCHORS)).toEqual([]);
   });
 
   it("stays silent when a replaced line keeps its invisible characters", () => {

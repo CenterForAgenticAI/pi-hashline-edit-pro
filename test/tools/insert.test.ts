@@ -449,8 +449,21 @@ describe("insert literal escape hints", () => {
         undefined, undefined, ctx,
       );
       expect(result.content[0].text).toContain(String.raw`[H_LITERAL_ESCAPE] "lines" contains the literal escaped text "\u200b"`);
-      expect(result.details.hints).toEqual([String.raw`[H_LITERAL_ESCAPE] "lines" contains the literal escaped text "\u200b"`]);
+      const hint = result.details.hints?.[0] ?? "";
+      expect(hint).toContain(String.raw`[H_LITERAL_ESCAPE] "lines" contains the literal escaped text "\u200b"`);
+      expect(hint).toContain(String.raw`└ "\u200b" at col 7`);
       expect(await readFile(path, "utf-8")).toBe("alpha\nbeta\nstable\\u200bCheckout\n");
+      const writtenAnchor = hint.split("\n").find((line: string) => line.includes("stable"))?.slice(0, 4);
+      expect(writtenAnchor).toMatch(/^[A-Za-z]{4}$/);
+      const within = await getTool("replace_within").execute(
+        "i2",
+        { replace_from: writtenAnchor!, replace_to: writtenAnchor!, replace_old: String.raw`\u200b`, replace_new: "\u200b" },
+        undefined,
+        undefined,
+        ctx,
+      );
+      expect(within.content[0].text).toContain("Successfully replaced");
+      expect(await readFile(path, "utf-8")).toBe("alpha\nbeta\nstable\u200bCheckout\n");
     });
   });
 });

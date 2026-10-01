@@ -281,7 +281,7 @@ describe("regReplace - robustness", () => {
 describe("replace literal escape hints", () => {
   it("hints and writes the literal escaped text", async () => {
     await withTempFile("sample.ts", "aaa\nbbb\nccc\n", async ({ cwd, path }) => {
-      const { ctx, editTool } = setupIntegrationTest(cwd);
+      const { ctx, editTool, getTool } = setupIntegrationTest(cwd);
       const hashes = await lineHashes("aaa\nbbb\nccc\n", join(cwd, "sample.ts"));
       const result = await editTool.execute(
         "e1",
@@ -289,9 +289,22 @@ describe("replace literal escape hints", () => {
         undefined, undefined, ctx,
       );
       expect(result.content[0].text).toContain(String.raw`[H_LITERAL_ESCAPE] "replacement_lines" contains the literal escaped text "\u200b"`);
-      expect(result.details.hints).toEqual([String.raw`[H_LITERAL_ESCAPE] "replacement_lines" contains the literal escaped text "\u200b"`]);
+      const hint = result.details.hints?.[0] ?? "";
+      expect(hint).toContain(String.raw`[H_LITERAL_ESCAPE] "replacement_lines" contains the literal escaped text "\u200b"`);
+      expect(hint).toContain(String.raw`└ "\u200b" at col 7`);
       expect(result.details.metrics?.warnings).toBe(0);
       expect(await readFile(path, "utf-8")).toBe("aaa\nstable\\u200bCheckout\nccc\n");
+      const writtenAnchor = hint.split("\n").find((line: string) => line.includes("stable"))?.slice(0, 4);
+      expect(writtenAnchor).toMatch(/^[A-Za-z]{4}$/);
+      const within = await getTool("replace_within").execute(
+        "e2",
+        { replace_from: writtenAnchor!, replace_to: writtenAnchor!, replace_old: String.raw`\u200b`, replace_new: "\u200b" },
+        undefined,
+        undefined,
+        ctx,
+      );
+      expect(within.content[0].text).toContain("Successfully replaced");
+      expect(await readFile(path, "utf-8")).toBe("aaa\nstable\u200bCheckout\nccc\n");
     });
   });
 });

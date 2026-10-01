@@ -247,4 +247,47 @@ describe("buildChanged", () => {
     expect(wide.details.diff!).toContain("│ddd");
     expect(wide.details.diff!).toContain("│eee");
   });
+
+  it("appends the new anchors to a literal-escape hint", async () => {
+    const original = "aaa\nbbb\nccc\n";
+    const result = "aaa\nstable\\u200bCheckout\nccc\n";
+    const originalHashes = await lineHashes(original, home.testPath);
+    const resultHashes = await lineHashes(result, home.testPath);
+    const output = buildChanged({
+      path: "test.txt",
+      originalNormalized: original,
+      originalHashes,
+      result,
+      resultHashes,
+      warnings: [String.raw`[H_LITERAL_ESCAPE] "replacement_lines" contains the literal escaped text "\u200b"`],
+      snapshotId: "snap1",
+      editMeta: { editsAttempted: 1, noopEditsCount: 0, firstChangedLine: 2, lastChangedLine: 2, addedLines: 1, removedLines: 1 },
+      spans: [{ start: 1, end: 1, replacementCount: 1 }],
+    });
+    expect(output.details.hints).toHaveLength(1);
+    const hint = output.details.hints![0]!;
+    expect(hint).toContain(String.raw`└ "\u200b" at col 7`);
+    expect(hint).toContain(`${resultHashes[1]}│${String.raw`stable\u200bCheckout`}`);
+  });
+
+  it("attributes literal-escape rows across multiple spans", async () => {
+    const original = "a\nb\nc\nd\n";
+    const result = "a\nB1\nB2\\u200b\nc\nD\\u200b\n";
+    const originalHashes = await lineHashes(original, home.testPath);
+    const resultHashes = await lineHashes(result, home.testPath);
+    const output = buildChanged({
+      path: "test.txt",
+      originalNormalized: original,
+      originalHashes,
+      result,
+      resultHashes,
+      warnings: [String.raw`[H_LITERAL_ESCAPE] "replacement_lines" contains the literal escaped text "\u200b"`],
+      snapshotId: "snap1",
+      editMeta: { editsAttempted: 2, noopEditsCount: 0, firstChangedLine: 2, lastChangedLine: 5, addedLines: 3, removedLines: 2 },
+      spans: [{ start: 1, end: 1, replacementCount: 2 }, { start: 3, end: 3, replacementCount: 1 }],
+    });
+    const hint = output.details.hints![0]!;
+    expect(hint).toContain(`${resultHashes[2]}│${String.raw`B2\u200b`}`);
+    expect(hint).toContain(`${resultHashes[4]}│${String.raw`D\u200b`}`);
+  });
 });
