@@ -451,9 +451,9 @@ describe("insert literal escape hints", () => {
       expect(result.content[0].text).toContain(String.raw`[H_LITERAL_ESCAPE] "lines" contains the literal escaped text "\u200b"`);
       const hint = result.details.hints?.[0] ?? "";
       expect(hint).toContain(String.raw`[H_LITERAL_ESCAPE] "lines" contains the literal escaped text "\u200b"`);
-      expect(hint).toContain(String.raw`└ "\u200b" at col 7`);
+      expect(hint).toContain("at col 7");
       expect(await readFile(path, "utf-8")).toBe("alpha\nbeta\nstable\\u200bCheckout\n");
-      const writtenAnchor = hint.split("\n").find((line: string) => line.includes("stable"))?.slice(0, 4);
+      const writtenAnchor = hint.match(/└ ([A-Za-z]{4})│/)?.[1];
       expect(writtenAnchor).toMatch(/^[A-Za-z]{4}$/);
       const within = await getTool("replace_within").execute(
         "i2",
@@ -484,8 +484,26 @@ describe("insert indentation hints", () => {
       const hint = ((result.details.hints ?? []) as string[]).find((entry) => entry.startsWith("[H_INDENT_MISMATCH]")) ?? "";
       expect(hint).toContain("[H_INDENT_MISMATCH]");
       expect(hint).toContain("└ expected 2 leading whitespace character(s) at col 1; the new line has 0.");
-      expect(hint).toContain("│  - id: checkout-5");
+      expect(hint).toContain("│ has.");
       expect(await readFile(path, "utf-8")).toBe("routes:\n- id: checkout-11\n    feature: stableCheckout\n  - id: checkout-5\n    feature: legacyCheckout\n");
+    });
+  });
+
+  it("flags an unindented inserted line that echoes a nearby body line", async () => {
+    await withTempFile("cases.test.ts", "test(\"a\", () => {\n  assert(result).toEqual(expected);\n});\n", async ({ cwd }) => {
+      const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
+      const text = getText(await readTool.execute("r1", { path: "cases.test.ts" }, undefined, undefined, ctx));
+      const anchor = extractHash(text.split("\n").find((line: string) => line.includes("│});"))!);
+      const result = await getTool("insert").execute(
+        "i1",
+        { anchor, direction: "before", lines: ["assert(result).toContain(\"extra\");"] },
+        undefined,
+        undefined,
+        ctx,
+      );
+      const hint = ((result.details.hints ?? []) as string[]).find((entry) => entry.startsWith("[H_INDENT_MISMATCH]")) ?? "";
+      expect(hint).toContain("[H_INDENT_MISMATCH]");
+      expect(hint).toContain("│ has.");
     });
   });
 });

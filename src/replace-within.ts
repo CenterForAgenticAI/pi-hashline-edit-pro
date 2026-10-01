@@ -13,7 +13,7 @@ import {
   normalizeReplaceWithinRequest,
   type ReplaceWithinReq,
 } from "./payload-contract";
-import { literalEscapeHint, splitLines } from "./utils";
+import { literalEscapeHints, splitLines } from "./utils";
 import { toLF } from "./normalize";
 import { MAX_RANGE_STALE_LINES } from "./constants";
 import {
@@ -178,10 +178,7 @@ export function buildReplaceWithinToolDef(flags: EditToolFlags = DEFAULT_EDIT_FL
         const req = normalized;
         const { refs, warnings } = parseWithinAnchors(req);
         await throwIfStrictInput(warnings);
-        const hints = [
-          literalEscapeHint([req.replace_old], "replace_old"),
-          literalEscapeHint([req.replace_new], "replace_new"),
-        ].filter((hint): hint is string => hint !== undefined);
+        const hints = [...literalEscapeHints([req.replace_old], "replace_old"), ...literalEscapeHints([req.replace_new], "replace_new")];
         const targetPath = await resolveEditTargetWithRequirement({
           removeFrom: req.replace_from,
           removeTo: req.replace_to,

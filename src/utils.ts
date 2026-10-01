@@ -380,6 +380,7 @@ function normalizeEditLines(record: Record<string, unknown>): void {
 const LITERAL_ESCAPE_RE = /\\(?:u([0-9a-fA-F]{4})|([ntr"]))/g;
 
 const REAL_LINE_BREAK_RE = /[\n\r]/;
+const MAX_LITERAL_ESCAPE_HINTS = 3;
 
 function isSurrogateEscapePair(line: string, index: number, hex: string): boolean {
 	const code = Number.parseInt(hex, 16);
@@ -398,7 +399,9 @@ function isSurrogateEscapePair(line: string, index: number, hex: string): boolea
 	return false;
 }
 
-export function literalEscapeHint(lines: string[], label: string): string | undefined {
+export function literalEscapeHints(lines: string[], label: string): string[] {
+	const hints: string[] = [];
+	const seen = new Set<string>();
 	for (const line of lines) {
 		if (!line.includes("\\")) continue;
 		const hasRealBreak = REAL_LINE_BREAK_RE.test(line);
@@ -410,8 +413,12 @@ export function literalEscapeHint(lines: string[], label: string): string | unde
 				if (hex.toLowerCase() === "dddd") continue;
 				if (isSurrogateEscapePair(line, match.index, hex)) continue;
 			}
-			return `[H_LITERAL_ESCAPE] "${label}" contains the literal escaped text "${match[0]}"`;
+			const text = match[0];
+			if (seen.has(text)) continue;
+			seen.add(text);
+			hints.push(`[H_LITERAL_ESCAPE] "${label}" contains the literal escaped text "${text}"`);
+			if (hints.length >= MAX_LITERAL_ESCAPE_HINTS) return hints;
 		}
 	}
-	return undefined;
+	return hints;
 }

@@ -6,10 +6,34 @@ const INVISIBLE_RE = /\p{Default_Ignorable_Code_Point}/u;
 const LOOKALIKE_SPACE_RE = /[\u00a0\u1680\u2000-\u200a\u202f\u205f\u3000]/u;
 const LOOKALIKE_DASH_RE = /[\u2010-\u2015\u2212]/u;
 const LOOKALIKE_QUOTE_RE = /[\u2018\u2019\u201c\u201d]/u;
-const LOOKALIKE_PUNCT_RE = /[\u3002\uff0e\uff61]/u;
+const FULLWIDTH_PUNCT_RANGES: ReadonlyArray<readonly [number, number]> = [
+  [0xff01, 0xff0f],
+  [0xff1a, 0xff20],
+  [0xff3b, 0xff40],
+  [0xff5b, 0xff5e],
+];
+const IDEOGRAPHIC_PUNCT_SUBSTITUTES: Readonly<Record<string, string>> = {
+  "\u3001": ",",
+  "\u3002": ".",
+  "\uff61": ".",
+  "\uff64": ",",
+};
+const FULLWIDTH_PUNCT_SUBSTITUTES: Readonly<Record<string, string>> = Object.fromEntries(
+  FULLWIDTH_PUNCT_RANGES.flatMap(([start, end]): Array<[string, string]> =>
+    Array.from({ length: end - start + 1 }, (_, offset): [string, string] => {
+      const code = start + offset;
+      return [String.fromCodePoint(code), String.fromCodePoint(code - 0xfee0)];
+    }),
+  ),
+);
+const LOOKALIKE_PUNCT_RE = new RegExp(
+  `[${FULLWIDTH_PUNCT_RANGES.map(([start, end]) => `${String.fromCodePoint(start)}-${String.fromCodePoint(end)}`).join("")}${Object.keys(IDEOGRAPHIC_PUNCT_SUBSTITUTES).join("")}]`,
+  "u",
+);
 const MAX_FIDELITY_HINTS = 3;
 const INSERT_REFERENCE_WINDOW = 5;
 const SIMILARITY_RUN = 10;
+const INDENT_SIMILARITY_RUN = 8;
 const INSERT_GRAM_BUDGET = 200_000;
 const REFERENCE_INDENT = " ".repeat(HASH_LEN + HASH_SEP.length);
 
@@ -41,9 +65,8 @@ const LOOKALIKE_SUBSTITUTES: Readonly<Record<string, string>> = {
   "\u2019": "'",
   "\u201c": "\"",
   "\u201d": "\"",
-  "\u3002": ".",
-  "\uff0e": ".",
-  "\uff61": ".",
+  ...FULLWIDTH_PUNCT_SUBSTITUTES,
+  ...IDEOGRAPHIC_PUNCT_SUBSTITUTES,
 };
 
 export function isFidelitySensitiveChar(char: string): boolean {
@@ -59,16 +82,11 @@ interface ReferenceRow {
   index: number;
 }
 
-function renderReferenceRow(reference: ReferenceRow, anchor: string | undefined): string {
-  const prefix = anchor === undefined ? " ".repeat(HASH_LEN) : anchor;
-  return `${prefix}${HASH_SEP}${reference.line}`;
-}
-
 function hiddenCharHint(char: string, reference: ReferenceRow, anchor: string | undefined): string {
   const column = [...reference.line].indexOf(char) + 1;
+  const label = anchor === undefined ? "" : ` that ${anchor}${HASH_SEP} has`;
   return [
-    `[H_UNICODE_LOST] The new text is missing ${formatCodePoint(char)}.`,
-    renderReferenceRow(reference, anchor),
+    `[H_UNICODE_LOST] The new text is missing ${formatCodePoint(char)}${label}.`,
     `${REFERENCE_INDENT}└ ${formatCodePoint(char)} at col ${column}`,
   ].join("\n");
 }
@@ -142,23 +160,21 @@ function swappedCandidate(line: string, matches: IndexedLine[], spanStart: numbe
   return candidates.find((candidate) => candidate.reference.index >= spanStart && candidate.reference.index <= spanEnd) ?? candidates[0];
 }
 
-function swappedCharHint(swapped: SwappedChar, reference: ReferenceRow, anchor: string | undefined): string {
+function swappedCharHint(swapped: SwappedChar, anchor: string | undefined): string {
   const label = anchor === undefined ? "the replaced line" : `${anchor}${HASH_SEP}`;
   return [
     `[H_UNICODE_SWAPPED] The new text uses ${formatCodePoint(swapped.newChar)} where ${label} uses ${formatCodePoint(swapped.oldChar)}.`,
-    renderReferenceRow(reference, anchor),
     `${REFERENCE_INDENT}└ ${formatCodePoint(swapped.oldChar)} at col ${swapped.column} → ${formatCodePoint(swapped.newChar)}`,
   ].join("\n");
 }
 
-function trailingWhitespaceHint(oldLine: string, newLine: string, reference: ReferenceRow, anchor: string | undefined): string {
+function trailingWhitespaceHint(oldLine: string, newLine: string, anchor: string | undefined): string {
   const oldTrail = oldLine.length - oldLine.trimEnd().length;
   const newTrail = newLine.length - newLine.trimEnd().length;
   const column = newLine.trimEnd().length + 1;
   const label = anchor === undefined ? "the replaced line" : `${anchor}${HASH_SEP}`;
   return [
     `[H_TRAILING_WHITESPACE] The new text differs from ${label} only by trailing whitespace.`,
-    renderReferenceRow(reference, anchor),
     `${REFERENCE_INDENT}└ ${newTrail} trailing whitespace character(s) at col ${column}; the replaced line had ${oldTrail}.`,
   ].join("\n");
 }
@@ -172,12 +188,11 @@ function indentMismatchHint(payloadLine: string, reference: ReferenceRow, anchor
   const payloadIndent = leadingWhitespace(payloadLine);
   const referenceIndent = leadingWhitespace(reference.line);
   if (payloadIndent.length >= referenceIndent.length || !referenceIndent.startsWith(payloadIndent)) return undefined;
-  const grams = gramSet([payloadLine], SIMILARITY_RUN);
-  if (grams === undefined || !sharesRun(reference.line, grams, SIMILARITY_RUN)) return undefined;
+  const grams = gramSet([payloadLine], INDENT_SIMILARITY_RUN);
+  if (grams === undefined || !sharesRun(reference.line, grams, INDENT_SIMILARITY_RUN)) return undefined;
   const label = anchor === undefined ? "the nearby line" : `${anchor}${HASH_SEP}`;
   return [
     `[H_INDENT_MISMATCH] The new line is missing leading whitespace that ${label} has.`,
-    renderReferenceRow(reference, anchor),
     `${REFERENCE_INDENT}└ expected ${referenceIndent.length} leading whitespace character(s) at col 1; the new line has ${payloadIndent.length}.`,
   ].join("\n");
 }
@@ -257,7 +272,7 @@ export function annotateLiteralEscapeHints(
     const rows = literalEscapeHintRows(resultContent, spans, resultHashes, escape);
     if (rows.length === 0) return hint;
     const shown = rows.slice(0, MAX_LITERAL_ESCAPE_ROWS);
-    const lines = shown.map((row) => `${renderReferenceRow(row, resultHashes[row.index])}\n${REFERENCE_INDENT}└ "${escape}" at col ${literalEscapeColumn(row.line, escape)}`);
+    const lines = shown.map((row) => `${REFERENCE_INDENT}└ ${resultHashes[row.index]!}${HASH_SEP} at col ${literalEscapeColumn(row.line, escape)}`);
     if (rows.length > shown.length) lines.push(`${REFERENCE_INDENT}... (+${rows.length - shown.length} more line(s))`);
     return `${hint}\n${lines.join("\n")}`;
   });
@@ -339,15 +354,22 @@ export function fidelityHints(
         const key = `swap:${candidate.reference.index}:${candidate.swapped.oldChar}`;
         if (seen.has(key)) continue;
         seen.add(key);
-        hints.push(swappedCharHint(candidate.swapped, candidate.reference, originalHashes?.[candidate.reference.index]));
+        hints.push(swappedCharHint(candidate.swapped, originalHashes?.[candidate.reference.index]));
       }
-      const indentPairs: Array<{ payloadLine: string; reference: ReferenceRow }> = carried !== undefined
-        ? payload.map((payloadLine) => ({ payloadLine, reference: { line: oldLines[span.start] ?? "", index: span.start } }))
-        : removed.length === payload.length
-          ? payload.map((payloadLine, index) => ({ payloadLine, reference: { line: removed[index]!, index: span.start + index } }))
-          : [];
-      for (const { payloadLine, reference } of indentPairs) {
+      const indentReferenceFor = (payloadIndex: number): ReferenceRow | undefined => {
+        if (carried !== undefined) {
+          return references.find((candidate) => indentMismatchHint(payload[payloadIndex]!, candidate, undefined) !== undefined);
+        }
+        if (removed.length === payload.length) {
+          return { line: removed[payloadIndex]!, index: span.start + payloadIndex };
+        }
+        return undefined;
+      };
+      for (let index = 0; index < payload.length; index += 1) {
         if (hints.length >= MAX_FIDELITY_HINTS) break;
+        const payloadLine = payload[index]!;
+        const reference = indentReferenceFor(index);
+        if (reference === undefined) continue;
         const indentHint = indentMismatchHint(payloadLine, reference, originalHashes?.[reference.index]);
         if (indentHint === undefined) continue;
         const key = `indent:${reference.index}:${payloadLine}`;
@@ -364,7 +386,7 @@ export function fidelityHints(
           const key = `trailing:${span.start + index}`;
           if (seen.has(key)) continue;
           seen.add(key);
-          hints.push(trailingWhitespaceHint(oldLine, newLine, { line: newLine, index: span.start + index }, originalHashes?.[span.start + index]));
+          hints.push(trailingWhitespaceHint(oldLine, newLine, originalHashes?.[span.start + index]));
         }
       }
     }

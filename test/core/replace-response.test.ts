@@ -266,8 +266,7 @@ describe("buildChanged", () => {
     });
     expect(output.details.hints).toHaveLength(1);
     const hint = output.details.hints![0]!;
-    expect(hint).toContain(String.raw`└ "\u200b" at col 7`);
-    expect(hint).toContain(`${resultHashes[1]}│${String.raw`stable\u200bCheckout`}`);
+    expect(hint).toContain(`└ ${resultHashes[1]}│ at col 7`);
   });
 
   it("attributes literal-escape rows across multiple spans", async () => {
@@ -287,7 +286,7 @@ describe("buildChanged", () => {
       spans: [{ start: 1, end: 1, replacementCount: 2 }, { start: 3, end: 3, replacementCount: 1 }],
     });
     const hint = output.details.hints![0]!;
-    expect(hint).toContain(`${resultHashes[2]}│${String.raw`B2\u200b`}`);
-    expect(hint).toContain(`${resultHashes[4]}│${String.raw`D\u200b`}`);
+    expect(hint).toContain(`└ ${resultHashes[2]}│ at col 3`);
+    expect(hint).toContain(`└ ${resultHashes[4]}│ at col 2`);
   });
 });

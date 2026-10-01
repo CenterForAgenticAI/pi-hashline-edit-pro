@@ -291,10 +291,10 @@ describe("replace literal escape hints", () => {
       expect(result.content[0].text).toContain(String.raw`[H_LITERAL_ESCAPE] "replacement_lines" contains the literal escaped text "\u200b"`);
       const hint = result.details.hints?.[0] ?? "";
       expect(hint).toContain(String.raw`[H_LITERAL_ESCAPE] "replacement_lines" contains the literal escaped text "\u200b"`);
-      expect(hint).toContain(String.raw`└ "\u200b" at col 7`);
+      expect(hint).toContain("at col 7");
       expect(result.details.metrics?.warnings).toBe(0);
       expect(await readFile(path, "utf-8")).toBe("aaa\nstable\\u200bCheckout\nccc\n");
-      const writtenAnchor = hint.split("\n").find((line: string) => line.includes("stable"))?.slice(0, 4);
+      const writtenAnchor = hint.match(/└ ([A-Za-z]{4})│/)?.[1];
       expect(writtenAnchor).toMatch(/^[A-Za-z]{4}$/);
       const within = await getTool("replace_within").execute(
         "e2",

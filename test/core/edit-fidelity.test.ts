@@ -28,9 +28,26 @@ describe("isFidelitySensitiveChar", () => {
     expect(isFidelitySensitiveChar(NNBSP)).toBe(true);
     expect(isFidelitySensitiveChar("\u201c")).toBe(true);
     expect(isFidelitySensitiveChar("\u2212")).toBe(true);
+    expect(isFidelitySensitiveChar("\u3001")).toBe(true);
     expect(isFidelitySensitiveChar("\u3002")).toBe(true);
+    expect(isFidelitySensitiveChar("\uff0c")).toBe(true);
     expect(isFidelitySensitiveChar("\uff0e")).toBe(true);
+    expect(isFidelitySensitiveChar("\uff1a")).toBe(true);
+    expect(isFidelitySensitiveChar("\uff1f")).toBe(true);
     expect(isFidelitySensitiveChar("\uff61")).toBe(true);
+    expect(isFidelitySensitiveChar("\uff64")).toBe(true);
+  });
+
+  it("covers the fullwidth ASCII punctuation ranges but not letters or digits", () => {
+    const ranges: Array<[number, number]> = [[0xff01, 0xff0f], [0xff1a, 0xff20], [0xff3b, 0xff40], [0xff5b, 0xff5e]];
+    for (const [start, end] of ranges) {
+      for (let code = start; code <= end; code += 1) {
+        expect(isFidelitySensitiveChar(String.fromCodePoint(code)), `U+${code.toString(16)}`).toBe(true);
+      }
+    }
+    for (const code of [0xff10, 0xff19, 0xff21, 0xff3a, 0xff41, 0xff5a]) {
+      expect(isFidelitySensitiveChar(String.fromCodePoint(code)), `U+${code.toString(16)}`).toBe(false);
+    }
   });
 
   it("leaves plain text and regular punctuation alone", () => {
@@ -39,6 +56,8 @@ describe("isFidelitySensitiveChar", () => {
     expect(isFidelitySensitiveChar("-")).toBe(false);
     expect(isFidelitySensitiveChar(",")).toBe(false);
     expect(isFidelitySensitiveChar("é")).toBe(false);
+    expect(isFidelitySensitiveChar("\uff10")).toBe(false);
+    expect(isFidelitySensitiveChar("\uff21")).toBe(false);
   });
 });
 
@@ -48,14 +67,14 @@ describe("fidelityHints", () => {
     expect(fidelityHints("a\n", "b\n", [])).toEqual([]);
   });
 
-  it("flags a dropped zero-width space and renders the row and column", () => {
+  it("flags a dropped zero-width space and names the anchor and column", () => {
     const old = `x\n\t{ID: "checkout-5", Feature: "legacy${ZWSP}Checkout", Retries: 3},\ny\n`;
     const result = `x\n\t{ID: "checkout-5", Feature: "stableCheckout", Retries: 3},\ny\n`;
     const row = `\t{ID: "checkout-5", Feature: "legacy${ZWSP}Checkout", Retries: 3},`;
     const hints = fidelityHints(old, result, [replaceSpan(1, 1, 1)], ANCHORS);
     expect(hints).toHaveLength(1);
     expect(hints[0]).toContain("[H_UNICODE_LOST]");
-    expect(hints[0]).toContain(`Bbbb│${row}`);
+    expect(hints[0]).toContain("that Bbbb│ has");
     expect(hints[0]).toContain(`└ U+200B at col ${row.indexOf(ZWSP) + 1}`);
     expect(hints[0].split("\n")[0]).toContain("U+200B");
   });
@@ -70,7 +89,7 @@ describe("fidelityHints", () => {
     const hints = fidelityHints(`legacy${NBSP}Checkout\n`, "stableCheckout\n", [replaceSpan(0, 0, 1)], ANCHORS);
     expect(hints).toHaveLength(1);
     expect(hints[0]).toContain("U+00A0");
-    expect(hints[0]).toContain(`Aaaa│legacy${NBSP}Checkout`);
+    expect(hints[0]).toContain("that Aaaa│ has");
   });
 
   it("flags dropped smart quotes and look-alike dashes when other text also changed", () => {
@@ -96,7 +115,7 @@ describe("fidelityHints", () => {
     const row = `- status: done${WORD_JOINER}`;
     const hints = fidelityHints(old, result, [insertSpan(1, 2, 0)], ANCHORS);
     expect(hints).toHaveLength(1);
-    expect(hints[0]).toContain(`Bbbb│${row}`);
+    expect(hints[0]).toContain("that Bbbb│ has");
     expect(hints[0]).toContain(`└ U+2060 at col ${row.indexOf(WORD_JOINER) + 1}`);
     expect(hints[0].split("\n")[0]).toContain("U+2060");
   });
@@ -108,7 +127,7 @@ describe("fidelityHints", () => {
     expect(hints).toHaveLength(1);
     expect(hints[0]).toContain("[H_UNICODE_LOST]");
     expect(hints[0]).toContain("U+00A0");
-    expect(hints[0]).toContain("// END serializes checkout");
+    expect(hints[0]).toContain("that Bbbb│ has");
   });
 
   it("does not flag hidden characters for inserted lines that do not match the context", () => {
@@ -124,7 +143,7 @@ describe("fidelityHints", () => {
     expect(hints).toHaveLength(1);
     expect(hints[0]).toContain("[H_INDENT_MISMATCH]");
     expect(hints[0]).toContain("└ expected 2 leading whitespace character(s) at col 1; the new line has 0.");
-    expect(hints[0]).toContain("Bbbb│  - id: checkout-5");
+    expect(hints[0]).toContain("that Bbbb│ has");
   });
 
   it("stays silent when the inserted line keeps the anchor line's indentation", () => {
@@ -140,6 +159,21 @@ describe("fidelityHints", () => {
     expect(hints).toHaveLength(1);
     expect(hints[0]).toContain("[H_INDENT_MISMATCH]");
     expect(hints[0]).toContain("expected 1 leading whitespace character(s) at col 1; the new line has 0.");
+  });
+
+  it("flags an unindented inserted line that echoes a nearby body line", () => {
+    const old = `a\n  assert(result).toEqual(expected);\n});\n`;
+    const result = `a\n  assert(result).toEqual(expected);\nassert(result).toContain("extra");\n});\n`;
+    const hints = fidelityHints(old, result, [insertSpan(2, 2, 1)], ANCHORS);
+    expect(hints).toHaveLength(1);
+    expect(hints[0]).toContain("[H_INDENT_MISMATCH]");
+    expect(hints[0]).toContain("that Bbbb│ has");
+  });
+
+  it("does not flag an unindented inserted line when no nearby row shares a long run", () => {
+    const old = `a\n  const y = 2;\n});\n`;
+    const result = `a\n  const y = 2;\nconst x = 1;\n});\n`;
+    expect(fidelityHints(old, result, [insertSpan(2, 2, 1)], ANCHORS)).toEqual([]);
   });
 
   it("does not flag a dedented line that shares no long run with the replaced line", () => {
@@ -182,7 +216,7 @@ describe("fidelityHints", () => {
     const result = "keep\nAB\nmid\nCD\ntail\n";
     const hints = fidelityHints(old, result, [replaceSpan(1, 1, 1), replaceSpan(3, 3, 1)], ANCHORS);
     expect(hints).toHaveLength(1);
-    expect(hints[0]).toContain("Bbbb│a");
+    expect(hints[0]).toContain("that Bbbb│ has");
     expect(hints[0]).toContain("U+200B");
   });
 
@@ -200,7 +234,7 @@ describe("fidelityHints", () => {
     const hints = fidelityHints(old, result, [replaceSpan(1, 1, 1)], ANCHORS);
     expect(hints).toHaveLength(1);
     expect(hints[0]).toContain("[H_UNICODE_SWAPPED]");
-    expect(hints[0]).toContain(`Bbbb│legacy${ZWSP}Checkout`);
+    expect(hints[0]).toContain("where Bbbb│ uses U+200B");
     expect(hints[0]).toContain("U+200B");
     expect(hints[0]).toContain("U+200D");
   });
@@ -211,24 +245,22 @@ describe("fidelityHints", () => {
     const hints = fidelityHints(old, result, [replaceSpan(2, 2, 1)], ANCHORS);
     expect(hints).toHaveLength(1);
     expect(hints[0]).toContain("[H_UNICODE_SWAPPED]");
-    expect(hints[0]).toContain(`Aaaa│template${ZWSP}entry`);
+    expect(hints[0]).toContain("where Aaaa│ uses U+200B");
   });
 
-  it("flags a full-width full stop where a neighboring row uses an ASCII period", () => {
-    const clean = "Vérifiez le reçu. Проверьте чек. 检查收据. تحقق من الإيصال.";
-    const swapped = "Vérifiez le reçu. Проверьте чек. 检查收据。 تحقق من الإيصال.";
-    const old = `head\n${clean}\ntail\n`;
-    const result = `head\n${swapped}\ntail\n`;
+  it("flags fullwidth punctuation used in place of its ASCII counterpart", () => {
+    const old = `head\nconst flag = true;\ntail\n`;
+    const result = `head\nconst flag ＝ true;\ntail\n`;
     const hints = fidelityHints(old, result, [insertSpan(0, 2, 0)], ANCHORS);
     expect(hints).toHaveLength(1);
     expect(hints[0]).toContain("[H_UNICODE_SWAPPED]");
-    expect(hints[0]).toContain("U+3002");
-    expect(hints[0]).toContain("U+002E");
-    expect(hints[0]).toContain(`Bbbb│${clean}`);
+    expect(hints[0]).toContain("U+FF1D");
+    expect(hints[0]).toContain("U+003D");
+    expect(hints[0]).toContain("where Bbbb│ uses U+003D");
   });
 
-  it("stays silent when a full-width full stop is normalized to an ASCII period", () => {
-    expect(fidelityHints("say 完了。\n", "say 完了.\n", [replaceSpan(0, 0, 1)], ANCHORS)).toEqual([]);
+  it("stays silent when fullwidth punctuation is normalized to ASCII", () => {
+    expect(fidelityHints("value ＝ 1\n", "value = 1\n", [replaceSpan(0, 0, 1)], ANCHORS)).toEqual([]);
   });
 
   it("stays silent when a replaced line keeps its invisible characters", () => {
@@ -243,7 +275,7 @@ describe("fidelityHints", () => {
     const hints = fidelityHints(old, result, [replaceSpan(1, 1, 1)], ANCHORS);
     expect(hints).toHaveLength(1);
     expect(hints[0]).toContain("[H_TRAILING_WHITESPACE]");
-    expect(hints[0]).toContain("Bbbb│target ");
+    expect(hints[0]).toContain("at col 7");
     expect(hints[0]).toContain("the replaced line had 0");
   });
 

@@ -11,7 +11,7 @@ import { stripAnchorRow } from "./hashline/resolve";
 import { withAnchorSession } from "./anchor-registry";
 import { loadP, loadGuide } from "./prompts";
 import { assertInsertReq, normReq, type InsertReq } from "./payload-contract";
-import { isRec, literalEscapeHint, splitLines } from "./utils";
+import { isRec, literalEscapeHints, splitLines } from "./utils";
 import { queuedEdit, editToolBase, editRenderCallWrapper, editRenderResultWrapper, resolveEditTargetWithRequirement, throwIfStrictInput, withInsertPrompts, DEFAULT_EDIT_FLAGS, type EditToolFlags } from "./edit-common";
 import type { RPreview, RRState } from "./replace-render";
 export { assertInsertReq, type InsertReq };
@@ -177,9 +177,7 @@ export function buildInsertToolDef(flags: EditToolFlags = DEFAULT_EDIT_FLAGS): I
         const canonical = normReq(params);
         assertInsertReq(canonical);
         const req = canonical;
-        const insertWarnings: string[] = [];
-        const literalEscape = literalEscapeHint([req.lines], "lines");
-        if (literalEscape !== undefined) insertWarnings.push(literalEscape);
+        const insertWarnings: string[] = [...literalEscapeHints([req.lines], "lines")];
         const targetPath = await resolveEditTargetWithRequirement({
           anchor: req.anchor,
           providedPath: req.path,

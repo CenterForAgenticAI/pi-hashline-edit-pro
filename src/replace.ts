@@ -10,7 +10,7 @@ import {
 } from "./replace-diff";
 import { readNormFile, type NormFile } from "./file-reader";
 import { editToolSchema, buildEditToolSchema, type ReqParams, type RawReqParams, assertReq, normReq } from "./payload-contract";
-import { literalEscapeHint, splitLines } from "./utils";
+import { literalEscapeHints, splitLines } from "./utils";
 import { loadP, loadGuide } from "./prompts";
 import { type FileIdentity } from "./fs-write";
 import { applyEdit,
@@ -290,7 +290,7 @@ export function buildToolDef(flags: EditToolFlags = DEFAULT_EDIT_FLAGS): ToolDef
         const canonical = normReq(params);
         assertReq(canonical);
         const normalizedParams = canonical;
-        const literalEscape = literalEscapeHint([normalizedParams.replacement_lines], "replacement_lines");
+        const literalEscapes = literalEscapeHints([normalizedParams.replacement_lines], "replacement_lines");
         const targetPath = await resolveEditTargetWithRequirement({
           removeFrom: normalizedParams.remove_from,
           removeTo: normalizedParams.remove_to,
@@ -315,7 +315,7 @@ export function buildToolDef(flags: EditToolFlags = DEFAULT_EDIT_FLAGS): ToolDef
               absolutePath,
               mutationTargetPath,
               editAnchors: [normalizedParams.remove_from, normalizedParams.remove_to],
-              prefixWarnings: literalEscape !== undefined ? [literalEscape] : [],
+              prefixWarnings: literalEscapes,
               signal,
             });
           }
@@ -334,7 +334,7 @@ export function buildToolDef(flags: EditToolFlags = DEFAULT_EDIT_FLAGS): ToolDef
             cwd: ctx.cwd,
             signal,
             hedit: built.edit,
-            extraWarnings: [...(literalEscape !== undefined ? [literalEscape] : []), ...built.warnings],
+            extraWarnings: [...literalEscapes, ...built.warnings],
           });
         });
       });
