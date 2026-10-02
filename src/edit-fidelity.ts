@@ -32,8 +32,9 @@ const LOOKALIKE_PUNCT_RE = new RegExp(
 );
 const MAX_FIDELITY_HINTS = 3;
 const INSERT_REFERENCE_WINDOW = 12;
+const INDENT_REFERENCE_WINDOW = 2;
 const SIMILARITY_RUN = 10;
-const INDENT_SIMILARITY_RUN = 8;
+const INDENT_SIMILARITY_RUN = 14;
 const INSERT_GRAM_BUDGET = 200_000;
 const REFERENCE_INDENT = " ".repeat(HASH_LEN + HASH_SEP.length);
 
@@ -69,8 +70,9 @@ const LOOKALIKE_SUBSTITUTES: Readonly<Record<string, string>> = {
   ...IDEOGRAPHIC_PUNCT_SUBSTITUTES,
 };
 
+const REPLACEMENT_CHAR = String.fromCodePoint(0xfffd);
 export function isFidelitySensitiveChar(char: string): boolean {
-  return INVISIBLE_RE.test(char) || LOOKALIKE_SPACE_RE.test(char) || LOOKALIKE_DASH_RE.test(char) || LOOKALIKE_QUOTE_RE.test(char) || LOOKALIKE_PUNCT_RE.test(char);
+  return char === REPLACEMENT_CHAR || INVISIBLE_RE.test(char) || LOOKALIKE_SPACE_RE.test(char) || LOOKALIKE_DASH_RE.test(char) || LOOKALIKE_QUOTE_RE.test(char) || LOOKALIKE_PUNCT_RE.test(char);
 }
 
 function formatCodePoint(char: string): string {
@@ -120,7 +122,7 @@ interface SwapCandidate {
 }
 
 function containsSensitiveChar(line: string): boolean {
-  return INVISIBLE_RE.test(line) || LOOKALIKE_SPACE_RE.test(line) || LOOKALIKE_DASH_RE.test(line) || LOOKALIKE_QUOTE_RE.test(line) || LOOKALIKE_PUNCT_RE.test(line);
+  return line.includes(REPLACEMENT_CHAR) || INVISIBLE_RE.test(line) || LOOKALIKE_SPACE_RE.test(line) || LOOKALIKE_DASH_RE.test(line) || LOOKALIKE_QUOTE_RE.test(line) || LOOKALIKE_PUNCT_RE.test(line);
 }
 
 function normalizeSensitiveChars(line: string): string {
@@ -132,6 +134,33 @@ function normalizeSensitiveChars(line: string): string {
 function isLookalikeSwap(oldChar: string, newChar: string): boolean {
   if (isFidelitySensitiveChar(oldChar) && isFidelitySensitiveChar(newChar)) return true;
   return LOOKALIKE_SUBSTITUTES[newChar] === oldChar;
+}
+function sharesFidelityClass(left: string, right: string): boolean {
+  if (left === REPLACEMENT_CHAR || right === REPLACEMENT_CHAR) return isFidelitySensitiveChar(left) || isFidelitySensitiveChar(right);
+  return (
+    (INVISIBLE_RE.test(left) && INVISIBLE_RE.test(right)) ||
+    (LOOKALIKE_SPACE_RE.test(left) && LOOKALIKE_SPACE_RE.test(right)) ||
+    (LOOKALIKE_DASH_RE.test(left) && LOOKALIKE_DASH_RE.test(right)) ||
+    (LOOKALIKE_QUOTE_RE.test(left) && LOOKALIKE_QUOTE_RE.test(right)) ||
+    (LOOKALIKE_PUNCT_RE.test(left) && LOOKALIKE_PUNCT_RE.test(right))
+  );
+}
+
+function findSubstitute(char: string, reference: ReferenceRow, payload: readonly string[]): string | undefined {
+  const referenceChars = [...reference.line];
+  const column = referenceChars.indexOf(char);
+  for (const line of payload) {
+    const candidateChars = [...line];
+    if (candidateChars.length !== referenceChars.length) continue;
+    const candidate = candidateChars[column];
+    if (candidate !== undefined && candidate !== char && sharesFidelityClass(char, candidate)) return candidate;
+  }
+  for (const line of payload) {
+    for (const candidate of line) {
+      if (candidate !== char && sharesFidelityClass(char, candidate)) return candidate;
+    }
+  }
+  return undefined;
 }
 
 function swappedCharPair(oldLine: string, newLine: string): SwappedChar | undefined {
@@ -215,6 +244,7 @@ function separatorMovedHint(
   carried: number | undefined,
   payload: string[],
   anchor: string | undefined,
+  fixAnchor: string | undefined,
 ): string | undefined {
   if (carried === undefined || payload.length < 2) return undefined;
   const anchorLine = oldLines[anchorIndex] ?? "";
@@ -238,7 +268,14 @@ function separatorMovedHint(
   const remedy = side === "before"
     ? "the inserted block may need its own trailing blank line"
     : "the inserted block may need its own leading blank line";
-  return [`[H_SEPARATOR_MOVED] ${observation}`, `${REFERENCE_INDENT}└ ${remedy}`].join("\n");
+  const fix = fixAnchor === undefined ? [] : [`${REFERENCE_INDENT}└ insert a blank line after ${fixAnchor}${HASH_SEP}`];
+  return [`[H_SEPARATOR_MOVED] ${observation}`, `${REFERENCE_INDENT}└ ${remedy}`, ...fix].join("\n");
+}
+function separatorFixAnchor(span: DiffSpan, offset: number, carried: number | undefined, payloadLength: number, resultHashes: readonly string[] | undefined): string | undefined {
+  if (carried === undefined || resultHashes === undefined) return undefined;
+  const index = carried === 0 ? span.start + offset : carried === payloadLength ? span.start + offset + carried - 1 : undefined;
+  if (index === undefined || index < 0 || index >= resultHashes.length) return undefined;
+  return resultHashes[index];
 }
 
 function gramSet(lines: readonly string[], size: number): Set<string> | undefined {
@@ -307,9 +344,10 @@ export function annotateLiteralEscapeHints(
     if (escape === undefined || escape.length === 0) return hint;
     const rows = literalEscapeHintRows(resultContent, spans, resultHashes, escape);
     if (rows.length === 0) return hint;
-    const shown = rows.slice(0, MAX_LITERAL_ESCAPE_ROWS);
-    const lines = shown.map((row) => `${REFERENCE_INDENT}└ ${resultHashes[row.index]!}${HASH_SEP} at col ${literalEscapeColumn(row.line, escape)}`);
-    if (rows.length > shown.length) lines.push(`${REFERENCE_INDENT}... (+${rows.length - shown.length} more line(s))`);
+    if (rows.length > MAX_LITERAL_ESCAPE_ROWS) {
+      return `${hint}\n${REFERENCE_INDENT}└ ${rows.length} line(s) carry it; undo_last_change reverts this edit and resending with a single ${escape} fixes it in one step — do not repair rows one by one or rewrite the file with shell commands.`;
+    }
+    const lines = rows.map((row) => `${REFERENCE_INDENT}└ ${resultHashes[row.index]!}${HASH_SEP} at col ${literalEscapeColumn(row.line, escape)}`);
     return `${hint}\n${lines.join("\n")}`;
   });
 }
@@ -319,7 +357,7 @@ export function fidelityHints(
   resultContent: string,
   spans: readonly DiffSpan[] | undefined,
   originalHashes?: readonly string[],
-  options?: { separatorMoved?: boolean },
+  options?: { separatorMoved?: boolean; resultHashes?: readonly string[]; indentHints?: boolean },
 ): string[] {
   if (spans === undefined || spans.length === 0) return [];
   const oldLines = splitLines(originalContent);
@@ -384,6 +422,12 @@ export function fidelityHints(
       for (const [char, reference] of missing) {
         if (seen.has(char) || hints.length >= MAX_FIDELITY_HINTS) continue;
         seen.add(char);
+        const substitute = findSubstitute(char, reference, payload);
+        if (substitute !== undefined) {
+          seen.add(`swap:${reference.index}:${char}`);
+          hints.push(swappedCharHint({ oldChar: char, newChar: substitute, column: [...reference.line].indexOf(char) + 1 }, originalHashes?.[reference.index]));
+          continue;
+        }
         hints.push(hiddenCharHint(char, reference, originalHashes?.[reference.index]));
       }
       for (const candidate of swaps) {
@@ -394,8 +438,20 @@ export function fidelityHints(
         hints.push(swappedCharHint(candidate.swapped, originalHashes?.[candidate.reference.index]));
       }
       const indentReferenceFor = (payloadIndex: number): ReferenceRow | undefined => {
+        if (options?.indentHints === false) return undefined;
         if (carried !== undefined) {
-          return references.find((candidate) => indentMismatchHint(payload[payloadIndex]!, candidate, undefined) !== undefined);
+          let nearest: ReferenceRow | undefined;
+          let nearestDistance = Number.POSITIVE_INFINITY;
+          for (const candidate of references) {
+            if (candidate.index < span.start - INDENT_REFERENCE_WINDOW || candidate.index > span.end + INDENT_REFERENCE_WINDOW) continue;
+            if (indentMismatchHint(payload[payloadIndex]!, candidate, undefined) === undefined) continue;
+            const distance = Math.abs(candidate.index - span.start);
+            if (distance < nearestDistance) {
+              nearest = candidate;
+              nearestDistance = distance;
+            }
+          }
+          return nearest;
         }
         if (removed.length === payload.length) {
           return { line: removed[payloadIndex]!, index: span.start + payloadIndex };
@@ -415,7 +471,8 @@ export function fidelityHints(
         hints.push(indentHint);
       }
       if (options?.separatorMoved) {
-        const separatorHint = separatorMovedHint(oldLines, span.start, carried, payload, originalHashes?.[span.start]);
+        const fixAnchor = separatorFixAnchor(span, offset, carried, payload.length, options.resultHashes);
+        const separatorHint = separatorMovedHint(oldLines, span.start, carried, payload, originalHashes?.[span.start], fixAnchor);
         if (separatorHint !== undefined && hints.length < MAX_FIDELITY_HINTS) hints.push(separatorHint);
       }
       if (carried === undefined && removed.length === inserted.length) {

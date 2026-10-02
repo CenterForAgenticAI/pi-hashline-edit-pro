@@ -269,6 +269,50 @@ describe("buildChanged", () => {
     expect(hint).toContain(`└ ${resultHashes[1]}│ at col 7`);
   });
 
+  it("replaces the anchor list with the recovery when many rows carry the literal escape", async () => {
+    const original = "aaa\nbbb\nccc\n";
+    const result = "aaa\nrow-0 stable\\u200bCheckout\nrow-1 stable\\u200bCheckout\nrow-2 stable\\u200bCheckout\nrow-3 stable\\u200bCheckout\nccc\n";
+    const originalHashes = await lineHashes(original, home.testPath);
+    const resultHashes = await lineHashes(result, home.testPath);
+    const output = buildChanged({
+      path: "test.txt",
+      originalNormalized: original,
+      originalHashes,
+      result,
+      resultHashes,
+      warnings: [String.raw`[H_LITERAL_ESCAPE] "replacement_lines" contains the literal escaped text "\u200b"`],
+      snapshotId: "snap1",
+      editMeta: { editsAttempted: 1, noopEditsCount: 0, addedLines: 4, removedLines: 1 },
+      spans: [{ start: 1, end: 1, replacementCount: 4 }],
+    });
+    const hint = output.details.hints![0]!;
+    expect(hint).toContain("undo_last_change");
+    expect(hint).toContain("4 line(s) carry it");
+    expect(hint).not.toContain(" at col ");
+  });
+
+  it("skips indent hints for copied and moved results", async () => {
+    const original = "head\n  const sharedValue = compute(input);\ntail\n";
+    const result = "head\n  const sharedValue = compute(input);\nconst sharedValue = compute(input);\ntail\n";
+    const originalHashes = await lineHashes(original, home.testPath);
+    const resultHashes = await lineHashes(result, home.testPath);
+    const base = {
+      path: "test.txt",
+      originalNormalized: original,
+      originalHashes,
+      result,
+      resultHashes,
+      warnings: undefined,
+      snapshotId: "snap1",
+      editMeta: { editsAttempted: 1, noopEditsCount: 0, firstChangedLine: 3, lastChangedLine: 3, addedLines: 1, removedLines: 0 },
+      spans: [{ start: 2, end: 2, replacementCount: 2, carry: 1 }],
+    };
+    const replaced = buildChanged(base);
+    expect(replaced.details.hints?.some((hint) => hint.includes("[H_INDENT_MISMATCH]"))).toBe(true);
+    const copied = buildChanged(base, "copied");
+    expect(copied.details.hints?.some((hint) => hint.includes("[H_INDENT_MISMATCH]")) ?? false).toBe(false);
+  });
+
   it("attributes literal-escape rows across multiple spans", async () => {
     const original = "a\nb\nc\nd\n";
     const result = "a\nB1\nB2\\u200b\nc\nD\\u200b\n";

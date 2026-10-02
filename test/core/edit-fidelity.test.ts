@@ -176,6 +176,24 @@ describe("fidelityHints", () => {
     expect(fidelityHints(old, result, [insertSpan(2, 2, 1)], ANCHORS)).toEqual([]);
   });
 
+  it("does not flag a match outside the indent reference window", () => {
+    const old = `a\n  const sharedRuntimeValue = compute(input);\nfiller one\nfiller two\nfiller three\nfiller four\ntail\n`;
+    const result = `a\n  const sharedRuntimeValue = compute(input);\nfiller one\nfiller two\nfiller three\nfiller four\nconst sharedRuntimeValue = compute(input);\ntail\n`;
+    expect(fidelityHints(old, result, [insertSpan(6, 2, 1)], ANCHORS)).toEqual([]);
+  });
+
+  it("does not flag an adjacent line when the shared run is short", () => {
+    const old = `a\n  expect(hints[0]).toContain("x");\ntail\n`;
+    const result = `a\n  expect(hints[0]).toContain("x");\nexpect(hints).toHaveLength(1);\ntail\n`;
+    expect(fidelityHints(old, result, [insertSpan(2, 2, 1)], ANCHORS)).toEqual([]);
+  });
+
+  it("skips indent hints when the caller disables them", () => {
+    const old = `head\n  - id: checkout-5\ntail\n`;
+    const result = `head\n- id: checkout-11\n  - id: checkout-5\ntail\n`;
+    expect(fidelityHints(old, result, [insertSpan(1, 2, 1)], ANCHORS, { indentHints: false })).toEqual([]);
+  });
+
   it("flags an inserted block that landed against a blank-separated anchor", () => {
     const old = `alpha\n\n## Next\ntail\n`;
     const result = `alpha\n\nbody one\nbody two\n## Next\ntail\n`;
@@ -184,6 +202,22 @@ describe("fidelityHints", () => {
     expect(hints[0]).toContain("[H_SEPARATOR_MOVED]");
     expect(hints[0]).toContain("blank line above Cccc│");
     expect(hints[0]).toContain("may need its own trailing blank line");
+  });
+
+  it("names the anchor to fix when the separator moved above the anchor", () => {
+    const old = `alpha\n\n## Next\ntail\n`;
+    const result = `alpha\n\nbody one\nbody two\n## Next\ntail\n`;
+    const hints = fidelityHints(old, result, [insertSpan(2, 3, 2)], ANCHORS, { separatorMoved: true, resultHashes: ANCHORS });
+    expect(hints).toHaveLength(1);
+    expect(hints[0]).toContain(`insert a blank line after ${ANCHORS[3]}│`);
+  });
+
+  it("names the anchor to fix when the separator moved below the anchor", () => {
+    const old = `alpha\n## Next\n\ntail\n`;
+    const result = `alpha\n## Next\nbody one\nbody two\n\ntail\n`;
+    const hints = fidelityHints(old, result, [insertSpan(1, 3, 0)], ANCHORS, { separatorMoved: true, resultHashes: ANCHORS });
+    expect(hints).toHaveLength(1);
+    expect(hints[0]).toContain(`insert a blank line after ${ANCHORS[1]}│`);
   });
 
   it("flags an inserted block that landed after a blank-separated anchor", () => {
@@ -264,6 +298,28 @@ describe("fidelityHints", () => {
     expect(hints[0]).toContain("where Bbbb│ uses U+200B");
     expect(hints[0]).toContain("U+200B");
     expect(hints[0]).toContain("U+200D");
+  });
+
+  it("names the look-alike substitute when the swapped pairing misses", () => {
+    const old = `keep\nlegacy${ZWSP}Checkout\ntail\n`;
+    const result = `keep\nstable${WORD_JOINER}Checkout!\ntail\n`;
+    const hints = fidelityHints(old, result, [replaceSpan(1, 1, 1)], ANCHORS);
+    expect(hints).toHaveLength(1);
+    expect(hints[0]).toContain("[H_UNICODE_SWAPPED]");
+    expect(hints[0]).toContain("U+2060 where Bbbb│ uses U+200B");
+  });
+
+  it("names U+FFFD as the substitute for a dropped no-break space", () => {
+    const old = `keep${NBSP}value!\ntail\n`;
+    const result = `keep\uFFFDvalue!\ntail\n`;
+    const hints = fidelityHints(old, result, [replaceSpan(0, 0, 1)], ANCHORS);
+    expect(hints).toHaveLength(1);
+    expect(hints[0]).toContain("[H_UNICODE_SWAPPED]");
+    expect(hints[0]).toContain("U+FFFD where Aaaa│ uses U+00A0");
+  });
+
+  it("flags the replacement character as fidelity sensitive", () => {
+    expect(isFidelitySensitiveChar("\uFFFD")).toBe(true);
   });
 
   it("flags a swap against a matching line elsewhere in the file", () => {
