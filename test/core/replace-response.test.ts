@@ -267,7 +267,7 @@ describe("buildChanged", () => {
     expect(output.details.hints).toHaveLength(1);
     const hint = output.details.hints![0]!;
     expect(hint).toContain(`${resultHashes[1]}│ col 7`);
-    expect(hint).toContain("resend with the actual U+200B character, not the escape text.");
+    expect(hint).toContain("resend with U+200B if unintended.");
   });
 
   it("replaces the anchor list with the recovery when many rows carry the literal escape", async () => {

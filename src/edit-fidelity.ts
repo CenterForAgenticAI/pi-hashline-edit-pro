@@ -90,8 +90,9 @@ interface ReferenceRow {
 
 function hiddenCharHint(char: string, reference: ReferenceRow, anchor: string | undefined): string {
   const column = [...reference.line].indexOf(char) + 1;
+  const codePoint = formatCodePoint(char);
   const referenceNote = anchor === undefined ? "" : `; ${anchor}${HASH_SEP} has it`;
-  return `[H_UNICODE_LOST] ${formatCodePoint(char)} missing at col ${column}${referenceNote}.`;
+  return `[H_UNICODE_LOST] ${codePoint} missing at col ${column}${referenceNote}; resend with ${codePoint} if unintended.`;
 }
 
 function withCharsRestored(line: string, chars: readonly string[], replacementFor: (char: string) => string): string {
@@ -193,7 +194,8 @@ function swappedCandidate(line: string, matches: IndexedLine[], spanStart: numbe
 
 function swappedCharHint(swapped: SwappedChar, anchor: string | undefined): string {
   const label = anchor === undefined ? "the replaced line" : `${anchor}${HASH_SEP}`;
-  return `[H_UNICODE_SWAPPED] ${formatCodePoint(swapped.newChar)} at col ${swapped.column} where ${label} has ${formatCodePoint(swapped.oldChar)}.`;
+  const expected = formatCodePoint(swapped.oldChar);
+  return `[H_UNICODE_SWAPPED] ${formatCodePoint(swapped.newChar)} at col ${swapped.column} where ${label} has ${expected}; resend with ${expected} if unintended.`;
 }
 
 function trailingWhitespaceHint(oldLine: string, newLine: string, anchor: string | undefined): string {
@@ -261,7 +263,7 @@ function separatorMovedHint(
     return undefined;
   }
   const label = anchor === undefined ? "the anchor line" : `${anchor}${HASH_SEP}`;
-  return `[H_SEPARATOR_MOVED] blank separator ${side === "before" ? "above" : "below"} ${label} was displaced by the inserted text.`;
+  return `[H_SEPARATOR_MOVED] blank separator ${side === "before" ? "above" : "below"} ${label} was displaced; add a blank line ${side} ${label} if unintended.`;
 }
 
 function gramSet(lines: readonly string[], size: number): Set<string> | undefined {
@@ -329,12 +331,6 @@ function actualEscapeName(escape: string): string {
   return "the character";
 }
 
-function literalEscapeRecovery(escape: string): string {
-  const actual = actualEscapeName(escape);
-  const target = escape[1] === "u" ? `the actual ${actual} character` : actual;
-  return `resend with ${target}, not the escape text`;
-}
-
 export function annotateLiteralEscapeHints(
   hints: string[],
   resultContent: string,
@@ -352,7 +348,7 @@ export function annotateLiteralEscapeHints(
       return `${hint} on ${plural(rows.length, "row")}; undo_last_change + resend with ${actualEscapeName(escape)} if unintended.`;
     }
     const locations = rows.map((row) => `${resultHashes[row.index]!}${HASH_SEP} col ${literalEscapeColumn(row.line, escape)}`).join(", ");
-    return `${hint} (${locations}); ${literalEscapeRecovery(escape)}.`;
+    return `${hint} (${locations}); resend with ${actualEscapeName(escape)} if unintended.`;
   });
 }
 

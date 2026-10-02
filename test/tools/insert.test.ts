@@ -520,7 +520,7 @@ describe("insert indentation hints", () => {
       );
       const hint = ((result.details.hints ?? []) as string[]).find((entry) => entry.startsWith("[H_SEPARATOR_MOVED]")) ?? "";
       expect(hint).toContain("[H_SEPARATOR_MOVED]");
-      expect(hint).toContain("was displaced by the inserted text.");
+      expect(hint).toContain(`was displaced; add a blank line before ${anchor}│ if unintended.`);
       expect(await readFile(path, "utf-8")).toBe("intro\n\n## Added\n\nbody\n## Next\nend\n");
     });
   });

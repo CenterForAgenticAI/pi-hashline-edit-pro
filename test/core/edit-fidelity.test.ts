@@ -74,7 +74,8 @@ describe("fidelityHints", () => {
     const hints = fidelityHints(old, result, [replaceSpan(1, 1, 1)], ANCHORS);
     expect(hints).toHaveLength(1);
     expect(hints[0]).toContain("[H_UNICODE_LOST]");
-    expect(hints[0]).toContain("; Bbbb│ has it.");
+    expect(hints[0]).toContain("; Bbbb│ has it;");
+    expect(hints[0]).toContain("resend with U+200B if unintended.");
     expect(hints[0]).toContain(`U+200B missing at col ${row.indexOf(ZWSP) + 1}`);
     expect(hints[0].split("\n")[0]).toContain("U+200B");
   });
@@ -89,7 +90,7 @@ describe("fidelityHints", () => {
     const hints = fidelityHints(`legacy${NBSP}Checkout\n`, "stableCheckout\n", [replaceSpan(0, 0, 1)], ANCHORS);
     expect(hints).toHaveLength(1);
     expect(hints[0]).toContain("U+00A0");
-    expect(hints[0]).toContain("; Aaaa│ has it.");
+    expect(hints[0]).toContain("; Aaaa│ has it;");
   });
 
   it("flags dropped smart quotes and look-alike dashes when other text also changed", () => {
@@ -115,7 +116,7 @@ describe("fidelityHints", () => {
     const row = `- status: done${WORD_JOINER}`;
     const hints = fidelityHints(old, result, [insertSpan(1, 2, 0)], ANCHORS);
     expect(hints).toHaveLength(1);
-    expect(hints[0]).toContain("; Bbbb│ has it.");
+    expect(hints[0]).toContain("; Bbbb│ has it;");
     expect(hints[0]).toContain(`U+2060 missing at col ${row.indexOf(WORD_JOINER) + 1}`);
     expect(hints[0].split("\n")[0]).toContain("U+2060");
   });
@@ -219,7 +220,7 @@ describe("fidelityHints", () => {
     const hints = fidelityHints(old, result, [insertSpan(2, 3, 2)], ANCHORS, { separatorMoved: true });
     expect(hints).toHaveLength(1);
     expect(hints[0]).toContain("[H_SEPARATOR_MOVED]");
-    expect(hints[0]).toContain("blank separator above Cccc│ was displaced by the inserted text.");
+    expect(hints[0]).toContain("blank separator above Cccc│ was displaced; add a blank line before Cccc│ if unintended.");
   });
 
 
@@ -230,7 +231,7 @@ describe("fidelityHints", () => {
     const hints = fidelityHints(old, result, [insertSpan(1, 3, 0)], ANCHORS, { separatorMoved: true });
     expect(hints).toHaveLength(1);
     expect(hints[0]).toContain("[H_SEPARATOR_MOVED]");
-    expect(hints[0]).toContain("blank separator below Bbbb│ was displaced by the inserted text.");
+    expect(hints[0]).toContain("blank separator below Bbbb│ was displaced; add a blank line after Bbbb│ if unintended.");
   });
 
   it("does not flag the separator when the option is off or the payload is one line", () => {
@@ -297,7 +298,7 @@ describe("fidelityHints", () => {
     const result = "keep\nAB\nmid\nCD\ntail\n";
     const hints = fidelityHints(old, result, [replaceSpan(1, 1, 1), replaceSpan(3, 3, 1)], ANCHORS);
     expect(hints).toHaveLength(1);
-    expect(hints[0]).toContain("; Bbbb│ has it.");
+    expect(hints[0]).toContain("; Bbbb│ has it;");
     expect(hints[0]).toContain("U+200B");
   });
 
@@ -306,7 +307,7 @@ describe("fidelityHints", () => {
     const result = "xstableCheckout\nystableCheckout\n";
     const hints = fidelityHints(old, result, [replaceSpan(0, 0, 1), { start: 1, end: 1, replacementCount: 1 }], ANCHORS);
     expect(hints).toHaveLength(1);
-    expect(hints[0].match(/U\+200B/g)).toHaveLength(1);
+    expect(hints[0].split("[H_UNICODE_LOST]").length - 1).toBe(1);
   });
 
   it("flags a swapped invisible character on a replaced line", () => {
@@ -316,6 +317,7 @@ describe("fidelityHints", () => {
     expect(hints).toHaveLength(1);
     expect(hints[0]).toContain("[H_UNICODE_SWAPPED]");
     expect(hints[0]).toContain("where Bbbb│ has U+200B");
+    expect(hints[0]).toContain("resend with U+200B if unintended.");
     expect(hints[0]).toContain("U+200B");
     expect(hints[0]).toContain("U+200D");
   });
