@@ -34,6 +34,7 @@ const MAX_FIDELITY_HINTS = 3;
 const INSERT_REFERENCE_WINDOW = 12;
 const INDENT_REFERENCE_WINDOW = 1;
 const SIMILARITY_RUN = 10;
+const ECHO_TEXT_RE = /[\p{L}\p{N}]/u;
 const INDENT_SIMILARITY_RUN = 14;
 const CALL_HEAD_RE = /^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*\s*\(/;
 const INSERT_GRAM_BUDGET = 200_000;
@@ -266,14 +267,18 @@ function separatorMovedHint(
   return `[H_SEPARATOR_MOVED] blank separator ${side === "before" ? "above" : "below"} ${label} was displaced; add a blank line ${side} ${label} if unintended.`;
 }
 
-function gramSet(lines: readonly string[], size: number): Set<string> | undefined {
+function gramSet(lines: readonly string[], size: number, requireText = false): Set<string> | undefined {
   const grams = new Set<string>();
   let total = 0;
   for (const line of lines) {
     total += line.length;
     if (total > INSERT_GRAM_BUDGET) return undefined;
     const chars = [...line];
-    for (let index = 0; index + size <= chars.length; index += 1) grams.add(chars.slice(index, index + size).join(""));
+    for (let index = 0; index + size <= chars.length; index += 1) {
+      const gram = chars.slice(index, index + size).join("");
+      if (requireText && !ECHO_TEXT_RE.test(gram)) continue;
+      grams.add(gram);
+    }
   }
   return grams;
 }
@@ -406,7 +411,7 @@ export function fidelityHints(
       const references: ReferenceRow[] = carried === undefined
         ? removed.map((line, index) => ({ line, index: span.start + index }))
         : referenceRows(oldLines, span.start, span.end);
-      const insertGate = carried === undefined ? null : (gramSet(payload, SIMILARITY_RUN) ?? new Set<string>());
+      const insertGate = carried === undefined ? null : (gramSet(payload, SIMILARITY_RUN, true) ?? new Set<string>());
       const swapKeys = new Set<string>();
       const swaps: SwapCandidate[] = [];
       let candidates: Map<string, IndexedLine[]> | undefined;

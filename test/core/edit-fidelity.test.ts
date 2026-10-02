@@ -147,6 +147,12 @@ describe("fidelityHints", () => {
     expect(fidelityHints(old, result, [insertSpan(3, 2, 0)], ANCHORS)).toEqual([]);
   });
 
+  it("does not treat a punctuation-only shared run as an echoed reference", () => {
+    const old = `head\ntest("serializes checkout\u2011payload\u00a09001", () => {\ntail\n`;
+    const result = `head\ntest("round-trips migrated checkout samples", () => {\n    { requestId: "request-0", feature: "stableCheckout", retries: 0 },\ntest("serializes checkout\u2011payload\u00a09001", () => {\ntail\n`;
+    expect(fidelityHints(old, result, [insertSpan(0, 3, 0)], ANCHORS)).toEqual([]);
+  });
+
   it("flags an unindented inserted line that echoes the anchor line", () => {
     const old = `head\n  - id: checkout-5\ntail\n`;
     const result = `head\n- id: checkout-11\n  - id: checkout-5\ntail\n`;
