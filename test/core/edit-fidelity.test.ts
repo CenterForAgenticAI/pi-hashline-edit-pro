@@ -120,14 +120,24 @@ describe("fidelityHints", () => {
     expect(hints[0].split("\n")[0]).toContain("U+2060");
   });
 
-  it("flags a dropped non-breaking space in an inserted line that echoes another row", () => {
+  it("flags an ASCII space substituted for a no-break space in an inserted line", () => {
     const old = `head\n// END serializes checkout\u2011payload\u00a00042\ntail\n`;
     const result = `head\ntest("serializes checkout\u2011payload 9004", () => {\n// END serializes checkout\u2011payload\u00a00042\ntail\n`;
     const hints = fidelityHints(old, result, [insertSpan(0, 2, 0)], ANCHORS);
     expect(hints).toHaveLength(1);
-    expect(hints[0]).toContain("[H_UNICODE_LOST]");
-    expect(hints[0]).toContain("U+00A0");
-    expect(hints[0]).toContain("; Bbbb│ has it.");
+    expect(hints[0]).toContain("[H_UNICODE_SWAPPED]");
+    expect(hints[0]).toContain("U+0020 at col 35");
+    expect(hints[0]).toContain("where Bbbb│ has U+00A0");
+  });
+
+  it("flags an ASCII period substituted for an ideographic full stop in an inserted line", () => {
+    const old = `head\nVérifiez le reçu. Проверьте чек. 检查收据。\ntail\n`;
+    const result = `head\nVérifiez le reçu. Проверьте чек. 检查收据。\nVérifiez le reçu. Проверьте чек. 检查收据.\ntail\n`;
+    const hints = fidelityHints(old, result, [insertSpan(1, 2, 0)], ANCHORS);
+    expect(hints).toHaveLength(1);
+    expect(hints[0]).toContain("[H_UNICODE_SWAPPED]");
+    expect(hints[0]).toContain("U+002E at col");
+    expect(hints[0]).toContain("where Bbbb│ has U+3002");
   });
 
   it("does not flag hidden characters for inserted lines that do not match the context", () => {

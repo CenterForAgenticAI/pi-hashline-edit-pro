@@ -143,7 +143,8 @@ function sharesFidelityClass(left: string, right: string): boolean {
     (LOOKALIKE_SPACE_RE.test(left) && LOOKALIKE_SPACE_RE.test(right)) ||
     (LOOKALIKE_DASH_RE.test(left) && LOOKALIKE_DASH_RE.test(right)) ||
     (LOOKALIKE_QUOTE_RE.test(left) && LOOKALIKE_QUOTE_RE.test(right)) ||
-    (LOOKALIKE_PUNCT_RE.test(left) && LOOKALIKE_PUNCT_RE.test(right))
+    (LOOKALIKE_PUNCT_RE.test(left) && LOOKALIKE_PUNCT_RE.test(right)) ||
+    LOOKALIKE_SUBSTITUTES[left] === right
   );
 }
 
@@ -328,6 +329,12 @@ function actualEscapeName(escape: string): string {
   return "the character";
 }
 
+function literalEscapeRecovery(escape: string): string {
+  const actual = actualEscapeName(escape);
+  const target = escape[1] === "u" ? `the actual ${actual} character` : actual;
+  return `resend with ${target}, not the escape text`;
+}
+
 export function annotateLiteralEscapeHints(
   hints: string[],
   resultContent: string,
@@ -345,7 +352,7 @@ export function annotateLiteralEscapeHints(
       return `${hint} on ${plural(rows.length, "row")}; undo_last_change + resend with ${actualEscapeName(escape)} if unintended.`;
     }
     const locations = rows.map((row) => `${resultHashes[row.index]!}${HASH_SEP} col ${literalEscapeColumn(row.line, escape)}`).join(", ");
-    return `${hint} (${locations}).`;
+    return `${hint} (${locations}); ${literalEscapeRecovery(escape)}.`;
   });
 }
 

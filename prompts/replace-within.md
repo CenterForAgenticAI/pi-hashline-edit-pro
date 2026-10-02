@@ -2,4 +2,4 @@ Replace part of a line (or a range of lines) without retyping the rest. `replace
 
 Example: read served `Hasu│    {"name": "widget", "size": "small"},`. Call { "replace_from": "Hasu", "replace_to": "Hasu", "replace_old": "small", "replace_new": "large" }. The line becomes `    {"name": "widget", "size": "large"},` and the post-edit diff carries fresh anchors.
 
-Both strings are exact text; escapes decode once — `\uXXXX` is the character, `\\uXXXX` the literal text. Matching uses LF line breaks and excludes the last line's terminator. A missing match is refused with the current rows, a repeated match with the matching line numbers, so the retry needs no read. Nothing but the matched text changes.
+Both strings are exact text; JSON decoding happens once, before the tool; the tool writes the string it receives and never decodes — `\uXXXX` is the character, `\\uXXXX` the literal text. Matching uses LF line breaks and excludes the last line's terminator. A missing match is refused with the current rows, a repeated match with the matching line numbers, so the retry needs no read. Nothing but the matched text changes.
