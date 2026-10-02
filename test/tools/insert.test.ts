@@ -447,12 +447,12 @@ describe("insert literal escape hints", () => {
         { anchor: betaHash, direction: "after", lines: [String.raw`stable\u200bCheckout`] },
         undefined, undefined, ctx,
       );
-      expect(result.content[0].text).toContain(String.raw`[H_LITERAL_ESCAPE] "lines" contains the literal escaped text "\u200b"`);
+      expect(result.content[0].text).toContain(String.raw`[H_LITERAL_ESCAPE] lines: "\u200b" written as literal text`);
       const hint = result.details.hints?.[0] ?? "";
-      expect(hint).toContain(String.raw`[H_LITERAL_ESCAPE] "lines" contains the literal escaped text "\u200b"`);
-      expect(hint).toContain("at col 7");
+      expect(hint).toContain(String.raw`[H_LITERAL_ESCAPE] lines: "\u200b" written as literal text`);
+      expect(hint).toContain("col 7");
       expect(await readFile(path, "utf-8")).toBe("alpha\nbeta\nstable\\u200bCheckout\n");
-      const writtenAnchor = hint.match(/└ ([A-Za-z]{4})│/)?.[1];
+      const writtenAnchor = hint.match(/([A-Za-z]{4})│ col/)?.[1];
       expect(writtenAnchor).toMatch(/^[A-Za-z]{4}$/);
       const within = await getTool("replace_within").execute(
         "i2",
@@ -482,8 +482,8 @@ describe("insert indentation hints", () => {
       );
       const hint = ((result.details.hints ?? []) as string[]).find((entry) => entry.startsWith("[H_INDENT_MISMATCH]")) ?? "";
       expect(hint).toContain("[H_INDENT_MISMATCH]");
-      expect(hint).toContain("└ expected 2 leading whitespace character(s) at col 1; the new line has 0.");
-      expect(hint).toContain("│ has.");
+      expect(hint).toContain("new line has 0 leading whitespace characters;");
+      expect(hint).toContain("│ has");
       expect(await readFile(path, "utf-8")).toBe("routes:\n- id: checkout-11\n    feature: stableCheckout\n  - id: checkout-5\n    feature: legacyCheckout\n");
     });
   });
@@ -502,7 +502,7 @@ describe("insert indentation hints", () => {
       );
       const hint = ((result.details.hints ?? []) as string[]).find((entry) => entry.startsWith("[H_INDENT_MISMATCH]")) ?? "";
       expect(hint).toContain("[H_INDENT_MISMATCH]");
-      expect(hint).toContain("│ has.");
+      expect(hint).toContain("│ has");
     });
   });
 
@@ -520,8 +520,7 @@ describe("insert indentation hints", () => {
       );
       const hint = ((result.details.hints ?? []) as string[]).find((entry) => entry.startsWith("[H_SEPARATOR_MOVED]")) ?? "";
       expect(hint).toContain("[H_SEPARATOR_MOVED]");
-      expect(hint).toContain("are adjacent");
-      expect(hint).toContain("may need its own trailing blank line");
+      expect(hint).toContain("was displaced by the inserted text.");
       expect(await readFile(path, "utf-8")).toBe("intro\n\n## Added\n\nbody\n## Next\nend\n");
     });
   });

@@ -416,7 +416,7 @@ export function literalEscapeHints(lines: string[], label: string): string[] {
 			const text = match[0];
 			if (seen.has(text)) continue;
 			seen.add(text);
-			hints.push(`[H_LITERAL_ESCAPE] "${label}" contains the literal escaped text "${text}"`);
+			hints.push(`[H_LITERAL_ESCAPE] ${label}: "${text}" written as literal text`);
 			if (hints.length >= MAX_LITERAL_ESCAPE_HINTS) return hints;
 		}
 	}

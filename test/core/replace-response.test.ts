@@ -259,14 +259,14 @@ describe("buildChanged", () => {
       originalHashes,
       result,
       resultHashes,
-      warnings: [String.raw`[H_LITERAL_ESCAPE] "replacement_lines" contains the literal escaped text "\u200b"`],
+      warnings: [String.raw`[H_LITERAL_ESCAPE] replacement_lines: "\u200b" written as literal text`],
       snapshotId: "snap1",
       editMeta: { editsAttempted: 1, noopEditsCount: 0, firstChangedLine: 2, lastChangedLine: 2, addedLines: 1, removedLines: 1 },
       spans: [{ start: 1, end: 1, replacementCount: 1 }],
     });
     expect(output.details.hints).toHaveLength(1);
     const hint = output.details.hints![0]!;
-    expect(hint).toContain(`└ ${resultHashes[1]}│ at col 7`);
+    expect(hint).toContain(`${resultHashes[1]}│ col 7`);
   });
 
   it("replaces the anchor list with the recovery when many rows carry the literal escape", async () => {
@@ -280,15 +280,17 @@ describe("buildChanged", () => {
       originalHashes,
       result,
       resultHashes,
-      warnings: [String.raw`[H_LITERAL_ESCAPE] "replacement_lines" contains the literal escaped text "\u200b"`],
+      warnings: [String.raw`[H_LITERAL_ESCAPE] replacement_lines: "\u200b" written as literal text`],
       snapshotId: "snap1",
       editMeta: { editsAttempted: 1, noopEditsCount: 0, addedLines: 4, removedLines: 1 },
       spans: [{ start: 1, end: 1, replacementCount: 4 }],
     });
     const hint = output.details.hints![0]!;
     expect(hint).toContain("undo_last_change");
-    expect(hint).toContain("4 line(s) carry it");
+    expect(hint).toContain("on 4 rows");
     expect(hint).not.toContain(" at col ");
+    expect(hint).toContain("resend with U+200B if unintended.");
+    expect(hint).not.toContain("resending with a single");
   });
 
   it("skips indent hints for copied and moved results", async () => {
@@ -324,13 +326,13 @@ describe("buildChanged", () => {
       originalHashes,
       result,
       resultHashes,
-      warnings: [String.raw`[H_LITERAL_ESCAPE] "replacement_lines" contains the literal escaped text "\u200b"`],
+      warnings: [String.raw`[H_LITERAL_ESCAPE] replacement_lines: "\u200b" written as literal text`],
       snapshotId: "snap1",
       editMeta: { editsAttempted: 2, noopEditsCount: 0, firstChangedLine: 2, lastChangedLine: 5, addedLines: 3, removedLines: 2 },
       spans: [{ start: 1, end: 1, replacementCount: 2 }, { start: 3, end: 3, replacementCount: 1 }],
     });
     const hint = output.details.hints![0]!;
-    expect(hint).toContain(`└ ${resultHashes[2]}│ at col 3`);
-    expect(hint).toContain(`└ ${resultHashes[4]}│ at col 2`);
+    expect(hint).toContain(`${resultHashes[2]}│ col 3`);
+    expect(hint).toContain(`${resultHashes[4]}│ col 2`);
   });
 });

@@ -38,10 +38,15 @@ export async function currentEditFlags(): Promise<EditToolFlags> {
   };
 }
 
+function preferenceGuideline(flags: EditToolFlags): string {
+  const tools = gatedEditOps(["replace", "replace_within", "insert", "copy", "move", "undo_last_change"], flags);
+  return `Prefer the hashline edit tools for anything that touches files: ${joinOps(tools, { backtick: true })}.`;
+}
+
 export function withReplacePrompts(base: { description: string; snippet: string; guidelines: string[] }, flags: EditToolFlags): { description: string; snippet: string; guidelines: string[] } {
   let description = base.description;
   const snippetParts = [base.snippet];
-  let guidelines = [...base.guidelines];
+  let guidelines = [preferenceGuideline(flags), ...base.guidelines];
   if (!flags.autoRead) {
     description = description.replace(/\n\nExample:[\s\S]*$/, "");
     guidelines = guidelines.filter((guideline) => !guideline.includes("post-edit diff"));
@@ -64,14 +69,15 @@ export function withReplacePrompts(base: { description: string; snippet: string;
 }
 
 export function withReadPrompts(base: { description: string; snippet: string; guidelines: string[] }, flags: EditToolFlags): { description: string; snippet: string; guidelines: string[] } {
+  const preference = preferenceGuideline(flags);
   if (flags.autoReadAllActive) {
     const rewritten = base.guidelines
       .filter((guideline) => !guideline.includes("call again after an edit"))
-    return { description: base.description, snippet: base.snippet, guidelines: [...rewritten] };
+    return { description: base.description, snippet: base.snippet, guidelines: [preference, ...rewritten] };
   }
   const withoutAutoReadAll = base.guidelines.filter((guideline) => !guideline.includes("E_AUTO_READ_ALL"))
-  if (flags.autoRead) return { description: base.description, snippet: base.snippet, guidelines: [...withoutAutoReadAll] };
-  const guidelines = [...withoutAutoReadAll];
+  if (flags.autoRead) return { description: base.description, snippet: base.snippet, guidelines: [preference, ...withoutAutoReadAll] };
+  const guidelines = [preference, ...withoutAutoReadAll];
   const mapped = guidelines.map((guideline) => guideline.startsWith("`read`: call again after an edit") ? "`read`: call again after an edit when you need anchors you lack." : guideline);
   return { description: base.description, snippet: base.snippet, guidelines: mapped };
 }

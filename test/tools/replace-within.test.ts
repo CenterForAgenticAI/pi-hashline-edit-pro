@@ -199,7 +199,7 @@ describe("replace_within", () => {
         { replace_from: anchor, replace_to: anchor, replace_old: "beta", replace_new: String.raw`stable\u200bCheckout` },
         undefined, undefined, ctx,
       );
-      expect(result.details.hints).toContainEqual(expect.stringContaining('[H_LITERAL_ESCAPE] "replace_new"'));
+      expect(result.details.hints).toContainEqual(expect.stringContaining('[H_LITERAL_ESCAPE] replace_new:'));
       expect(result.details.metrics?.warnings).toBe(0);
     });
   });

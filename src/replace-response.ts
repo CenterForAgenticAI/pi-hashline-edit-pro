@@ -140,7 +140,7 @@ export function buildChanged(input: SuccessInput, verb = "replaced", diffContext
   const diffResult = genDiff(originalNormalized, result, diffContextLines, resultHashes, originalHashes, undefined, spans);
   const addedLines = editMeta.addedLines;
   const removedLines = editMeta.removedLines;
-  const fidelity = fidelityHints(originalNormalized, result, spans, originalHashes, { separatorMoved: verb === "inserted" || verb === "edited", resultHashes, indentHints: verb !== "copied" && verb !== "moved" });
+  const fidelity = fidelityHints(originalNormalized, result, spans, originalHashes, { separatorMoved: verb === "inserted" || verb === "edited", indentHints: verb !== "copied" && verb !== "moved" });
   const { warnings: noticeWarnings, hints } = splitNotices(fidelity.length > 0 ? [...(warnings ?? []), ...fidelity] : warnings);
   const annotatedHints = annotateLiteralEscapeHints(hints, result, spans, resultHashes);
   const noticesBlock = `${warnBlock(noticeWarnings)}${hintBlock(annotatedHints)}`;

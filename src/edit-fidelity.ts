@@ -1,5 +1,5 @@
 import { splitLines } from "./utils";
-import { HASH_LEN, HASH_SEP, canon } from "./hashline";
+import { HASH_SEP, canon } from "./hashline";
 import type { DiffSpan } from "./replace-diff";
 
 const INVISIBLE_RE = /\p{Default_Ignorable_Code_Point}/u;
@@ -32,11 +32,11 @@ const LOOKALIKE_PUNCT_RE = new RegExp(
 );
 const MAX_FIDELITY_HINTS = 3;
 const INSERT_REFERENCE_WINDOW = 12;
-const INDENT_REFERENCE_WINDOW = 2;
+const INDENT_REFERENCE_WINDOW = 1;
 const SIMILARITY_RUN = 10;
 const INDENT_SIMILARITY_RUN = 14;
+const CALL_HEAD_RE = /^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*\s*\(/;
 const INSERT_GRAM_BUDGET = 200_000;
-const REFERENCE_INDENT = " ".repeat(HASH_LEN + HASH_SEP.length);
 
 const LOOKALIKE_SUBSTITUTES: Readonly<Record<string, string>> = {
   "\u00a0": " ",
@@ -79,6 +79,10 @@ function formatCodePoint(char: string): string {
   return `U+${char.codePointAt(0)!.toString(16).toUpperCase().padStart(4, "0")}`;
 }
 
+function plural(count: number, noun: string): string {
+  return `${count} ${noun}${count === 1 ? "" : "s"}`;
+}
+
 interface ReferenceRow {
   line: string;
   index: number;
@@ -86,11 +90,8 @@ interface ReferenceRow {
 
 function hiddenCharHint(char: string, reference: ReferenceRow, anchor: string | undefined): string {
   const column = [...reference.line].indexOf(char) + 1;
-  const label = anchor === undefined ? "" : ` that ${anchor}${HASH_SEP} has`;
-  return [
-    `[H_UNICODE_LOST] The new text is missing ${formatCodePoint(char)}${label}.`,
-    `${REFERENCE_INDENT}└ ${formatCodePoint(char)} at col ${column}`,
-  ].join("\n");
+  const referenceNote = anchor === undefined ? "" : `; ${anchor}${HASH_SEP} has it`;
+  return `[H_UNICODE_LOST] ${formatCodePoint(char)} missing at col ${column}${referenceNote}.`;
 }
 
 function withCharsRestored(line: string, chars: readonly string[], replacementFor: (char: string) => string): string {
@@ -191,10 +192,7 @@ function swappedCandidate(line: string, matches: IndexedLine[], spanStart: numbe
 
 function swappedCharHint(swapped: SwappedChar, anchor: string | undefined): string {
   const label = anchor === undefined ? "the replaced line" : `${anchor}${HASH_SEP}`;
-  return [
-    `[H_UNICODE_SWAPPED] The new text uses ${formatCodePoint(swapped.newChar)} where ${label} uses ${formatCodePoint(swapped.oldChar)}.`,
-    `${REFERENCE_INDENT}└ ${formatCodePoint(swapped.oldChar)} at col ${swapped.column} → ${formatCodePoint(swapped.newChar)}`,
-  ].join("\n");
+  return `[H_UNICODE_SWAPPED] ${formatCodePoint(swapped.newChar)} at col ${swapped.column} where ${label} has ${formatCodePoint(swapped.oldChar)}.`;
 }
 
 function trailingWhitespaceHint(oldLine: string, newLine: string, anchor: string | undefined): string {
@@ -202,10 +200,7 @@ function trailingWhitespaceHint(oldLine: string, newLine: string, anchor: string
   const newTrail = newLine.length - newLine.trimEnd().length;
   const column = newLine.trimEnd().length + 1;
   const label = anchor === undefined ? "the replaced line" : `${anchor}${HASH_SEP}`;
-  return [
-    `[H_TRAILING_WHITESPACE] The new text differs from ${label} only by trailing whitespace.`,
-    `${REFERENCE_INDENT}└ ${newTrail} trailing whitespace character(s) at col ${column}; the replaced line had ${oldTrail}.`,
-  ].join("\n");
+  return `[H_TRAILING_WHITESPACE] ${plural(newTrail, "trailing whitespace character")} at col ${column}; ${label} had ${oldTrail}.`;
 }
 
 function leadingWhitespace(line: string): string {
@@ -213,17 +208,21 @@ function leadingWhitespace(line: string): string {
   return line.slice(0, line.length - trimmed.length);
 }
 
+function sameCallHead(payloadLine: string, referenceLine: string): boolean {
+  const left = CALL_HEAD_RE.exec(payloadLine.trimStart())?.[0];
+  const right = CALL_HEAD_RE.exec(referenceLine.trimStart())?.[0];
+  return left !== undefined && left === right;
+}
+
 function indentMismatchHint(payloadLine: string, reference: ReferenceRow, anchor: string | undefined): string | undefined {
   const payloadIndent = leadingWhitespace(payloadLine);
   const referenceIndent = leadingWhitespace(reference.line);
   if (payloadIndent.length >= referenceIndent.length || !referenceIndent.startsWith(payloadIndent)) return undefined;
   const grams = gramSet([payloadLine], INDENT_SIMILARITY_RUN);
-  if (grams === undefined || !sharesRun(reference.line, grams, INDENT_SIMILARITY_RUN)) return undefined;
+  const sharesLongRun = grams !== undefined && sharesRun(reference.line, grams, INDENT_SIMILARITY_RUN);
+  if (!sharesLongRun && !sameCallHead(payloadLine, reference.line)) return undefined;
   const label = anchor === undefined ? "the nearby line" : `${anchor}${HASH_SEP}`;
-  return [
-    `[H_INDENT_MISMATCH] The new line is missing leading whitespace that ${label} has.`,
-    `${REFERENCE_INDENT}└ expected ${referenceIndent.length} leading whitespace character(s) at col 1; the new line has ${payloadIndent.length}.`,
-  ].join("\n");
+  return `[H_INDENT_MISMATCH] new line has ${plural(payloadIndent.length, "leading whitespace character")}; ${label} has ${referenceIndent.length}.`;
 }
 
 function referenceRows(lines: string[], start: number, end: number): ReferenceRow[] {
@@ -244,7 +243,6 @@ function separatorMovedHint(
   carried: number | undefined,
   payload: string[],
   anchor: string | undefined,
-  fixAnchor: string | undefined,
 ): string | undefined {
   if (carried === undefined || payload.length < 2) return undefined;
   const anchorLine = oldLines[anchorIndex] ?? "";
@@ -262,20 +260,7 @@ function separatorMovedHint(
     return undefined;
   }
   const label = anchor === undefined ? "the anchor line" : `${anchor}${HASH_SEP}`;
-  const observation = side === "before"
-    ? `The blank line above ${label} now separates the previous block from the inserted text; the inserted text and ${label} are adjacent.`
-    : `The blank line below ${label} now follows the inserted text; the inserted text and ${label} are adjacent.`;
-  const remedy = side === "before"
-    ? "the inserted block may need its own trailing blank line"
-    : "the inserted block may need its own leading blank line";
-  const fix = fixAnchor === undefined ? [] : [`${REFERENCE_INDENT}└ insert a blank line after ${fixAnchor}${HASH_SEP}`];
-  return [`[H_SEPARATOR_MOVED] ${observation}`, `${REFERENCE_INDENT}└ ${remedy}`, ...fix].join("\n");
-}
-function separatorFixAnchor(span: DiffSpan, offset: number, carried: number | undefined, payloadLength: number, resultHashes: readonly string[] | undefined): string | undefined {
-  if (carried === undefined || resultHashes === undefined) return undefined;
-  const index = carried === 0 ? span.start + offset : carried === payloadLength ? span.start + offset + carried - 1 : undefined;
-  if (index === undefined || index < 0 || index >= resultHashes.length) return undefined;
-  return resultHashes[index];
+  return `[H_SEPARATOR_MOVED] blank separator ${side === "before" ? "above" : "below"} ${label} was displaced by the inserted text.`;
 }
 
 function gramSet(lines: readonly string[], size: number): Set<string> | undefined {
@@ -299,7 +284,7 @@ function sharesRun(line: string, grams: Set<string>, size: number): boolean {
 }
 
 const LITERAL_ESCAPE_HINT_PREFIX = "[H_LITERAL_ESCAPE] ";
-const LITERAL_ESCAPE_TEXT_RE = /contains the literal escaped text "(.*)"$/;
+const LITERAL_ESCAPE_TEXT_RE = /^\[H_LITERAL_ESCAPE\] [^:]*: "(.*)" written as literal text$/;
 const MAX_LITERAL_ESCAPE_ROWS = 3;
 
 function literalEscapeColumn(line: string, escape: string): number {
@@ -331,6 +316,18 @@ function literalEscapeHintRows(
   return rows;
 }
 
+function actualEscapeName(escape: string): string {
+  const hex = /^\\u([0-9a-fA-F]{4})$/.exec(escape)?.[1];
+  if (hex !== undefined) return `U+${hex.toUpperCase()}`;
+  if (escape.length === 2) {
+    if (escape[1] === "n") return "a line break";
+    if (escape[1] === "r") return "a carriage return";
+    if (escape[1] === "t") return "a tab";
+    if (escape[1] === '"') return "a double quote";
+  }
+  return "the character";
+}
+
 export function annotateLiteralEscapeHints(
   hints: string[],
   resultContent: string,
@@ -345,11 +342,26 @@ export function annotateLiteralEscapeHints(
     const rows = literalEscapeHintRows(resultContent, spans, resultHashes, escape);
     if (rows.length === 0) return hint;
     if (rows.length > MAX_LITERAL_ESCAPE_ROWS) {
-      return `${hint}\n${REFERENCE_INDENT}└ ${rows.length} line(s) carry it; undo_last_change reverts this edit and resending with a single ${escape} fixes it in one step — do not repair rows one by one or rewrite the file with shell commands.`;
+      return `${hint} on ${plural(rows.length, "row")}; undo_last_change + resend with ${actualEscapeName(escape)} if unintended.`;
     }
-    const lines = rows.map((row) => `${REFERENCE_INDENT}└ ${resultHashes[row.index]!}${HASH_SEP} at col ${literalEscapeColumn(row.line, escape)}`);
-    return `${hint}\n${lines.join("\n")}`;
+    const locations = rows.map((row) => `${resultHashes[row.index]!}${HASH_SEP} col ${literalEscapeColumn(row.line, escape)}`).join(", ");
+    return `${hint} (${locations}).`;
   });
+}
+
+function separatorLostHint(oldLines: string[], span: DiffSpan, originalHashes?: readonly string[]): string | undefined {
+  if (span.replacementCount !== 0 || span.end < span.start) return undefined;
+  const beforeIndex = span.start - 1;
+  const afterIndex = span.end + 1;
+  if (beforeIndex < 0 || afterIndex >= oldLines.length) return undefined;
+  for (let index = span.start; index <= span.end; index += 1) {
+    if (!isBlankLine(oldLines[index])) return undefined;
+  }
+  if (isBlankLine(oldLines[beforeIndex]) || isBlankLine(oldLines[afterIndex])) return undefined;
+  const before = originalHashes?.[beforeIndex];
+  const after = originalHashes?.[afterIndex];
+  if (before === undefined || after === undefined) return undefined;
+  return `[H_SEPARATOR_LOST] deletion removed ${plural(span.end - span.start + 1, "blank line")} between ${before}${HASH_SEP} and ${after}${HASH_SEP}.`;
 }
 
 export function fidelityHints(
@@ -357,7 +369,7 @@ export function fidelityHints(
   resultContent: string,
   spans: readonly DiffSpan[] | undefined,
   originalHashes?: readonly string[],
-  options?: { separatorMoved?: boolean; resultHashes?: readonly string[]; indentHints?: boolean },
+  options?: { separatorMoved?: boolean; indentHints?: boolean },
 ): string[] {
   if (spans === undefined || spans.length === 0) return [];
   const oldLines = splitLines(originalContent);
@@ -471,8 +483,7 @@ export function fidelityHints(
         hints.push(indentHint);
       }
       if (options?.separatorMoved) {
-        const fixAnchor = separatorFixAnchor(span, offset, carried, payload.length, options.resultHashes);
-        const separatorHint = separatorMovedHint(oldLines, span.start, carried, payload, originalHashes?.[span.start], fixAnchor);
+        const separatorHint = separatorMovedHint(oldLines, span.start, carried, payload, originalHashes?.[span.start]);
         if (separatorHint !== undefined && hints.length < MAX_FIDELITY_HINTS) hints.push(separatorHint);
       }
       if (carried === undefined && removed.length === inserted.length) {
@@ -487,6 +498,10 @@ export function fidelityHints(
           hints.push(trailingWhitespaceHint(oldLine, newLine, originalHashes?.[span.start + index]));
         }
       }
+    }
+    if (removed.length > 0 && inserted.length === 0) {
+      const lost = separatorLostHint(oldLines, span, originalHashes);
+      if (lost !== undefined && hints.length < MAX_FIDELITY_HINTS) hints.push(lost);
     }
     offset += span.replacementCount - removedCount;
   }
