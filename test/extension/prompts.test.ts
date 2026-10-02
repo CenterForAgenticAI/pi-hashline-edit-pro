@@ -249,12 +249,10 @@ describe("edit prompt flag variants", () => {
     expect(result.description).toContain("Strict-input mode is on");
   });
 
-  it("withReplaceWithinPrompts drops the copy/move mention when Copy/move is off", () => {
+  it("withReplaceWithinPrompts leaves guidelines unchanged when Copy/move is off", () => {
     const on = withReplaceWithinPrompts(withinBase, DEFAULT_EDIT_FLAGS);
-    expect(on.guidelines.some((g) => g.includes("like `copy` and `move`"))).toBe(true);
     const off = withReplaceWithinPrompts(withinBase, { ...DEFAULT_EDIT_FLAGS, copyMoveEnabled: false });
-    expect(off.guidelines.some((g) => g.includes("`copy`"))).toBe(false);
-    expect(off.guidelines.some((g) => g.includes("commits on its own"))).toBe(true);
+    expect(off.guidelines).toEqual(on.guidelines);
   });
 
   it("withGrepPrompts drops copy and move when Copy/move is off", () => {

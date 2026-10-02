@@ -1,4 +1,3 @@
 - `replace_within`: use it instead of `replace` to change part of a line, so every character the request does not name is preserved as served.
 - `replace_within`: `replace_old` must be copied exactly from the served row and occur once in the range; a missing or repeated match is refused and returns the current rows.
-- `replace_within`: a batch never groups it; it commits on its own, like `copy` and `move`.
-- `replace_within`: when the same `replace_old` occurs many times, `anchor_grep` with `literal: true` serves every matching row; then one `replace_within` per row keeps each edit byte-exact.
+- `replace_within`: when the same `replace_old` occurs many times, `anchor_grep` with `literal: true` serves every matching row in one call, and one `replace_within` per row is cheap — only the named bytes change, so a wrong match costs one line, not a rewritten file.

@@ -96,7 +96,7 @@ export function withInsertPrompts(base: { description: string; snippet: string; 
 export function withReplaceWithinPrompts(base: { description: string; snippet: string; guidelines: string[] }, flags: EditToolFlags): { description: string; snippet: string; guidelines: string[] } {
   const descriptionParts = [base.description];
   const snippetParts = [base.snippet];
-  const guidelines = base.guidelines.map((guideline) => flags.copyMoveEnabled ? guideline : guideline.replace(", like `copy` and `move`", ""));
+  const guidelines = [...base.guidelines];
   if (flags.requirePath) {
     descriptionParts.push("Also give `path` matching the file the anchors were served for; it is required and must match anchor ownership.");
     snippetParts.push("; include `path` (required)");

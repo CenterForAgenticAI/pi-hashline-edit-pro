@@ -1,2 +1,2 @@
 - `move`: a cross-file move records one undo entry per file — undo both sides. Lines between source and target may be re-anchored.
-- `move`: for a block move, use this tool instead of rebuilding the file with shell commands; to append at the end, use the destination's last served line as `insert_after`. Shell edits bypass range verification, the post-edit diff, and undo.
+- `move`: for a block move, this tool is the cheap path: only the source's two boundary rows and the destination line need serving, the interior moves verbatim, and rebuilding the file with shell commands costs range verification, the post-edit diff, and undo; to append at the end, use the destination's last served line as `insert_after`.
