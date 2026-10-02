@@ -39,8 +39,8 @@ export async function currentEditFlags(): Promise<EditToolFlags> {
 }
 
 function preferenceGuideline(flags: EditToolFlags): string {
-  const tools = gatedEditOps(["replace", "replace_within", "insert", "copy", "move", "undo_last_change"], flags);
-  return `Prefer the hashline edit tools for anything that touches files: ${joinOps(tools, { backtick: true })}.`;
+  const tools = gatedEditOps(["read", "replace", "replace_within", "insert", "copy", "move", "undo_last_change"], flags);
+  return `Prefer the hashline tools for anything that touches files: ${joinOps(tools, { backtick: true })}.`;
 }
 
 export function withReplacePrompts(base: { description: string; snippet: string; guidelines: string[] }, flags: EditToolFlags): { description: string; snippet: string; guidelines: string[] } {

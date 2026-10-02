@@ -140,7 +140,7 @@ describe("read tool guidelines", () => {
     const { pi, getTool } = makeFakePiRegistry();
     regRead(pi);
     const guidelines = getTool("read").promptGuidelines as string[];
-    expect(guidelines[0]).toBe("Prefer the hashline edit tools for anything that touches files: `replace`, `replace_within`, `insert`, `copy`, `move`, or `undo_last_change`.");
+    expect(guidelines[0]).toBe("Prefer the hashline tools for anything that touches files: `read`, `replace`, `replace_within`, `insert`, `copy`, `move`, or `undo_last_change`.");
   });
 });
 
@@ -187,7 +187,7 @@ describe("edit prompt flag variants", () => {
 
   it("withReplacePrompts lists only the enabled edit tools in its preference guideline", () => {
     const all = withReplacePrompts(replaceBase, DEFAULT_EDIT_FLAGS);
-    expect(all.guidelines[0]).toBe("Prefer the hashline edit tools for anything that touches files: `replace`, `replace_within`, `insert`, `copy`, `move`, or `undo_last_change`.");
+    expect(all.guidelines[0]).toBe("Prefer the hashline tools for anything that touches files: `read`, `replace`, `replace_within`, `insert`, `copy`, `move`, or `undo_last_change`.");
     const noWithin = withReplacePrompts(replaceBase, { ...DEFAULT_EDIT_FLAGS, replaceWithinEnabled: false });
     expect(noWithin.guidelines[0]).not.toContain("replace_within");
     const noTransfer = withReplacePrompts(replaceBase, { ...DEFAULT_EDIT_FLAGS, copyMoveEnabled: false });
@@ -284,7 +284,7 @@ describe("edit prompt flag variants", () => {
 
   it("withReadPrompts lists only the enabled edit tools in its first guideline", () => {
     const all = withReadPrompts(readBase, DEFAULT_EDIT_FLAGS);
-    expect(all.guidelines[0]).toBe("Prefer the hashline edit tools for anything that touches files: `replace`, `replace_within`, `insert`, `copy`, `move`, or `undo_last_change`.");
+    expect(all.guidelines[0]).toBe("Prefer the hashline tools for anything that touches files: `read`, `replace`, `replace_within`, `insert`, `copy`, `move`, or `undo_last_change`.");
     const noWithin = withReadPrompts(readBase, { ...DEFAULT_EDIT_FLAGS, replaceWithinEnabled: false });
     expect(noWithin.guidelines[0]).not.toContain("replace_within");
     const noTransfer = withReadPrompts(readBase, { ...DEFAULT_EDIT_FLAGS, copyMoveEnabled: false });
@@ -297,7 +297,7 @@ describe("edit prompt flag variants", () => {
     const result = withReadPrompts(readBase, DEFAULT_EDIT_FLAGS);
     expect(result.description).toBe(readBase.description);
     expect(result.snippet).toBe(readBase.snippet);
-    expect(result.guidelines[0]).toContain("Prefer the hashline edit tools for anything that touches files:");
+    expect(result.guidelines[0]).toContain("Prefer the hashline tools for anything that touches files:");
     expect(result.guidelines.slice(1)).toEqual(readBase.guidelines.filter((g) => !g.includes("E_AUTO_READ_ALL")));
   });
 
