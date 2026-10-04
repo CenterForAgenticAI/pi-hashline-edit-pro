@@ -8,7 +8,7 @@ import {
   changedRange,
 } from "./hashline";
 import { MAX_DIFF_INPUT_BYTES } from "./constants";
-import { splitLines } from "./utils";
+import { isBlankLine, splitLines } from "./utils";
 import {
   detectEnding,
   toLF,
@@ -39,10 +39,6 @@ function fmtDiffLine(
   hash: string | undefined,
 ): string {
   return `${prefix}${hash ?? " ".repeat(ANCHOR_LEN)}${HASH_SEP}${line}`;
-}
-
-function isBlankLine(line: string): boolean {
-  return line.trim().length === 0;
 }
 
 const ELLIPSIS_MARKER: unique symbol = Symbol("ellipsis");

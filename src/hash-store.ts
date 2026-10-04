@@ -282,9 +282,6 @@ function shutdownDb(db: RawDb): void {
 }
 
 async function openStore(storePath: string): Promise<HashStore> {
-  if (cachedDb && cachedDb.path === storePath && cachedDb.db.isOpen) {
-    return { stmts: cachedDb.stmts, engine: sqliteEngine };
-  }
   if (cachedDb) shutdownHashStore();
   const epoch = storeEpoch;
   await initHasher();

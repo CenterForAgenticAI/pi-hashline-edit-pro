@@ -43,9 +43,29 @@ function preferenceGuideline(flags: EditToolFlags): string {
   return `Prefer the hashline tools for anything that touches files: ${joinOps(tools, { backtick: true })}.`;
 }
 
+function finalizePrompts(
+  description: string,
+  snippet: string,
+  guidelines: string[],
+  flags: EditToolFlags,
+  requirePathNotice: string,
+): { description: string; snippet: string; guidelines: string[] } {
+  const descriptionParts = [description];
+  const snippetParts = [snippet];
+  if (flags.requirePath) {
+    descriptionParts.push(requirePathNotice);
+    snippetParts.push("; include `path` (required)");
+  } else {
+    descriptionParts.push("Path resolution is anchor-only; do not pass `path`.");
+  }
+  if (flags.strictInput) {
+    descriptionParts.push("Strict-input mode is on: auto-fixable slips are rejected instead of fixed with warnings.");
+  }
+  return { description: descriptionParts.join(" "), snippet: snippetParts.join(""), guidelines };
+}
+
 export function withReplacePrompts(base: { description: string; snippet: string; guidelines: string[] }, flags: EditToolFlags): { description: string; snippet: string; guidelines: string[] } {
   let description = base.description;
-  const snippetParts = [base.snippet];
   let guidelines = [preferenceGuideline(flags), ...base.guidelines];
   if (!flags.autoRead) {
     description = description.replace(/\n\nExample:[\s\S]*$/, "");
@@ -55,17 +75,7 @@ export function withReplacePrompts(base: { description: string; snippet: string;
   if (!flags.replaceWithinEnabled) {
     description = description.replace(/\n?To change only part of a line without retyping the rest, use `replace_within` instead; it preserves every character the request does not name\./, "");
   }
-  const descriptionParts = [description];
-  if (flags.requirePath) {
-    descriptionParts.push("Also give `path` matching the file the anchors were served for; it is required and must match anchor ownership.");
-    snippetParts.push("; include `path` (required)");
-  } else {
-    descriptionParts.push("Path resolution is anchor-only; do not pass `path`.");
-  }
-  if (flags.strictInput) {
-    descriptionParts.push("Strict-input mode is on: auto-fixable slips are rejected instead of fixed with warnings.");
-  }
-  return { description: descriptionParts.join(" "), snippet: snippetParts.join(""), guidelines };
+  return finalizePrompts(description, base.snippet, guidelines, flags, "Also give `path` matching the file the anchors were served for; it is required and must match anchor ownership.");
 }
 
 export function withReadPrompts(base: { description: string; snippet: string; guidelines: string[] }, flags: EditToolFlags): { description: string; snippet: string; guidelines: string[] } {
@@ -84,35 +94,13 @@ export function withReadPrompts(base: { description: string; snippet: string; gu
 
 export function withInsertPrompts(base: { description: string; snippet: string; guidelines: string[] }, flags: EditToolFlags): { description: string; snippet: string; guidelines: string[] } {
   const baseDescription = flags.autoRead ? base.description : base.description.replace("and the last call shows the combined diff,", "and the last call shows the combined result,");
-  const descriptionParts = [baseDescription];
-  const snippetParts = [base.snippet];
   const guidelines = [...base.guidelines];
-  if (flags.requirePath) {
-    descriptionParts.push("Also give `path` matching the file the anchor was served for; it is required and must match anchor ownership.");
-    snippetParts.push("; include `path` (required)");
-  } else {
-    descriptionParts.push("Path resolution is anchor-only; do not pass `path`.");
-  }
-  if (flags.strictInput) {
-    descriptionParts.push("Strict-input mode is on: auto-fixable slips are rejected instead of fixed with warnings.");
-  }
-  return { description: descriptionParts.join(" "), snippet: snippetParts.join(""), guidelines };
+  return finalizePrompts(baseDescription, base.snippet, guidelines, flags, "Also give `path` matching the file the anchor was served for; it is required and must match anchor ownership.");
 }
 
 export function withReplaceWithinPrompts(base: { description: string; snippet: string; guidelines: string[] }, flags: EditToolFlags): { description: string; snippet: string; guidelines: string[] } {
-  const descriptionParts = [base.description];
-  const snippetParts = [base.snippet];
   const guidelines = [...base.guidelines];
-  if (flags.requirePath) {
-    descriptionParts.push("Also give `path` matching the file the anchors were served for; it is required and must match anchor ownership.");
-    snippetParts.push("; include `path` (required)");
-  } else {
-    descriptionParts.push("Path resolution is anchor-only; do not pass `path`.");
-  }
-  if (flags.strictInput) {
-    descriptionParts.push("Strict-input mode is on: auto-fixable slips are rejected instead of fixed with warnings.");
-  }
-  return { description: descriptionParts.join(" "), snippet: snippetParts.join(""), guidelines };
+  return finalizePrompts(base.description, base.snippet, guidelines, flags, "Also give `path` matching the file the anchors were served for; it is required and must match anchor ownership.");
 }
 
 function gatedEditOps(ops: string[], flags: EditToolFlags): string[] {
@@ -157,19 +145,8 @@ export function withUndoPrompts(base: { description: string; snippet: string; gu
 }
 
 export function withTransferPrompts(base: { description: string; snippet: string; guidelines: string[] }, flags: EditToolFlags): { description: string; snippet: string; guidelines: string[] } {
-  const descriptionParts = [base.description];
-  const snippetParts = [base.snippet];
   const guidelines = [...base.guidelines];
-  if (flags.requirePath) {
-    descriptionParts.push("Also give `path` matching the source or destination file the anchors were served for; it is required and must match anchor ownership.");
-    snippetParts.push("; include `path` (required)");
-  } else {
-    descriptionParts.push("Path resolution is anchor-only; do not pass `path`.");
-  }
-  if (flags.strictInput) {
-    descriptionParts.push("Strict-input mode is on: auto-fixable slips are rejected instead of fixed with warnings.");
-  }
-  return { description: descriptionParts.join(" "), snippet: snippetParts.join(""), guidelines };
+  return finalizePrompts(base.description, base.snippet, guidelines, flags, "Also give `path` matching the source or destination file the anchors were served for; it is required and must match anchor ownership.");
 }
 
 function staleAnchorMessage(ref: string, hash: string, owners: Array<OwnedAnchor | undefined>): string {

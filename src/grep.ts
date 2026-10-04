@@ -14,7 +14,7 @@ import { toCwd, toDisplayPath } from "./paths";
 import { loadP } from "./prompts";
 import { normReq } from "./payload-contract";
 import { DEFAULT_EDIT_FLAGS, withGrepPrompts, type EditToolFlags } from "./edit-common";
-import { abortIf, clipLine, errCode, gutterWidth, isRec, makePrepareArguments, rejectUnknownFields, truncateToBytes, visLines } from "./utils";
+import { abortIf, clipLine, errCode, isRec, makePrepareArguments, rejectUnknownFields, truncateToBytes, visLines, withLineNumbers } from "./utils";
 import { withAnchorSession, formatAnchorReclaimNotice, takeReclaimedPaths } from "./anchor-registry";
 import { serveRows } from "./served";
 import { Text } from "@earendil-works/pi-tui";
@@ -406,14 +406,7 @@ async function collectRgMatches(
 
 
 function displayRowsForHit(hit: FileHit): string[] {
-  let max = 0;
-  for (const n of hit.lineNumbers) if (n > max) max = n;
-  const width = gutterWidth(max, 1);
-  return hit.rows.map((row, i) => {
-    const n = hit.lineNumbers[i]!;
-    const padded = String(n).padStart(width, " ");
-    return `${padded} │ ${row}`;
-  });
+  return withLineNumbers(hit.rows.join("\n"), hit.lineNumbers).split("\n").slice(0, hit.rows.length);
 }
 
 const grepToolSchema = Type.Object(

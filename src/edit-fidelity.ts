@@ -1,4 +1,4 @@
-import { splitLines } from "./utils";
+import { isBlankLine, splitLines } from "./utils";
 import { HASH_SEP, canon } from "./hashline";
 import type { DiffSpan } from "./replace-diff";
 
@@ -235,10 +235,6 @@ function referenceRows(lines: string[], start: number, end: number): ReferenceRo
   const rows: ReferenceRow[] = [];
   for (let index = from; index <= to; index++) rows.push({ line: lines[index]!, index });
   return rows;
-}
-
-function isBlankLine(line: string | undefined): boolean {
-  return (line ?? "").trim().length === 0;
 }
 
 function separatorMovedHint(

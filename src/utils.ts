@@ -57,6 +57,10 @@ export function visLines(text: string): string[] {
 }
 
 
+export function isBlankLine(line: string | undefined): boolean {
+	return (line ?? "").trim().length === 0;
+}
+
 export function rejectUnknownFields(
   obj: Record<string, unknown>,
   allowed: Set<string>,

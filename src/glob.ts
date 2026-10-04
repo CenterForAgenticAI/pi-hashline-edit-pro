@@ -140,26 +140,8 @@ function globPartToSource(glob: string): string {
       continue;
     }
     if (ch === "[") {
-      let j = i + 1;
-      if (j < glob.length && (glob[j] === "!" || glob[j] === "^")) j++;
-      if (j < glob.length && glob[j] === "]") j++;
-      let esc3 = false;
-      while (j < glob.length) {
-        const c = glob[j]!;
-        if (esc3) {
-          esc3 = false;
-          j++;
-          continue;
-        }
-        if (c === "\\") {
-          esc3 = true;
-          j++;
-          continue;
-        }
-        if (c === "]") break;
-        j++;
-      }
-      if (j >= glob.length) {
+      const j = bracketEnd(glob, i);
+      if (j < 0) {
         source += "\\[";
         i++;
         continue;

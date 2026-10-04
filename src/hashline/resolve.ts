@@ -1,4 +1,4 @@
-import { abortIf, rejectUnknownFields, clipLine, decodeStringArray, assertNoNul } from "../utils";
+import { abortIf, rejectUnknownFields, clipLine, decodeStringArray, assertNoNul, isBlankLine } from "../utils";
 import { parseHashRef, parsePayloadText, parseTextWithSeparators, type Anchor, type ParsedText } from "./parse";
 import { HASH_SEP, stripRowPrefix, lineChecksum, type RowPrefixKind } from "./hash";
 import { HASH_RUN } from "./alphabet";
@@ -284,11 +284,10 @@ export function preserveDeletionSeparators(edit: HEdit, fileLines: string[], fil
 	if (fromLine === undefined || toLine === undefined) return edit;
 	const rangeStart = Math.min(fromLine, toLine);
 	const rangeEnd = Math.max(fromLine, toLine);
-	const isBlank = (index: number): boolean => (fileLines[index] ?? "").trim().length === 0;
 	let start = rangeStart;
 	let end = rangeEnd;
-	while (start <= end && isBlank(start)) start += 1;
-	while (end >= start && isBlank(end)) end -= 1;
+	while (start <= end && isBlankLine(fileLines[start])) start += 1;
+	while (end >= start && isBlankLine(fileLines[end])) end -= 1;
 	if (start > end || (start === rangeStart && end === rangeEnd)) return edit;
 	return { ...edit, hash_bounds: [{ hash: fileHashes[start]! }, { hash: fileHashes[end]! }] };
 }
