@@ -1,3 +1,0 @@
-- `replace_within`: use it instead of `replace` to change part of a line, so every character the request does not name is preserved as served.
-- `replace_within`: `old_string` must be copied exactly from the served row and occur once in the range; a missing or repeated match is refused and returns the current rows.
-- `replace_within`: when the same `old_string` occurs many times, `anchor_grep` with `literal: true` serves every matching row in one call, and one `replace_within` per row is cheap — only the named bytes change, so a wrong match costs one line, not a rewritten file.

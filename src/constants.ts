@@ -11,13 +11,13 @@ export const MAX_DIFF_INPUT_BYTES = 1024 * 1024;
 export const HASH_STORE_BUSY_TIMEOUT = 1000;
 export const HASH_STORE_VERSION = 9;
 export const NEW_CONTENT_NOT_ARRAY_MSG =
-  `[E_BAD_SHAPE] "replacement_lines" must be an array of strings, one per line (use [] to delete).`;
+  `[E_BAD_SHAPE] "text" must be an array of strings, one per line (use [] to delete).`;
 
 export const NEW_CONTENT_NOT_STRING_MSG =
-  `[E_BAD_SHAPE] "replacement_lines" must be a string holding the exact text to write. Use "" to delete the range and "\\n" for one blank line; line breaks inside the string separate lines.`;
+  `[E_BAD_SHAPE] "text" must be a string holding the exact text to write. Use "" to delete the range and "\\n" for one blank line; line breaks inside the string separate lines.`;
 
-export const LINES_NOT_STRING_MSG =
-  `[E_BAD_SHAPE] "lines" must be a string holding the exact text to insert. Use "\\n" for one blank line; line breaks inside the string separate lines.`;
+export const TEXT_NOT_STRING_MSG =
+  `[E_BAD_SHAPE] "text" must be a string holding the exact text to insert. Use "\\n" for one blank line; line breaks inside the string separate lines.`;
 
 export const NUL_CONTENT_MSG =
   `[E_BAD_SHAPE] Content contains a NUL byte (U+0000); a text file cannot contain NUL, and writing it would break further reads and edits. Remove the NUL byte and retry. An empty replacement ([]) deletes a range.`;

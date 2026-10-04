@@ -17,7 +17,7 @@ describe("mixed line endings", () => {
 			const oldAnchor = anchorFor(text, "old");
 			const result = await editTool.execute(
 				"e1",
-				{ remove_from: oldAnchor, remove_to: oldAnchor, replacement_lines: ["new"] },
+				{ remove_from: oldAnchor, remove_to: oldAnchor, text: ["new"] },
 				undefined,
 				undefined,
 				ctx,
@@ -34,7 +34,7 @@ describe("mixed line endings", () => {
 			const two = anchorFor(text, "two");
 			await getTool("insert").execute(
 				"i1",
-				{ anchor: two, direction: "after", lines: ["mid-a", "mid-b"] },
+				{ anchor: two, direction: "after", text: ["mid-a", "mid-b"] },
 				undefined,
 				undefined,
 				ctx,
@@ -49,8 +49,8 @@ describe("mixed line endings", () => {
 			const text = getText(await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx));
 			const b = anchorFor(text, "BBB");
 			const d = anchorFor(text, "DDD");
-			const bArgs = { remove_from: b, remove_to: b, replacement_lines: ["B2"] };
-			const dArgs = { remove_from: d, remove_to: d, replacement_lines: [] };
+			const bArgs = { remove_from: b, remove_to: b, text: ["B2"] };
+			const dArgs = { remove_from: d, remove_to: d, text: [] };
 			await handlers.get("message_end")!(
 				{
 					type: "message_end",
@@ -84,7 +84,7 @@ describe("mixed line endings", () => {
 			const old = anchorFor(text, "old");
 			await getTool("replace").execute(
 				"e1",
-				{ remove_from: old, remove_to: old, replacement_lines: ["new"] },
+				{ remove_from: old, remove_to: old, text: ["new"] },
 				undefined,
 				undefined,
 				ctx,

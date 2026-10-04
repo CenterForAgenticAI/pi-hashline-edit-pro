@@ -16,7 +16,7 @@ describe("compPreview", () => {
       const hashes = await lineHashes("aaa\nbbb\nccc\n", join(cwd, "sample.ts"));
 
       const preview = await compPreview(
-        { remove_from: hashes[1]!, remove_to: hashes[1]!, replacement_lines: ["BeSR"] },
+        { remove_from: hashes[1]!, remove_to: hashes[1]!, text: ["BeSR"] },
         cwd,
       );
       expect(preview).toHaveProperty("diff");
@@ -29,7 +29,7 @@ describe("compPreview", () => {
       const hashes = await lineHashes("alpha\nbeta\ngamma\n", join(cwd, "sample.ts"));
 
       const preview = await compPreview(
-        { remove_from: hashes[1]!, remove_to: hashes[1]!, replacement_lines: ["BETA"] },
+        { remove_from: hashes[1]!, remove_to: hashes[1]!, text: ["BETA"] },
         cwd,
       );
       expect(preview).toHaveProperty("diff");
@@ -42,7 +42,7 @@ describe("compPreview", () => {
       const hashes = await lineHashes("aaa\nbbb\nccc\n", join(cwd, "sample.ts"));
 
       const preview = await compPreview(
-        { remove_from: hashes[1]!, remove_to: hashes[1]!, replacement_lines: ["BeSR"] },
+        { remove_from: hashes[1]!, remove_to: hashes[1]!, text: ["BeSR"] },
         cwd,
       );
       expect(preview).toHaveProperty("diff");
@@ -54,7 +54,7 @@ describe("compPreview", () => {
       const hashes = await lineHashes("aaa\nbbb\nccc\n", join(cwd, "sample.ts"));
 
       const preview = await compPreview(
-        { remove_from: hashes[1]!, remove_to: hashes[1]!, replacement_lines: ["BeSR"] },
+        { remove_from: hashes[1]!, remove_to: hashes[1]!, text: ["BeSR"] },
         cwd,
       );
       expect(preview).toHaveProperty("diff");
@@ -66,7 +66,7 @@ describe("compPreview", () => {
       const hashes = await lineHashes("aaa\nbbb\nccc\n", join(cwd, "sample.ts"));
 
       const preview = await compPreview(
-        { remove_from: hashes[1]!, remove_to: hashes[1]!, replacement_lines: ["BeSR"] },
+        { remove_from: hashes[1]!, remove_to: hashes[1]!, text: ["BeSR"] },
         cwd,
       );
       expect(preview).toHaveProperty("diff");
@@ -77,7 +77,7 @@ describe("compPreview", () => {
     await withTempFile("sample.ts", "aaa\nbbb\nccc\n", async ({ cwd }) => {
       const hashes = await lineHashes("aaa\nbbb\nccc\n", join(cwd, "sample.ts"));
       const preview = await compPreview(
-        { path: "sample.ts", changes: [{ remove_from: hashes[1]!, remove_to: hashes[1]!, replacement_lines: ["BeSR"] }] },
+        { path: "sample.ts", changes: [{ remove_from: hashes[1]!, remove_to: hashes[1]!, text: ["BeSR"] }] },
         cwd,
       );
       expect(preview).toHaveProperty("error");
@@ -89,7 +89,7 @@ describe("compPreview", () => {
     await withTempFile("sample.ts", "aaa\nbbb\nccc\n", async ({ cwd }) => {
       const hashes = await lineHashes("aaa\nbbb\nccc\n", join(cwd, "sample.ts"));
       const preview = await compPreview(
-        { remove_from: hashes[1]!, remove_to: hashes[1]!, replacement_lines: ["BeSR"] },
+        { remove_from: hashes[1]!, remove_to: hashes[1]!, text: ["BeSR"] },
         cwd,
       );
       expect(preview).toHaveProperty("diff");
@@ -97,12 +97,12 @@ describe("compPreview", () => {
     });
   });
 
-  it("previews a method-chained stringified replacement_lines", async () => {
+  it("previews a method-chained stringified text", async () => {
     await withTempFile("sample.ts", "aaa\nbbb\nccc\n", async ({ cwd }) => {
       const hashes = await lineHashes("aaa\nbbb\nccc\n", join(cwd, "sample.ts"));
 
       const preview = await compPreview(
-        { remove_from: hashes[1]!, remove_to: hashes[1]!, replacement_lines: '["BBB"].map(s => s)' },
+        { remove_from: hashes[1]!, remove_to: hashes[1]!, text: '["BBB"].map(s => s)' },
         cwd,
       );
       expect(preview).toHaveProperty("diff");
@@ -152,7 +152,7 @@ describe("renderCall preview", () => {
 
       const harness = makeHarness(cwd);
       tool.renderCall(
-        { remove_from: hashes[1]!, remove_to: hashes[1]!, replacement_lines: ["BeSR"] },
+        { remove_from: hashes[1]!, remove_to: hashes[1]!, text: ["BeSR"] },
         harness.theme,
         harness.context,
       );
@@ -172,7 +172,7 @@ describe("renderCall preview", () => {
 
       const harness = makeHarness(cwd);
       tool.renderCall(
-        { path: "sample.ts", changes: [{ remove_from: hashes[1]!, remove_to: hashes[1]!, replacement_lines: ["BeSR"] }] },
+        { path: "sample.ts", changes: [{ remove_from: hashes[1]!, remove_to: hashes[1]!, text: ["BeSR"] }] },
         harness.theme,
         harness.context,
       );
@@ -193,13 +193,13 @@ describe("renderCall preview", () => {
       try {
         const harness = makeHarness(cwd);
         tool.renderCall(
-          { remove_from: hashes[1]!, remove_to: hashes[1]!, replacement_lines: ["BeSR"] },
+          { remove_from: hashes[1]!, remove_to: hashes[1]!, text: ["BeSR"] },
           harness.theme,
           harness.context,
         );
         expect(harness.state.preview).toBeUndefined();
         tool.renderCall(
-          { remove_from: hashes[1]!, remove_to: hashes[1]!, replacement_lines: ["DAfo"] },
+          { remove_from: hashes[1]!, remove_to: hashes[1]!, text: ["DAfo"] },
           harness.theme,
           harness.context,
         );
@@ -222,7 +222,7 @@ describe("compPreview - noop", () => {
     await withTempFile("sample.ts", "aaa\nbbb\nccc\n", async ({ cwd }) => {
       const hashes = await lineHashes("aaa\nbbb\nccc\n", join(cwd, "sample.ts"));
       const preview = await compPreview(
-        { remove_from: hashes[1]!, remove_to: hashes[1]!, replacement_lines: ["bbb"] },
+        { remove_from: hashes[1]!, remove_to: hashes[1]!, text: ["bbb"] },
         cwd,
       );
       expect(preview).toEqual({
@@ -260,7 +260,7 @@ describe("renderCall state transitions", () => {
     state.preview = { diff: "stale diff" };
     state.previewGeneration = 7;
     const component = tool.renderCall!(
-      { remove_from: "ATIm", remove_to: "BeSR", replacement_lines: ["x"] },
+      { remove_from: "ATIm", remove_to: "BeSR", text: ["x"] },
       theme as any,
       context as any,
     ) as Text;
@@ -278,7 +278,7 @@ describe("renderCall state transitions", () => {
     state.preview = { diff: "stale diff" };
     state.previewGeneration = 2;
     tool.renderCall!(
-      { remove_from: "ATIm", remove_to: "BeSR", replacement_lines: ["x"] },
+      { remove_from: "ATIm", remove_to: "BeSR", text: ["x"] },
       theme as any,
       context as any,
     );
@@ -376,7 +376,7 @@ describe("renderResult", () => {
       content: [
         {
           type: "text",
-          text: "Successfully replaced in sample.ts.\n\nWarnings:\n[W_BARE_HASH_PREFIX] Stripped \"anchor│\" prefix from replacement_lines line 1.",
+          text: "Successfully replaced in sample.ts.\n\nWarnings:\n[W_BARE_HASH_PREFIX] Stripped \"anchor│\" prefix from text line 1.",
         },
       ],
       details: {
@@ -392,7 +392,7 @@ describe("renderResult", () => {
     ) as Text;
     const text = (component as any).text as string;
     expect(text).toContain("+ATIm│BBB");
-    expect(text).toContain("[W_BARE_HASH_PREFIX] Stripped \"anchor│\" prefix from replacement_lines line 1.");
+    expect(text).toContain("[W_BARE_HASH_PREFIX] Stripped \"anchor│\" prefix from text line 1.");
   });
 
   it("returns an empty component when there is nothing to render", () => {

@@ -3,7 +3,7 @@ import { dirname, join, resolve } from "path";
 import { fileURLToPath } from "url";
 import { describe, expect, it } from "vitest";
 import { loadGuide, loadP } from "../../src/prompts";
-import { withReadPrompts, withReplacePrompts, withReplaceWithinPrompts, withInsertPrompts, withTransferPrompts, withUndoPrompts, withGrepPrompts, DEFAULT_EDIT_FLAGS } from "../../src/edit-common";
+import { withReadPrompts, withReplacePrompts, withReplaceMatchPrompts, withInsertPrompts, withTransferPrompts, withUndoPrompts, withGrepPrompts, DEFAULT_EDIT_FLAGS } from "../../src/edit-common";
 import { regRead } from "../../src/read";
 import { makeFakePiRegistry } from "../support/fixtures";
 
@@ -32,9 +32,9 @@ const undoBase = {
 };
 
 const withinBase = {
-  description: loadP("../prompts/replace-within.md"),
-  snippet: loadP("../prompts/replace-within-snippet.md"),
-  guidelines: loadGuide("../prompts/replace-within-guidelines.md"),
+  description: loadP("../prompts/replace-match.md"),
+  snippet: loadP("../prompts/replace-match-snippet.md"),
+  guidelines: loadGuide("../prompts/replace-match-guidelines.md"),
 };
 
 const grepBase = {
@@ -98,7 +98,7 @@ describe("prompt guidelines", () => {
     );
     expect(content).toContain("remove_from");
     expect(content).toContain("remove_to");
-    expect(content).toContain("replacement_lines");
+    expect(content).toContain("text");
     expect(content).not.toContain("hash_bounds");
     expect(content).not.toContain("new_content");
     expect(content).not.toContain("{{");
@@ -140,7 +140,7 @@ describe("read tool guidelines", () => {
     const { pi, getTool } = makeFakePiRegistry();
     regRead(pi);
     const guidelines = getTool("read").promptGuidelines as string[];
-    expect(guidelines[0]).toBe("Prefer the hashline tools for anything that touches files: `read`, `replace`, `replace_within`, `insert`, `copy`, `move`, or `undo_last_change`.");
+    expect(guidelines[0]).toBe("Prefer the hashline tools for anything that touches files: `read`, `replace`, `replace_match`, `insert`, `copy`, `move`, or `undo_last_change`.");
   });
 });
 
@@ -187,13 +187,13 @@ describe("edit prompt flag variants", () => {
 
   it("withReplacePrompts lists only the enabled edit tools in its preference guideline", () => {
     const all = withReplacePrompts(replaceBase, DEFAULT_EDIT_FLAGS);
-    expect(all.guidelines[0]).toBe("Prefer the hashline tools for anything that touches files: `read`, `replace`, `replace_within`, `insert`, `copy`, `move`, or `undo_last_change`.");
-    const noWithin = withReplacePrompts(replaceBase, { ...DEFAULT_EDIT_FLAGS, replaceWithinEnabled: false });
-    expect(noWithin.guidelines[0]).not.toContain("replace_within");
+    expect(all.guidelines[0]).toBe("Prefer the hashline tools for anything that touches files: `read`, `replace`, `replace_match`, `insert`, `copy`, `move`, or `undo_last_change`.");
+    const noWithin = withReplacePrompts(replaceBase, { ...DEFAULT_EDIT_FLAGS, replaceMatchEnabled: false });
+    expect(noWithin.guidelines[0]).not.toContain("replace_match");
     const noTransfer = withReplacePrompts(replaceBase, { ...DEFAULT_EDIT_FLAGS, copyMoveEnabled: false });
     expect(noTransfer.guidelines[0]).not.toContain("`copy`");
     expect(noTransfer.guidelines[0]).not.toContain("`move`");
-    expect(noTransfer.guidelines[0]).toContain("`replace_within`");
+    expect(noTransfer.guidelines[0]).toContain("`replace_match`");
   });
 
   it("withReplacePrompts drops the diff-follow hint and example when auto-read is off", () => {
@@ -205,11 +205,11 @@ describe("edit prompt flag variants", () => {
     expect(result.guidelines.some((g) => g.includes("post-edit diff"))).toBe(false);
   });
 
-  it("withReplacePrompts drops the replace_within cross-reference when the tool is off", () => {
+  it("withReplacePrompts drops the replace_match cross-reference when the tool is off", () => {
     const on = withReplacePrompts(replaceBase, DEFAULT_EDIT_FLAGS);
-    expect(on.description).toContain("use `replace_within` instead");
-    const off = withReplacePrompts(replaceBase, { ...DEFAULT_EDIT_FLAGS, replaceWithinEnabled: false });
-    expect(off.description).not.toContain("replace_within");
+    expect(on.description).toContain("use `replace_match` instead");
+    const off = withReplacePrompts(replaceBase, { ...DEFAULT_EDIT_FLAGS, replaceMatchEnabled: false });
+    expect(off.description).not.toContain("replace_match");
     expect(off.description).toContain("Replace a range of lines");
   });
 
@@ -236,21 +236,21 @@ describe("edit prompt flag variants", () => {
   });
 
   it("withUndoPrompts drops disabled tools from its operation lists", () => {
-    const off = withUndoPrompts(undoBase, { ...DEFAULT_EDIT_FLAGS, replaceWithinEnabled: false, copyMoveEnabled: false });
+    const off = withUndoPrompts(undoBase, { ...DEFAULT_EDIT_FLAGS, replaceMatchEnabled: false, copyMoveEnabled: false });
     expect(off.description).not.toContain("copy");
-    expect(off.description).not.toContain("replace_within");
+    expect(off.description).not.toContain("replace_match");
     expect(off.description).not.toContain("or move");
     expect(off.description).toContain("replace or insert");
     expect(off.snippet).not.toContain("copy");
-    expect(off.snippet).not.toContain("replace_within");
-    expect(off.guidelines.some((g) => g.includes("replace_within"))).toBe(false);
+    expect(off.snippet).not.toContain("replace_match");
+    expect(off.guidelines.some((g) => g.includes("replace_match"))).toBe(false);
     expect(off.guidelines.some((g) => g.includes("cross-file `move`"))).toBe(false);
   });
 
   it("withUndoPrompts keeps the full operation list when both toggles are on", () => {
     const on = withUndoPrompts(undoBase, DEFAULT_EDIT_FLAGS);
-    expect(on.description).toContain("replace, replace_within, insert, copy, or move");
-    expect(on.snippet).toContain("`replace`, `replace_within`, `insert`, `copy`, or `move`");
+    expect(on.description).toContain("replace, replace_match, insert, copy, or move");
+    expect(on.snippet).toContain("`replace`, `replace_match`, `insert`, `copy`, or `move`");
     expect(on.guidelines.some((g) => g.includes("cross-file `move`"))).toBe(true);
   });
 
@@ -261,15 +261,15 @@ describe("edit prompt flag variants", () => {
     expect(result.description).toContain("Strict-input mode is on");
   });
 
-  it("withReplaceWithinPrompts adds the require-path and strict-input notices", () => {
-    const result = withReplaceWithinPrompts(replaceBase, { ...DEFAULT_EDIT_FLAGS, requirePath: true, strictInput: true });
+  it("withReplaceMatchPrompts adds the require-path and strict-input notices", () => {
+    const result = withReplaceMatchPrompts(replaceBase, { ...DEFAULT_EDIT_FLAGS, requirePath: true, strictInput: true });
     expect(result.description).toContain("Also give `path` matching the file the anchors were served for");
     expect(result.description).toContain("Strict-input mode is on");
   });
 
-  it("withReplaceWithinPrompts leaves guidelines unchanged when Copy/move is off", () => {
-    const on = withReplaceWithinPrompts(withinBase, DEFAULT_EDIT_FLAGS);
-    const off = withReplaceWithinPrompts(withinBase, { ...DEFAULT_EDIT_FLAGS, copyMoveEnabled: false });
+  it("withReplaceMatchPrompts leaves guidelines unchanged when Copy/move is off", () => {
+    const on = withReplaceMatchPrompts(withinBase, DEFAULT_EDIT_FLAGS);
+    const off = withReplaceMatchPrompts(withinBase, { ...DEFAULT_EDIT_FLAGS, copyMoveEnabled: false });
     expect(off.guidelines).toEqual(on.guidelines);
   });
 
@@ -284,13 +284,13 @@ describe("edit prompt flag variants", () => {
 
   it("withReadPrompts lists only the enabled edit tools in its first guideline", () => {
     const all = withReadPrompts(readBase, DEFAULT_EDIT_FLAGS);
-    expect(all.guidelines[0]).toBe("Prefer the hashline tools for anything that touches files: `read`, `replace`, `replace_within`, `insert`, `copy`, `move`, or `undo_last_change`.");
-    const noWithin = withReadPrompts(readBase, { ...DEFAULT_EDIT_FLAGS, replaceWithinEnabled: false });
-    expect(noWithin.guidelines[0]).not.toContain("replace_within");
+    expect(all.guidelines[0]).toBe("Prefer the hashline tools for anything that touches files: `read`, `replace`, `replace_match`, `insert`, `copy`, `move`, or `undo_last_change`.");
+    const noWithin = withReadPrompts(readBase, { ...DEFAULT_EDIT_FLAGS, replaceMatchEnabled: false });
+    expect(noWithin.guidelines[0]).not.toContain("replace_match");
     const noTransfer = withReadPrompts(readBase, { ...DEFAULT_EDIT_FLAGS, copyMoveEnabled: false });
     expect(noTransfer.guidelines[0]).not.toContain("`copy`");
     expect(noTransfer.guidelines[0]).not.toContain("`move`");
-    expect(noTransfer.guidelines[0]).toContain("`replace_within`");
+    expect(noTransfer.guidelines[0]).toContain("`replace_match`");
   });
 
   it("withReadPrompts drops the auto-read-all guideline when auto-read-all is off", () => {

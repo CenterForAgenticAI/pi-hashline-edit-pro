@@ -52,7 +52,7 @@ describe("copy and move registration", () => {
   });
 
   it("adds path to the schema when require-path mode is on", () => {
-    const tool = buildTransferToolDef("copy", { requirePath: true, strictInput: false, autoRead: true, autoReadAllActive: false, replaceWithinEnabled: true, copyMoveEnabled: true });
+    const tool = buildTransferToolDef("copy", { requirePath: true, strictInput: false, autoRead: true, autoReadAllActive: false, replaceMatchEnabled: true, copyMoveEnabled: true });
     const schema = tool.parameters as { properties?: Record<string, unknown> };
     expect(schema.properties?.path).toBeDefined();
   });
@@ -82,7 +82,7 @@ describe("copy", () => {
 
       const applied = await getTool("replace").execute(
         "e1",
-        { remove_from: beta, remove_to: beta, replacement_lines: ["BETA"] },
+        { remove_from: beta, remove_to: beta, text: ["BETA"] },
         undefined,
         undefined,
         ctx,
@@ -490,7 +490,7 @@ describe("served-range verification", () => {
         served: undefined,
       });
       expect(plan.servedOverride).toBeUndefined();
-      expect(plan.editParams.replacement_lines).toEqual(["b", "c", "a"]);
+      expect(plan.editParams.text).toEqual(["b", "c", "a"]);
     });
   });
 });

@@ -188,7 +188,7 @@ describe("write-hook registerWriteHook", () => {
       }
     });
   });
-  it("handles file_path alias", async () => {
+  it("ignores write input with a file_path", async () => {
     await withTempDir("pi-hashline-writehook-test-", async () => {
       const dir = await mkdtemp(join(await getWritableTempRoot(), "writehook-alias-"));
       try {
@@ -200,7 +200,7 @@ describe("write-hook registerWriteHook", () => {
         registerWriteHook(pi);
         const handler = handlers.get("tool_call") as (event: unknown, ctx: unknown) => Promise<unknown>;
         const result = await handler({ toolName: "write", input: { file_path: "alias.txt", content: "ATIm│echo\n" } }, { cwd: dir, signal: undefined });
-        expect(result).toEqual(expect.objectContaining({ block: true }));
+        expect(result).toBeUndefined();
       } finally {
         await rm(dir, { recursive: true, force: true });
       }

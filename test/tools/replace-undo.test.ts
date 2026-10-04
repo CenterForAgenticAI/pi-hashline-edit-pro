@@ -56,7 +56,7 @@ describe("undo_last_change", () => {
         "e1",
         {
           remove_from: hashes[1]!, remove_to: hashes[1]!,
-          replacement_lines: ["BBB"],
+          text: ["BBB"],
         },
         undefined,
         undefined,
@@ -82,30 +82,19 @@ describe("undo_last_change", () => {
     });
   });
 
-  it("undo works with the file_path alias", async () => {
+  it("rejects the file_path alias for undo", async () => {
     await withTempFile("sample.ts", "aaa\nbbb\nccc\n", async ({ cwd }) => {
       const { getTool, ctx } = setupIntegrationTest(cwd);
-      const editTool = getTool("replace");
       const undo = getTool("undo_last_change");
-      const hashes = await servedAnchors(getTool, ctx, "sample.ts");
-
-      await editTool.execute(
-        "e1",
-        { remove_from: hashes[1]!, remove_to: hashes[1]!, replacement_lines: ["BBB"] },
-        undefined,
-        undefined,
-        ctx,
-      );
-
-      const undoResult = await undo.execute(
-        "u1",
-        { file_path: "sample.ts" },
-        undefined,
-        undefined,
-        ctx,
-      );
-      expect(undoResult.isError).toBeFalsy();
-      expect(getText(undoResult)).toMatch(/undone last change/i);
+      await expect(
+        undo.execute(
+          "u1",
+          { file_path: "sample.ts" },
+          undefined,
+          undefined,
+          ctx,
+        ),
+      ).rejects.toThrow(/\[E_BAD_SHAPE\]/);
     });
   });
 
@@ -120,7 +109,7 @@ describe("undo_last_change", () => {
         "e1",
         {
           remove_from: hashes[1]!, remove_to: hashes[1]!,
-          replacement_lines: ["BBB"],
+          text: ["BBB"],
         },
         undefined,
         undefined,
@@ -150,7 +139,7 @@ describe("undo_last_change", () => {
         "e1",
         {
           remove_from: hashes[1]!, remove_to: hashes[1]!,
-          replacement_lines: ["BBB"],
+          text: ["BBB"],
         },
         undefined,
         undefined,
@@ -193,7 +182,7 @@ describe("undo_last_change", () => {
         "e1",
         {
           remove_from: hashes[1]!, remove_to: hashes[1]!,
-          replacement_lines: ["BBB", "B2"],
+          text: ["BBB", "B2"],
         },
         undefined,
         undefined,
@@ -225,7 +214,7 @@ describe("undo_last_change", () => {
         "e1",
         {
           remove_from: hashes[1]!, remove_to: hashes[1]!,
-          replacement_lines: [],
+          text: [],
         },
         undefined,
         undefined,
@@ -257,7 +246,7 @@ describe("undo_last_change", () => {
         "e1",
         {
           remove_from: hashes[1]!, remove_to: hashes[2]!,
-          replacement_lines: [`XXX`, `YYY`, `ZZZ`],
+          text: [`XXX`, `YYY`, `ZZZ`],
         },
         undefined,
         undefined,
@@ -289,7 +278,7 @@ describe("undo_last_change", () => {
         "e1",
         {
           remove_from: hashes[1]!, remove_to: hashes[1]!,
-          replacement_lines: ["BBB"],
+          text: ["BBB"],
         },
         undefined,
         undefined,
@@ -322,7 +311,7 @@ describe("undo_last_change", () => {
         "e1",
         {
           remove_from: hashes[1]!, remove_to: hashes[1]!,
-          replacement_lines: ["BBB"],
+          text: ["BBB"],
         },
         undefined,
         undefined,
@@ -362,7 +351,7 @@ describe("undo_last_change", () => {
             "e1",
             {
               remove_from: hashes[1]!, remove_to: hashes[1]!,
-              replacement_lines: ["BBB"],
+              text: ["BBB"],
             },
             undefined,
             undefined,
@@ -380,7 +369,7 @@ describe("undo_last_change", () => {
         "e2",
         {
           remove_from: hashes[1]!, remove_to: hashes[1]!,
-          replacement_lines: ["BBB"],
+          text: ["BBB"],
         },
         undefined,
         undefined,
@@ -400,7 +389,7 @@ describe("undo_last_change", () => {
         "e1",
         {
           remove_from: hashes[1]!, remove_to: hashes[1]!,
-          replacement_lines: ["BBB"],
+          text: ["BBB"],
         },
         undefined,
         undefined,
@@ -417,7 +406,7 @@ describe("undo_last_change", () => {
             "e2",
             {
               remove_from: hashes[2]!, remove_to: hashes[2]!,
-              replacement_lines: ["CCC"],
+              text: ["CCC"],
             },
             undefined,
             undefined,
@@ -452,7 +441,7 @@ describe("undo_last_change", () => {
             "e1",
             {
               remove_from: hashes[1]!, remove_to: hashes[1]!,
-              replacement_lines: ["BBB"],
+              text: ["BBB"],
             },
             undefined,
             undefined,
@@ -479,7 +468,7 @@ describe("undo_last_change", () => {
         "e1",
         {
           remove_from: hashes[1]!, remove_to: hashes[1]!,
-          replacement_lines: ["BBB"],
+          text: ["BBB"],
         },
         undefined,
         undefined,
@@ -502,7 +491,7 @@ describe("undo_last_change", () => {
             "e2",
             {
               remove_from: hashes[2]!, remove_to: hashes[2]!,
-              replacement_lines: ["CCC"],
+              text: ["CCC"],
             },
             controller.signal,
             undefined,
@@ -532,7 +521,7 @@ describe("undo_last_change", () => {
         "e1",
         {
           remove_from: hashes[1]!, remove_to: hashes[1]!,
-          replacement_lines: ["BBB"],
+          text: ["BBB"],
         },
         undefined,
         undefined,
@@ -571,7 +560,7 @@ describe("undo_last_change", () => {
         "e1",
         {
           remove_from: hashes[0]!, remove_to: hashes[0]!,
-          replacement_lines: ["LINE1"],
+          text: ["LINE1"],
         },
         undefined,
         undefined,
@@ -604,7 +593,7 @@ describe("undo_last_change", () => {
 
       await editTool.execute(
         "e1",
-        { remove_from: hashes[1]!, remove_to: hashes[1]!, replacement_lines: ["BBB"] },
+        { remove_from: hashes[1]!, remove_to: hashes[1]!, text: ["BBB"] },
         undefined, undefined, ctx,
       );
 
@@ -642,7 +631,7 @@ describe("undo_last_change", () => {
 
       await editTool.execute(
         "e1",
-        { remove_from: hashes[1]!, remove_to: hashes[1]!, replacement_lines: ["BBB"] },
+        { remove_from: hashes[1]!, remove_to: hashes[1]!, text: ["BBB"] },
         undefined, undefined, ctx,
       );
 
@@ -666,7 +655,7 @@ describe("undo_last_change", () => {
 
       await editTool.execute(
         "e1",
-        { remove_from: hashes[1]!, remove_to: hashes[1]!, replacement_lines: ["BBB"] },
+        { remove_from: hashes[1]!, remove_to: hashes[1]!, text: ["BBB"] },
         undefined, undefined, ctx,
       );
 
@@ -690,7 +679,7 @@ describe("undo_last_change", () => {
 
       await editTool.execute(
         "e1",
-        { remove_from: hashes[1]!, remove_to: hashes[1]!, replacement_lines: ["BBB"] },
+        { remove_from: hashes[1]!, remove_to: hashes[1]!, text: ["BBB"] },
         undefined, undefined, ctx,
       );
 
@@ -727,7 +716,7 @@ describe("undo_last_change", () => {
       await chmod(path, 0o640);
       await editTool.execute(
         "e1",
-        { remove_from: hashes[1]!, remove_to: hashes[1]!, replacement_lines: ["BBB"] },
+        { remove_from: hashes[1]!, remove_to: hashes[1]!, text: ["BBB"] },
         undefined, undefined, ctx,
       );
 
@@ -751,7 +740,7 @@ describe("undo_last_change", () => {
 
       await editTool.execute(
         "e1",
-        { remove_from: hashes[1]!, remove_to: hashes[1]!, replacement_lines: ["BBB"] },
+        { remove_from: hashes[1]!, remove_to: hashes[1]!, text: ["BBB"] },
         undefined, undefined, ctx,
       );
 
@@ -803,7 +792,7 @@ describe("undo_last_change", () => {
 
       await editTool.execute(
         "e1",
-        { remove_from: emptyHash, remove_to: emptyHash, replacement_lines: ["first", "second"] },
+        { remove_from: emptyHash, remove_to: emptyHash, text: ["first", "second"] },
         undefined, undefined, ctx,
       );
       expect(await readFile(join(cwd, "sample.ts"), "utf-8")).toBe("first\nsecond");
@@ -837,7 +826,7 @@ describe("undo cleared after write", () => {
 
       await editTool.execute(
         "e1",
-        { remove_from: hashes[1]!, remove_to: hashes[1]!, replacement_lines: ["BBB"] },
+        { remove_from: hashes[1]!, remove_to: hashes[1]!, text: ["BBB"] },
         undefined, undefined, { cwd } as any,
       );
 
@@ -863,7 +852,7 @@ describe("undo cleared after write", () => {
 
       await editTool.execute(
         "e1",
-        { remove_from: hashes[1]!, remove_to: hashes[1]!, replacement_lines: ["BBB"] },
+        { remove_from: hashes[1]!, remove_to: hashes[1]!, text: ["BBB"] },
         undefined, undefined, { cwd } as any,
       );
 
@@ -889,7 +878,7 @@ describe("undo cleared after write", () => {
 
       await editTool.execute(
         "e1",
-        { remove_from: hashes[0]!, remove_to: hashes[0]!, replacement_lines: ["ALPHA"] },
+        { remove_from: hashes[0]!, remove_to: hashes[0]!, text: ["ALPHA"] },
         undefined, undefined, ctx,
       );
 

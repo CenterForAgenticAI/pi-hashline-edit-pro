@@ -26,7 +26,7 @@ describe("served state across an external shrink", () => {
         {
           remove_from: dHash,
           remove_to: eHash,
-          replacement_lines: [],
+          text: [],
         },
         undefined,
         undefined,
@@ -54,7 +54,7 @@ describe("served state across an external shrink", () => {
           {
             remove_from: aHash,
             remove_to: aHash,
-            replacement_lines: ["x"],
+            text: ["x"],
           },
           undefined,
           undefined,

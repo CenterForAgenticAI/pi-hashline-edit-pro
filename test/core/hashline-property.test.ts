@@ -152,7 +152,7 @@ describe("property: single random edit per call", () => {
       const edit = resEdit({
         remove_from: hashes[span.s - 1]!,
         remove_to: hashes[span.e - 1]!,
-        replacement_lines: span.repl,
+        text: span.repl,
       });
       const result = applyEdit(content, edit, undefined, hashes, home.testPath);
       const correctedExpected = expectedEditContent(
@@ -195,7 +195,7 @@ describe("property: sequential random edits", () => {
         const edit = resEdit({
           remove_from: currentHashes[span.s - 1]!,
           remove_to: currentHashes[span.e - 1]!,
-          replacement_lines: span.repl,
+          text: span.repl,
         });
         const result = applyEdit(current, edit, undefined, currentHashes, home.testPath);
         applied.push({ s: span.s, e: span.e, repl: span.repl });
@@ -275,7 +275,7 @@ describe("property: chained stable mapping at every step", () => {
         const edit = resEdit({
           remove_from: hashes[span.s - 1]!,
           remove_to: hashes[span.e - 1]!,
-          replacement_lines: span.repl,
+          text: span.repl,
         });
         let result;
         try {

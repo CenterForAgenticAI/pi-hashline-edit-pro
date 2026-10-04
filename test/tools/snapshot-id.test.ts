@@ -19,7 +19,7 @@ describe("snapshotId surface (details-only after W2)", () => {
       const result = await editTool.execute(
         "e1",
         {
-          remove_from: betaRef, remove_to: betaRef, replacement_lines: ["BETA"],
+          remove_from: betaRef, remove_to: betaRef, text: ["BETA"],
         },
         undefined,
         undefined,
@@ -51,7 +51,7 @@ describe("snapshotId surface (details-only after W2)", () => {
         editTool.execute(
           "e1",
           {
-            remove_from: alphaRef, remove_to: gammaRef, replacement_lines: ["alpha", "x", "gamma"],
+            remove_from: alphaRef, remove_to: gammaRef, text: ["alpha", "x", "gamma"],
           },
           undefined,
           undefined,
@@ -76,7 +76,7 @@ describe("snapshotId surface (details-only after W2)", () => {
       const result = await editTool.execute(
         "e1",
         {
-          remove_from: betaRef, remove_to: betaRef, replacement_lines: ["BETA"],
+          remove_from: betaRef, remove_to: betaRef, text: ["BETA"],
         },
         undefined,
         undefined,
@@ -100,7 +100,7 @@ describe("snapshotId surface (details-only after W2)", () => {
       await editTool.execute(
         "e1",
         {
-          remove_from: betaRef, remove_to: betaRef, replacement_lines: ["BETA"],
+          remove_from: betaRef, remove_to: betaRef, text: ["BETA"],
         },
         undefined,
         undefined,
@@ -111,7 +111,7 @@ describe("snapshotId surface (details-only after W2)", () => {
         editTool.execute(
           "e2",
           {
-            remove_from: betaRef, remove_to: betaRef, replacement_lines: ["BETA-AGAIN"],
+            remove_from: betaRef, remove_to: betaRef, text: ["BETA-AGAIN"],
           },
           undefined,
           undefined,

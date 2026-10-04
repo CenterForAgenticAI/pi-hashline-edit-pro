@@ -25,7 +25,7 @@ describe("chained edits on files with duplicated content", () => {
         {
           remove_from: refs["a"]!,
           remove_to: refs["c"]!,
-          replacement_lines: [],
+          text: [],
         },
         undefined,
         undefined,
@@ -38,7 +38,7 @@ describe("chained edits on files with duplicated content", () => {
         {
           remove_from: refs["d"]!,
           remove_to: refs["e"]!,
-          replacement_lines: [],
+          text: [],
         },
         undefined,
         undefined,
@@ -66,7 +66,7 @@ describe("chained edits on files with duplicated content", () => {
         {
           remove_from: refs["a"]!,
           remove_to: refs["c"]!,
-          replacement_lines: [],
+          text: [],
         },
         undefined,
         undefined,
@@ -81,7 +81,7 @@ describe("chained edits on files with duplicated content", () => {
         {
           remove_from: contextHash,
           remove_to: contextHash,
-          replacement_lines: ["B"],
+          text: ["B"],
         },
         undefined,
         undefined,

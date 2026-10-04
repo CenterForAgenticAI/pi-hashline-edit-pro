@@ -15,8 +15,8 @@ describe("planAssistantMessage", () => {
       );
       await planAssistantMessage(
         assistantMessage([
-          toolCall("c1", "replace", { remove_from: hashes[0], remove_to: hashes[0], replacement_lines: ["x"] }),
-          toolCall("c2", "replace", { remove_from: hashes[1], remove_to: hashes[1], replacement_lines: ["y"] }),
+          toolCall("c1", "replace", { remove_from: hashes[0], remove_to: hashes[0], text: ["x"] }),
+          toolCall("c2", "replace", { remove_from: hashes[1], remove_to: hashes[1], text: ["y"] }),
         ]),
         cwd,
       );
@@ -32,7 +32,7 @@ describe("planAssistantMessage", () => {
       const hashes = await lineHashes("aaa\nbbb\nccc\n", path);
       await planAssistantMessage(
         assistantMessage([
-          toolCall("c1", "replace", { remove_from: hashes[0], remove_to: hashes[0], replacement_lines: ["x"] }),
+          toolCall("c1", "replace", { remove_from: hashes[0], remove_to: hashes[0], text: ["x"] }),
         ]),
         cwd,
       );
@@ -46,8 +46,8 @@ describe("planAssistantMessage", () => {
       const hashes = await lineHashes("aaa\nbbb\nccc\n", path);
       await planAssistantMessage(
         assistantMessage([
-          toolCall("c1", "replace", { remove_from: hashes[0], remove_to: hashes[0], replacement_lines: ["x"] }),
-          toolCall("c2", "replace", { remove_from: hashes[2], remove_to: hashes[2], replacement_lines: ["y"] }),
+          toolCall("c1", "replace", { remove_from: hashes[0], remove_to: hashes[0], text: ["x"] }),
+          toolCall("c2", "replace", { remove_from: hashes[2], remove_to: hashes[2], text: ["y"] }),
         ]),
         cwd,
       );
@@ -65,10 +65,10 @@ describe("planAssistantMessage", () => {
       const hashesB = await lineHashes("mmm\nnnn\n", second);
       await planAssistantMessage(
         assistantMessage([
-          toolCall("a1", "replace", { remove_from: hashesA[0], remove_to: hashesA[0], replacement_lines: ["x"] }),
-          toolCall("b1", "replace", { remove_from: hashesB[0], remove_to: hashesB[0], replacement_lines: ["y"] }),
-          toolCall("a2", "replace", { remove_from: hashesA[1], remove_to: hashesA[1], replacement_lines: ["z"] }),
-          toolCall("b2", "insert", { anchor: hashesB[1], direction: "after", lines: ["w"] }),
+          toolCall("a1", "replace", { remove_from: hashesA[0], remove_to: hashesA[0], text: ["x"] }),
+          toolCall("b1", "replace", { remove_from: hashesB[0], remove_to: hashesB[0], text: ["y"] }),
+          toolCall("a2", "replace", { remove_from: hashesA[1], remove_to: hashesA[1], text: ["z"] }),
+          toolCall("b2", "insert", { anchor: hashesB[1], direction: "after", text: ["w"] }),
         ]),
         cwd,
       );
@@ -88,9 +88,9 @@ describe("planAssistantMessage", () => {
       const hashesB = await lineHashes("mmm\n", second);
       await planAssistantMessage(
         assistantMessage([
-          toolCall("a1", "replace", { remove_from: hashesA[0], remove_to: hashesA[0], replacement_lines: ["x"] }),
-          toolCall("b1", "replace", { remove_from: hashesB[0], remove_to: hashesB[0], replacement_lines: ["y"] }),
-          toolCall("a2", "replace", { remove_from: hashesA[1], remove_to: hashesA[1], replacement_lines: ["z"] }),
+          toolCall("a1", "replace", { remove_from: hashesA[0], remove_to: hashesA[0], text: ["x"] }),
+          toolCall("b1", "replace", { remove_from: hashesB[0], remove_to: hashesB[0], text: ["y"] }),
+          toolCall("a2", "replace", { remove_from: hashesA[1], remove_to: hashesA[1], text: ["z"] }),
         ]),
         cwd,
       );
@@ -106,8 +106,8 @@ describe("planAssistantMessage", () => {
       const hashes = await lineHashes("aaa\nbbb\nccc\n", path);
       await planAssistantMessage(
         assistantMessage([
-          toolCall("c1", "replace", { remove_from: hashes[0], remove_to: hashes[0], replacement_lines: ["x"] }),
-          toolCall("c2", "replace", { remove_from: "ZZZZ", remove_to: "ZZZZ", replacement_lines: ["y"] }),
+          toolCall("c1", "replace", { remove_from: hashes[0], remove_to: hashes[0], text: ["x"] }),
+          toolCall("c2", "replace", { remove_from: "ZZZZ", remove_to: "ZZZZ", text: ["y"] }),
         ]),
         cwd,
       );
@@ -128,8 +128,8 @@ describe("planAssistantMessage", () => {
       const hashes = await lineHashes("aaa\nbbb\nccc\n", path);
       await planAssistantMessage(
         assistantMessage([
-          toolCall("c1", "replace", { path: "sample.txt", remove_from: hashes[0], remove_to: hashes[0], replacement_lines: ["x"] }),
-          toolCall("c2", "replace", { path: "sample.txt", remove_from: hashes[1], remove_to: hashes[1], replacement_lines: ["y"] }),
+          toolCall("c1", "replace", { path: "sample.txt", remove_from: hashes[0], remove_to: hashes[0], text: ["x"] }),
+          toolCall("c2", "replace", { path: "sample.txt", remove_from: hashes[1], remove_to: hashes[1], text: ["y"] }),
         ]),
         cwd,
       );
@@ -138,8 +138,8 @@ describe("planAssistantMessage", () => {
       resetBatchStateForTests();
       await planAssistantMessage(
         assistantMessage([
-          toolCall("d1", "replace", { path: "sample.txt", remove_from: hashes[0], remove_to: hashes[0], replacement_lines: ["x"] }),
-          toolCall("d2", "replace", { path: "other.txt", remove_from: hashes[1], remove_to: hashes[1], replacement_lines: ["y"] }),
+          toolCall("d1", "replace", { path: "sample.txt", remove_from: hashes[0], remove_to: hashes[0], text: ["x"] }),
+          toolCall("d2", "replace", { path: "other.txt", remove_from: hashes[1], remove_to: hashes[1], text: ["y"] }),
         ]),
         cwd,
       );
@@ -154,8 +154,8 @@ describe("planAssistantMessage", () => {
       const hashes = await lineHashes("aaa\nbbb\nccc\n", path);
       await planAssistantMessage(
         assistantMessage([
-          toolCall("c1", "replace", { remove_from: hashes[0], remove_to: hashes[0], replacement_lines: ["x"] }),
-          toolCall("c2", "replace", { remove_from: hashes[1], remove_to: hashes[1], replacement_lines: ["y"] }),
+          toolCall("c1", "replace", { remove_from: hashes[0], remove_to: hashes[0], text: ["x"] }),
+          toolCall("c2", "replace", { remove_from: hashes[1], remove_to: hashes[1], text: ["y"] }),
         ]),
         cwd,
       );

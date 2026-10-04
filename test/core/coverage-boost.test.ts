@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeAll } from "vitest";
-import { isHashRow, numberedRead, withLineNumbers, clipLine, assertLineLimit, lineLimitMoreThanMessage, truncateToBytes, getCached, splitLines, visLines, isRec, normalizeFilePath } from "../../src/utils";
+import { isHashRow, numberedRead, withLineNumbers, clipLine, assertLineLimit, lineLimitMoreThanMessage, truncateToBytes, getCached, splitLines, visLines, isRec, normalizeRequest } from "../../src/utils";
 import { parseHashRef } from "../../src/hashline/parse";
 import { initHasher, getH, xxh32, contentChecksum } from "../../src/hashline/hasher";
 import { isValidHashList, parseHashList, parseStoredHashes, isValidSnapshot, isCorruptionError, isBusyError } from "../../src/hash-store/validation";
@@ -74,13 +74,12 @@ describe("coverage boost utils", () => {
     expect(visLines("")).toEqual([]);
     expect(visLines("a\nb")).toEqual(["a", "b"]);
   });
-  it("isRec and normalizeFilePath", () => {
+  it("isRec and normalizeRequest leave aliases untouched", () => {
     expect(isRec({})).toBe(true);
     expect(isRec(null)).toBe(false);
-    const r: Record<string, unknown> = { file_path: "a.txt" };
-    normalizeFilePath(r);
-    expect(r.path).toBe("a.txt");
-    expect(r.file_path).toBeUndefined();
+    const r = normalizeRequest({ file_path: "a.txt" }) as Record<string, unknown>;
+    expect(r.path).toBeUndefined();
+    expect(r.file_path).toBe("a.txt");
   });
   it("canon and hashSource and toCwd", () => {
     expect(canon("  hello   ")).toBe("  hello");
@@ -244,8 +243,8 @@ describe("coverage boost hash-store and read", () => {
   it("covers insert validation", async () => {
     const { assertInsertReq } = await import("../../src/insert");
     expect(() => assertInsertReq(null)).toThrow("[E_BAD_SHAPE]");
-    expect(() => assertInsertReq({ anchor: "", direction: "after", lines: [] })).toThrow();
-    expect(() => assertInsertReq({ anchor: "abc", direction: "wrong" as never, lines: [] })).toThrow();
-    expect(() => assertInsertReq({ anchor: "abc", direction: "after", lines: "x" })).not.toThrow();
+    expect(() => assertInsertReq({ anchor: "", direction: "after", text: [] })).toThrow();
+    expect(() => assertInsertReq({ anchor: "abc", direction: "wrong" as never, text: [] })).toThrow();
+    expect(() => assertInsertReq({ anchor: "abc", direction: "after", text: "x" })).not.toThrow();
   });
 });

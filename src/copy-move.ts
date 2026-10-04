@@ -167,7 +167,7 @@ export function buildTransferEdit(input: {
       editParams: {
         remove_from: preload.fileHashes[insertLine - 1]!,
         remove_to: preload.fileHashes[insertLine - 1]!,
-        replacement_lines: [fileLines[insertLine - 1]!, ...sourceLines],
+        text: [fileLines[insertLine - 1]!, ...sourceLines],
       },
       foldedAnchorLines: 1,
       anchorCarry: 0,
@@ -181,7 +181,7 @@ export function buildTransferEdit(input: {
       editParams: {
         remove_from: preload.fileHashes[replacedStart - 1]!,
         remove_to: preload.fileHashes[replacedEnd - 1]!,
-        replacement_lines: [...sourceLines, ...fileLines.slice(insertLine, sourceStart - 1)],
+        text: [...sourceLines, ...fileLines.slice(insertLine, sourceStart - 1)],
       },
       foldedAnchorLines: 0,
       servedOverride: trustSpan(fileLines, preload.fileHashes, served, replacedStart, replacedEnd),
@@ -194,7 +194,7 @@ export function buildTransferEdit(input: {
     editParams: {
       remove_from: preload.fileHashes[replacedStart - 1]!,
       remove_to: preload.fileHashes[replacedEnd - 1]!,
-      replacement_lines: [...fileLines.slice(sourceEnd, insertLine), ...sourceLines],
+      text: [...fileLines.slice(sourceEnd, insertLine), ...sourceLines],
     },
     foldedAnchorLines: 0,
     servedOverride: trustSpan(fileLines, preload.fileHashes, served, replacedStart, replacedEnd),
@@ -299,12 +299,12 @@ async function prepareCrossTransfer(input: {
     ? {
         remove_from: destinationPreload.fileHashes[0]!,
         remove_to: destinationPreload.fileHashes[0]!,
-        replacement_lines: [...moved],
+        text: [...moved],
       }
     : {
         remove_from: destinationPreload.fileHashes[insertLine - 1]!,
         remove_to: destinationPreload.fileHashes[insertLine - 1]!,
-        replacement_lines: [destinationLines[insertLine - 1]!, ...moved],
+        text: [destinationLines[insertLine - 1]!, ...moved],
       };
   const destinationFolded = destinationPreload.normalized.length === 0 ? 0 : 1;
   const sourceEndings = endingsForRange(sourcePreload.endingSeparators, sourceStart, sourceEnd);
@@ -315,7 +315,7 @@ async function prepareCrossTransfer(input: {
   const sourceEdit: HTEdit = {
     remove_from: sourcePreload.fileHashes[sourceStart - 1]!,
     remove_to: sourcePreload.fileHashes[sourceEnd - 1]!,
-    replacement_lines: [],
+    text: [],
   };
   return { sourcePreload, destinationPreload, sourceDisplay, destinationDisplay, destinationEdit, destinationFolded, sourceEdit, endingOverrides };
 }

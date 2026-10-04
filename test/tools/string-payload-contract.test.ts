@@ -10,7 +10,7 @@ describe("string payload contract", () => {
       const beta = anchorFor(text, "beta");
       await getTool("insert").execute(
         "i1",
-        { anchor: beta, direction: "before", lines: "inserted line 1\ninserted line 2\n" },
+        { anchor: beta, direction: "before", text: "inserted line 1\ninserted line 2\n" },
         undefined, undefined, ctx,
       );
       expect(await readFile(path, "utf-8")).toBe("alpha\ninserted line 1\ninserted line 2\nbeta\ngamma\n");
@@ -22,7 +22,7 @@ describe("string payload contract", () => {
       const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
       const text = getText(await readTool.execute("r1", { path: "sample.ts" }, undefined, undefined, ctx));
       const alpha = anchorFor(text, "alpha");
-      await getTool("insert").execute("i1", { anchor: alpha, direction: "after", lines: "one\n\ntwo\n" }, undefined, undefined, ctx);
+      await getTool("insert").execute("i1", { anchor: alpha, direction: "after", text: "one\n\ntwo\n" }, undefined, undefined, ctx);
       expect(await readFile(path, "utf-8")).toBe("alpha\none\n\ntwo\nbeta\n");
     });
   });
@@ -32,7 +32,7 @@ describe("string payload contract", () => {
       const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
       const text = getText(await readTool.execute("r1", { path: "sample.ts" }, undefined, undefined, ctx));
       const alpha = anchorFor(text, "alpha");
-      await getTool("insert").execute("i1", { anchor: alpha, direction: "after", lines: "" }, undefined, undefined, ctx);
+      await getTool("insert").execute("i1", { anchor: alpha, direction: "after", text: "" }, undefined, undefined, ctx);
       expect(await readFile(path, "utf-8")).toBe("alpha\n\nbeta\n");
     });
   });
@@ -42,7 +42,7 @@ describe("string payload contract", () => {
       const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
       const text = getText(await readTool.execute("r1", { path: "sample.ts" }, undefined, undefined, ctx));
       const alpha = anchorFor(text, "alpha");
-      await getTool("insert").execute("i1", { anchor: alpha, direction: "after", lines: "\n" }, undefined, undefined, ctx);
+      await getTool("insert").execute("i1", { anchor: alpha, direction: "after", text: "\n" }, undefined, undefined, ctx);
       expect(await readFile(path, "utf-8")).toBe("alpha\n\nbeta\n");
     });
   });
@@ -52,7 +52,7 @@ describe("string payload contract", () => {
       const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
       const text = getText(await readTool.execute("r1", { path: "sample.ts" }, undefined, undefined, ctx));
       const b = anchorFor(text, "b");
-      await getTool("replace").execute("e1", { remove_from: b, remove_to: b, replacement_lines: "B1\nB2" }, undefined, undefined, ctx);
+      await getTool("replace").execute("e1", { remove_from: b, remove_to: b, text: "B1\nB2" }, undefined, undefined, ctx);
       expect(await readFile(path, "utf-8")).toBe("a\nB1\nB2\nc\n");
     });
   });
@@ -62,7 +62,7 @@ describe("string payload contract", () => {
       const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
       const text = getText(await readTool.execute("r1", { path: "sample.ts" }, undefined, undefined, ctx));
       const b = anchorFor(text, "b");
-      await getTool("replace").execute("e1", { remove_from: b, remove_to: b, replacement_lines: "" }, undefined, undefined, ctx);
+      await getTool("replace").execute("e1", { remove_from: b, remove_to: b, text: "" }, undefined, undefined, ctx);
       expect(await readFile(path, "utf-8")).toBe("a\nc\n");
     });
   });
@@ -72,7 +72,7 @@ describe("string payload contract", () => {
       const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
       const text = getText(await readTool.execute("r1", { path: "sample.ts" }, undefined, undefined, ctx));
       const b = anchorFor(text, "b");
-      await getTool("replace").execute("e1", { remove_from: b, remove_to: b, replacement_lines: "\n" }, undefined, undefined, ctx);
+      await getTool("replace").execute("e1", { remove_from: b, remove_to: b, text: "\n" }, undefined, undefined, ctx);
       expect(await readFile(path, "utf-8")).toBe("a\n\nc\n");
     });
   });
@@ -82,7 +82,7 @@ describe("string payload contract", () => {
       const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
       const text = getText(await readTool.execute("r1", { path: "sample.ts" }, undefined, undefined, ctx));
       const beta = anchorFor(text, "beta");
-      await getTool("replace").execute("e1", { remove_from: beta, remove_to: beta, replacement_lines: "beta\n" }, undefined, undefined, ctx);
+      await getTool("replace").execute("e1", { remove_from: beta, remove_to: beta, text: "beta\n" }, undefined, undefined, ctx);
       expect(await readFile(path, "utf-8")).toBe("alpha\r\nbeta\ngamma\r\n");
     });
   });
@@ -93,8 +93,8 @@ describe("string payload contract", () => {
       const text = getText(await readTool.execute("r1", { path: "sample.ts" }, undefined, undefined, ctx));
       const beta = anchorFor(text, "beta");
       const gamma = anchorFor(text, "gamma");
-      const firstArgs = { remove_from: beta, remove_to: beta, replacement_lines: "beta1\nbeta2" };
-      const secondArgs = { remove_from: gamma, remove_to: gamma, replacement_lines: "GAMMA" };
+      const firstArgs = { remove_from: beta, remove_to: beta, text: "beta1\nbeta2" };
+      const secondArgs = { remove_from: gamma, remove_to: gamma, text: "GAMMA" };
       await handlers.get("message_end")!(
         { type: "message_end", message: assistantMessage([toolCall("b1", "replace", firstArgs), toolCall("b2", "replace", secondArgs)]) },
         ctx,
@@ -112,7 +112,7 @@ describe("string payload contract", () => {
       const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
       const text = getText(await readTool.execute("r1", { path: "sample.ts" }, undefined, undefined, ctx));
       const b = anchorFor(text, "b");
-      await getTool("replace").execute("e1", { remove_from: b, remove_to: b, replacement_lines: ["B", ""] }, undefined, undefined, ctx);
+      await getTool("replace").execute("e1", { remove_from: b, remove_to: b, text: ["B", ""] }, undefined, undefined, ctx);
       expect(await readFile(path, "utf-8")).toBe("a\nB\n\nc\n");
     });
   });
@@ -123,8 +123,8 @@ describe("string payload contract", () => {
       const text = getText(await readTool.execute("r1", { path: "sample.ts" }, undefined, undefined, ctx));
       const b = anchorFor(text, "b");
       const { assertReq } = await import("../../src/payload-contract");
-      expect(() => assertReq({ remove_from: b, remove_to: b, replacement_lines: ["B"] })).toThrow(
-        '[E_BAD_SHAPE] "replacement_lines" must be a string',
+      expect(() => assertReq({ remove_from: b, remove_to: b, text: ["B"] })).toThrow(
+        '[E_BAD_SHAPE] "text" must be a string',
       );
       expect(await readFile(path, "utf-8")).toBe("a\nb\nc\n");
     });

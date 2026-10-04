@@ -102,7 +102,7 @@ describe("stable hashing with duplicate content lines", () => {
         {
           remove_from: line1Hash,
           remove_to: firstBraceHash,
-          replacement_lines: [],
+          text: [],
         },
         undefined,
         undefined,
@@ -140,7 +140,7 @@ describe("stable hashing with duplicate content lines", () => {
         {
           remove_from: aHash,
           remove_to: cHash,
-          replacement_lines: [],
+          text: [],
         },
         undefined,
         undefined,
@@ -181,7 +181,7 @@ describe("stable hashing with duplicate content lines", () => {
         {
           remove_from: aHash,
           remove_to: cHash,
-          replacement_lines: [],
+          text: [],
         },
         undefined,
         undefined,
@@ -193,7 +193,7 @@ describe("stable hashing with duplicate content lines", () => {
         {
           remove_from: dHash,
           remove_to: eHash,
-          replacement_lines: [],
+          text: [],
         },
         undefined,
         undefined,

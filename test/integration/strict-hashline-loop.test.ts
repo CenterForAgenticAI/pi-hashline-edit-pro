@@ -16,7 +16,7 @@ describe("strict hashline tool loop", () => {
       await editTool.execute(
         "e1",
         {
-          remove_from: betaRef, remove_to: betaRef, replacement_lines: ["BETA"],
+          remove_from: betaRef, remove_to: betaRef, text: ["BETA"],
         },
         undefined,
         undefined,
@@ -27,7 +27,7 @@ describe("strict hashline tool loop", () => {
         editTool.execute(
           "e2",
           {
-            remove_from: betaRef, remove_to: betaRef, replacement_lines: ["BETA-AGAIN"],
+            remove_from: betaRef, remove_to: betaRef, text: ["BETA-AGAIN"],
           },
           undefined,
           undefined,
@@ -45,7 +45,7 @@ describe("strict hashline tool loop", () => {
       await editTool.execute(
         "e3",
         {
-          remove_from: freshRef, remove_to: freshRef, replacement_lines: ["BETA-AGAIN"],
+          remove_from: freshRef, remove_to: freshRef, text: ["BETA-AGAIN"],
         },
         undefined,
         undefined,
@@ -64,7 +64,7 @@ describe("strict hashline tool loop", () => {
 
       await editTool.execute(
         "e1",
-        { remove_from: emptyHash, remove_to: emptyHash, replacement_lines: ["first", "second"] },
+        { remove_from: emptyHash, remove_to: emptyHash, text: ["first", "second"] },
         undefined,
         undefined,
         ctx,
@@ -89,7 +89,7 @@ describe("CRLF line ending preservation", () => {
 
       await editTool.execute(
         "e1",
-        { remove_from: betaRef, remove_to: betaRef, replacement_lines: ["BETA"] },
+        { remove_from: betaRef, remove_to: betaRef, text: ["BETA"] },
         undefined,
         undefined,
         ctx,
@@ -115,7 +115,7 @@ describe("CRLF line ending preservation", () => {
 
       await editTool.execute(
         "e1",
-        { remove_from: betaRef, remove_to: betaRef, replacement_lines: ["BETA"] },
+        { remove_from: betaRef, remove_to: betaRef, text: ["BETA"] },
         undefined,
         undefined,
         ctx,
@@ -146,7 +146,7 @@ describe("UTF-8 BOM handling", () => {
 
       await editTool.execute(
         "e1",
-        { remove_from: betaRef, remove_to: betaRef, replacement_lines: ["BETA"] },
+        { remove_from: betaRef, remove_to: betaRef, text: ["BETA"] },
         undefined,
         undefined,
         ctx,

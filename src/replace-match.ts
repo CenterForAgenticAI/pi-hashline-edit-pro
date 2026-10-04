@@ -7,11 +7,10 @@ import { fmtRegion, MAX_HASH_LINES, parseHashRef, resolveAnchorLine, stripAnchor
 import { withAnchorSession } from "./anchor-registry";
 import { loadP, loadGuide } from "./prompts";
 import {
-  assertReplaceWithinReq,
-  buildReplaceWithinToolSchema,
-  getReplaceWithinInput,
-  normalizeReplaceWithinRequest,
-  type ReplaceWithinReq,
+  assertReplaceMatchReq,
+  buildReplaceMatchToolSchema,
+  getReplaceMatchInput,
+  type ReplaceMatchReq,
 } from "./payload-contract";
 import { literalEscapeHints, splitLines } from "./utils";
 import { toLF } from "./normalize";
@@ -24,21 +23,21 @@ import {
   resolveEditTargetWithRequirement,
   throwIfStrictInput,
   tryResolveEditTarget,
-  withReplaceWithinPrompts,
+  withReplaceMatchPrompts,
   type EditToolFlags,
 } from "./edit-common";
 import { makeRenderCall, type RPreview, type RRState } from "./replace-render";
 
-interface WithinRefs {
+interface MatchRefs {
   from: Anchor;
   to: Anchor;
 }
 
-export interface WithinPlan {
-  editParams: { remove_from: string; remove_to: string; replacement_lines: string };
+export interface MatchPlan {
+  editParams: { remove_from: string; remove_to: string; text: string };
 }
 
-function formatWithinRange(start: number, end: number): string {
+function formatMatchRange(start: number, end: number): string {
   return start === end ? `line ${start}` : `lines ${start}-${end}`;
 }
 
@@ -68,24 +67,24 @@ function notFoundMessage(displayPath: string, start: number, end: number, fileHa
   const shownCount = Math.min(rangeLength, MAX_RANGE_STALE_LINES);
   const shown = fmtRegion(fileHashes.slice(start - 1, start - 1 + shownCount), fileLines.slice(start - 1, start - 1 + shownCount));
   const more = rangeLength > shownCount ? `\n[The range has ${rangeLength} lines; showing the first ${shownCount}.]` : "";
-  return `[E_SUBSTRING_NOT_FOUND] "old_string" was not found in ${formatWithinRange(start, end)} of ${displayPath}. Current rows:\n\n${shown}${more}\n\nCopy old_string exactly from the served row (comparison uses LF breaks and excludes the last line's terminator) and retry.`;
+  return `[E_SUBSTRING_NOT_FOUND] "old_string" was not found in ${formatMatchRange(start, end)} of ${displayPath}. Current rows:\n\n${shown}${more}\n\nCopy old_string exactly from the served row (comparison uses LF breaks and excludes the last line's terminator) and retry.`;
 }
 
 function ambiguousMessage(displayPath: string, start: number, end: number, matchLines: number[]): string {
   const shownCount = 8;
   const shown = matchLines.slice(0, shownCount).join(", ");
   const more = matchLines.length > shownCount ? ` (+${matchLines.length - shownCount} more)` : "";
-  return `[E_SUBSTRING_AMBIGUOUS] "old_string" occurs ${matchLines.length} times in ${formatWithinRange(start, end)} of ${displayPath} (matching lines ${shown}${more}). Narrow replace_from/replace_to to one line, or extend old_string so it matches exactly once.`;
+  return `[E_SUBSTRING_AMBIGUOUS] "old_string" occurs ${matchLines.length} times in ${formatMatchRange(start, end)} of ${displayPath} (matching lines ${shown}${more}). Narrow replace_from/replace_to to one line, or extend old_string so it matches exactly once.`;
 }
 
-export function parseWithinAnchors(req: ReplaceWithinReq): { refs: WithinRefs; warnings: string[] } {
+export function parseMatchAnchors(req: ReplaceMatchReq): { refs: MatchRefs; warnings: string[] } {
   const warnings: string[] = [];
   const from = stripAnchorRow(req.replace_from.trim(), "replace_from entry", warnings);
   const to = stripAnchorRow(req.replace_to.trim(), "replace_to entry", warnings);
   return { refs: { from: parseHashRef(from), to: parseHashRef(to) }, warnings };
 }
 
-export function buildReplaceWithinEdit(req: ReplaceWithinReq, refs: WithinRefs, preload: NormFile, displayPath: string): WithinPlan {
+export function buildReplaceMatchEdit(req: ReplaceMatchReq, refs: MatchRefs, preload: NormFile, displayPath: string): MatchPlan {
   const fileLines = splitLines(preload.normalized);
   const fromLine = resolveAnchorLine(refs.from, fileLines, preload.fileHashes, displayPath);
   const toLine = resolveAnchorLine(refs.to, fileLines, preload.fileHashes, displayPath);
@@ -109,17 +108,17 @@ export function buildReplaceWithinEdit(req: ReplaceWithinReq, refs: WithinRefs, 
     editParams: {
       remove_from: startRef.hash,
       remove_to: endRef.hash,
-      replacement_lines: replacement,
+      text: replacement,
     },
   };
 }
 
-export async function replaceWithinPreview(request: unknown, cwd: string, signal?: AbortSignal): Promise<RPreview> {
+export async function replaceMatchPreview(request: unknown, cwd: string, signal?: AbortSignal): Promise<RPreview> {
   try {
-    const normalized = normalizeReplaceWithinRequest(request);
-    assertReplaceWithinReq(normalized);
+    const normalized: unknown = request;
+    assertReplaceMatchReq(normalized);
     const req = normalized;
-    const { refs, warnings } = parseWithinAnchors(req);
+    const { refs, warnings } = parseMatchAnchors(req);
     await throwIfStrictInput(warnings);
     const targetPath = await resolveEditTargetWithRequirement({
       removeFrom: req.replace_from,
@@ -134,7 +133,7 @@ export async function replaceWithinPreview(request: unknown, cwd: string, signal
       allocation: "shadow",
       signal,
     });
-    const plan = buildReplaceWithinEdit(req, refs, preload, targetPath);
+    const plan = buildReplaceMatchEdit(req, refs, preload, targetPath);
     const pipe = await execPipeline(targetPath, plan.editParams, cwd, {
       accessMode: constants.R_OK,
       noPersist: true,
@@ -148,35 +147,34 @@ export async function replaceWithinPreview(request: unknown, cwd: string, signal
   }
 }
 
-type ReplaceWithinToolDef = ToolDefinition<any, ReplaceDetails, RRState> & { renderShell?: "default" | "self" };
+type ReplaceMatchToolDef = ToolDefinition<any, ReplaceDetails, RRState> & { renderShell?: "default" | "self" };
 
-export function buildReplaceWithinToolDef(flags: EditToolFlags = DEFAULT_EDIT_FLAGS): ReplaceWithinToolDef {
-  const prompted = withReplaceWithinPrompts({
-    description: loadP("../prompts/replace-within.md"),
-    snippet: loadP("../prompts/replace-within-snippet.md"),
-    guidelines: loadGuide("../prompts/replace-within-guidelines.md"),
+export function buildReplaceMatchToolDef(flags: EditToolFlags = DEFAULT_EDIT_FLAGS): ReplaceMatchToolDef {
+  const prompted = withReplaceMatchPrompts({
+    description: loadP("../prompts/replace-match.md"),
+    snippet: loadP("../prompts/replace-match-snippet.md"),
+    guidelines: loadGuide("../prompts/replace-match-guidelines.md"),
   }, flags);
   return {
-    name: "replace_within",
-    label: "Replace Within",
+    name: "replace_match",
+    label: "Replace Match",
     description: prompted.description,
     promptSnippet: prompted.snippet,
     promptGuidelines: prompted.guidelines,
     ...editToolBase,
-    prepareArguments: normalizeReplaceWithinRequest,
-    parameters: buildReplaceWithinToolSchema(flags.requirePath),
-    renderCall: makeRenderCall(replaceWithinPreview, {
-      getInput: getReplaceWithinInput,
-      toolName: "replace_within",
+    parameters: buildReplaceMatchToolSchema(flags.requirePath),
+    renderCall: makeRenderCall(replaceMatchPreview, {
+      getInput: getReplaceMatchInput,
+      toolName: "replace_match",
       resolveTarget: (input) => (typeof input.replace_from === "string" ? tryResolveEditTarget(input.replace_from, input.replace_to) : undefined),
     }),
     renderResult: editRenderResultWrapper,
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
       return withAnchorSession(ctx, async () => {
-        const normalized = normalizeReplaceWithinRequest(params);
-        assertReplaceWithinReq(normalized);
+        const normalized: unknown = params;
+        assertReplaceMatchReq(normalized);
         const req = normalized;
-        const { refs, warnings } = parseWithinAnchors(req);
+        const { refs, warnings } = parseMatchAnchors(req);
         await throwIfStrictInput(warnings);
         const hints = [...literalEscapeHints([req.old_string], "old_string"), ...literalEscapeHints([req.new_string], "new_string")];
         const targetPath = await resolveEditTargetWithRequirement({
@@ -191,9 +189,9 @@ export function buildReplaceWithinToolDef(flags: EditToolFlags = DEFAULT_EDIT_FL
             accessMode: constants.R_OK | constants.W_OK,
             maxLines: MAX_HASH_LINES,
           });
-          let plan: WithinPlan;
+          let plan: MatchPlan;
           try {
-            plan = buildReplaceWithinEdit(req, refs, preload, targetPath);
+            plan = buildReplaceMatchEdit(req, refs, preload, targetPath);
           } catch (error) {
             await noteAnchorError(preload.absolutePath, error);
             throw error;
@@ -219,6 +217,6 @@ export function buildReplaceWithinToolDef(flags: EditToolFlags = DEFAULT_EDIT_FL
   };
 }
 
-export function regReplaceWithin(pi: ExtensionAPI, flags: EditToolFlags = DEFAULT_EDIT_FLAGS): void {
-  pi.registerTool(buildReplaceWithinToolDef(flags));
+export function regReplaceMatch(pi: ExtensionAPI, flags: EditToolFlags = DEFAULT_EDIT_FLAGS): void {
+  pi.registerTool(buildReplaceMatchToolDef(flags));
 }

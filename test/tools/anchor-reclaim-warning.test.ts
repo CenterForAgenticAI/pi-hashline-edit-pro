@@ -37,7 +37,7 @@ describe("anchor reclaim warnings", () => {
       try {
         const result = await getTool("replace").execute(
           "e1",
-          { remove_from: beta, remove_to: beta, replacement_lines: ["BETA"] },
+          { remove_from: beta, remove_to: beta, text: ["BETA"] },
           undefined,
           undefined,
           ctx,
@@ -75,8 +75,8 @@ describe("anchor reclaim warnings", () => {
     await withTempFile("sample.txt", "alpha\nbeta\ngamma\n", async ({ cwd }) => {
       const { ctx, readTool, getTool, handlers } = setupIntegrationTest(cwd);
       const text = getText(await readTool.execute("r0", { path: "sample.txt" }, undefined, undefined, ctx));
-      const betaArgs = { remove_from: anchorFor(text, "beta"), remove_to: anchorFor(text, "beta"), replacement_lines: ["BETA"] };
-      const gammaArgs = { remove_from: anchorFor(text, "gamma"), remove_to: anchorFor(text, "gamma"), replacement_lines: ["GAMMA"] };
+      const betaArgs = { remove_from: anchorFor(text, "beta"), remove_to: anchorFor(text, "beta"), text: ["BETA"] };
+      const gammaArgs = { remove_from: anchorFor(text, "gamma"), remove_to: anchorFor(text, "gamma"), text: ["GAMMA"] };
       await handlers.get("message_end")!(
         { type: "message_end", message: assistantMessage([toolCall("b1", "replace", betaArgs), toolCall("b2", "replace", gammaArgs)]) },
         ctx,

@@ -10,7 +10,7 @@ describe("line endings via embedded breaks", () => {
       const beta = anchorFor(text, "beta");
       const result = await editTool.execute(
         "e1",
-        { remove_from: beta, remove_to: beta, replacement_lines: ["beta\n"] },
+        { remove_from: beta, remove_to: beta, text: ["beta\n"] },
         undefined,
         undefined,
         ctx,
@@ -27,7 +27,7 @@ describe("line endings via embedded breaks", () => {
       const beta = anchorFor(text, "beta");
       const result = await editTool.execute(
         "e1",
-        { remove_from: beta, remove_to: beta, replacement_lines: ["beta\n"] },
+        { remove_from: beta, remove_to: beta, text: ["beta\n"] },
         undefined,
         undefined,
         ctx,
@@ -44,7 +44,7 @@ describe("line endings via embedded breaks", () => {
       const beta = anchorFor(text, "beta");
       await editTool.execute(
         "e1",
-        { remove_from: beta, remove_to: beta, replacement_lines: ["beta\r\n"] },
+        { remove_from: beta, remove_to: beta, text: ["beta\r\n"] },
         undefined,
         undefined,
         ctx,
@@ -60,7 +60,7 @@ describe("line endings via embedded breaks", () => {
       const one = anchorFor(text, "one");
       await getTool("insert").execute(
         "i1",
-        { anchor: one, direction: "after", lines: ["x", "y\n"] },
+        { anchor: one, direction: "after", text: ["x", "y\n"] },
         undefined,
         undefined,
         ctx,
@@ -76,7 +76,7 @@ describe("line endings via embedded breaks", () => {
       const two = anchorFor(text, "two");
       await getTool("insert").execute(
         "i1",
-        { anchor: two, direction: "after", lines: ["x\n"] },
+        { anchor: two, direction: "after", text: ["x\n"] },
         undefined,
         undefined,
         ctx,
@@ -92,7 +92,7 @@ describe("line endings via embedded breaks", () => {
       const beta = anchorFor(text, "beta");
       const result = await editTool.execute(
         "e1",
-        { remove_from: beta, remove_to: beta, replacement_lines: ["beta\n"] },
+        { remove_from: beta, remove_to: beta, text: ["beta\n"] },
         undefined,
         undefined,
         ctx,
@@ -109,7 +109,7 @@ describe("line endings via embedded breaks", () => {
       const beta = anchorFor(text, "beta");
       await getTool("replace").execute(
         "e1",
-        { remove_from: beta, remove_to: beta, replacement_lines: ["beta\n"] },
+        { remove_from: beta, remove_to: beta, text: ["beta\n"] },
         undefined,
         undefined,
         ctx,
@@ -127,8 +127,8 @@ describe("line endings via embedded breaks", () => {
       const text = getText(await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx));
       const alpha = anchorFor(text, "alpha");
       const beta = anchorFor(text, "beta");
-      const firstArgs = { remove_from: alpha, remove_to: alpha, replacement_lines: ["alpha\n"] };
-      const secondArgs = { remove_from: beta, remove_to: beta, replacement_lines: ["beta\n"] };
+      const firstArgs = { remove_from: alpha, remove_to: alpha, text: ["alpha\n"] };
+      const secondArgs = { remove_from: beta, remove_to: beta, text: ["beta\n"] };
       const message = assistantMessage([toolCall("b1", "replace", firstArgs), toolCall("b2", "replace", secondArgs)]);
       await handlers.get("message_end")!({ type: "message_end", message }, ctx);
       const first = await getTool("replace").execute("b1", firstArgs, undefined, undefined, ctx);
@@ -152,8 +152,8 @@ describe("line endings via embedded breaks", () => {
       const text = getText(await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx));
       const one = anchorFor(text, "one");
       const two = anchorFor(text, "two");
-      const firstArgs = { remove_from: one, remove_to: one, replacement_lines: ["ONE"] };
-      const secondArgs = { remove_from: two, remove_to: two, replacement_lines: ["two\n"] };
+      const firstArgs = { remove_from: one, remove_to: one, text: ["ONE"] };
+      const secondArgs = { remove_from: two, remove_to: two, text: ["two\n"] };
       const message = assistantMessage([toolCall("m1", "replace", firstArgs), toolCall("m2", "replace", secondArgs)]);
       await handlers.get("message_end")!({ type: "message_end", message }, ctx);
       await getTool("replace").execute("m1", firstArgs, undefined, undefined, ctx);

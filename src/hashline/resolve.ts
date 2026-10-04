@@ -33,13 +33,13 @@ export interface NEdit {
 }
 
 export type HTEdit = {
-  replacement_lines: string[];
+  text: string[];
   remove_from: string;
   remove_to: string;
 };
 
 export type HTPayloadEdit = {
-  replacement_lines: string;
+  text: string;
   remove_from: string;
   remove_to: string;
 };
@@ -120,7 +120,7 @@ export function fmtMismatchWithHashes(
 }
 
 
-const ITEM_KS = new Set(["replacement_lines", "remove_from", "remove_to"]);
+const ITEM_KS = new Set(["text", "remove_from", "remove_to"]);
 
 function assertBounds(edit: Record<string, unknown>): void {
 	if ("remove_from" in edit && typeof edit.remove_from !== "string") {
@@ -141,23 +141,23 @@ function assertBounds(edit: Record<string, unknown>): void {
 }
 
 function assertItem(edit: Record<string, unknown>): void {
-	rejectUnknownFields(edit, ITEM_KS, "Edit", "The edit takes only { replacement_lines, remove_from, remove_to }.");
+	rejectUnknownFields(edit, ITEM_KS, "Edit", "The edit takes only { text, remove_from, remove_to }.");
 	assertBounds(edit);
-	if (!("replacement_lines" in edit)) {
-		throw new Error(`[E_BAD_SHAPE] The edit requires a "replacement_lines" array (use [] to delete).`);
+	if (!("text" in edit)) {
+		throw new Error(`[E_BAD_SHAPE] The edit requires a "text" array (use [] to delete).`);
 	}
-	if (!Array.isArray(edit.replacement_lines) || edit.replacement_lines.some((line) => typeof line !== "string")) {
+	if (!Array.isArray(edit.text) || edit.text.some((line) => typeof line !== "string")) {
 		throw new Error(NEW_CONTENT_NOT_ARRAY_MSG);
 	}
 }
 
 function assertPayloadItem(edit: Record<string, unknown>): void {
-	rejectUnknownFields(edit, ITEM_KS, "Edit", "The edit takes only { replacement_lines, remove_from, remove_to }.");
+	rejectUnknownFields(edit, ITEM_KS, "Edit", "The edit takes only { text, remove_from, remove_to }.");
 	assertBounds(edit);
-	if (!("replacement_lines" in edit)) {
-		throw new Error(`[E_BAD_SHAPE] The edit requires a "replacement_lines" string (use "" to delete).`);
+	if (!("text" in edit)) {
+		throw new Error(`[E_BAD_SHAPE] The edit requires a "text" string (use "" to delete).`);
 	}
-	if (typeof edit.replacement_lines !== "string") {
+	if (typeof edit.text !== "string") {
 		throw new Error(NEW_CONTENT_NOT_STRING_MSG);
 	}
 }
@@ -195,12 +195,12 @@ export function stripAnchorRow(
 }
 
 export function resEdit(edit: HTEdit | HTPayloadEdit, warnings?: string[]): HEdit {
-	if (typeof edit.replacement_lines === "string") {
+	if (typeof edit.text === "string") {
 		assertPayloadItem(edit as unknown as Record<string, unknown>);
-		return resolveParsedEdit(edit.remove_from, edit.remove_to, parsePayloadText(edit.replacement_lines), warnings);
+		return resolveParsedEdit(edit.remove_from, edit.remove_to, parsePayloadText(edit.text), warnings);
 	}
 	assertItem(edit as Record<string, unknown>);
-	const parsed = parseTextWithSeparators(decodeStringArray(edit.replacement_lines, warnings) ?? edit.replacement_lines);
+	const parsed = parseTextWithSeparators(decodeStringArray(edit.text, warnings) ?? edit.text);
 	return resolveParsedEdit(edit.remove_from, edit.remove_to, parsed, warnings);
 }
 
@@ -241,7 +241,7 @@ function stripRowPrefixes(
 	return { ...edit, content_lines: contentLines };
 }
 
-const DEFAULT_STRIP_WARNING_LOCATION: StripWarningLocation = { label: "replacement_lines", indexOffset: 0 };
+const DEFAULT_STRIP_WARNING_LOCATION: StripWarningLocation = { label: "text", indexOffset: 0 };
 
 export function stripBarePrefixes(edit: HEdit, warnings: string[], location: StripWarningLocation = DEFAULT_STRIP_WARNING_LOCATION): HEdit {
 	return stripRowPrefixes(edit, warnings, ["bare"], "[W_BARE_HASH_PREFIX]", '"anchor│" prefix', location);

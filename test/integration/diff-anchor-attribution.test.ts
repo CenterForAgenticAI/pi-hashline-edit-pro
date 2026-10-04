@@ -37,7 +37,7 @@ describe("diff anchor attribution on duplicate lines", () => {
       const raw = await readFile(path, "utf-8");
       const prepend = Array.from({ length: 6 }, (_, index) => `IDE line ${index + 1}`).join("\n") + "\n";
       await writeFile(path, prepend + raw, "utf-8");
-      const editResult: any = await editTool.execute("e1", { remove_from: D2, remove_to: G, replacement_lines: ["REPLACED"] }, undefined, undefined, ctx);
+      const editResult: any = await editTool.execute("e1", { remove_from: D2, remove_to: G, text: ["REPLACED"] }, undefined, undefined, ctx);
       const diff: string = editResult.details?.diff ?? "";
       expect(diff.length).toBeGreaterThan(0);
       const removed = minusAnchors(diff);
@@ -47,8 +47,8 @@ describe("diff anchor attribution on duplicate lines", () => {
       expect(removed).toContain(D2);
       expect(removed).toContain(G);
       expect(diff.split("\n").find((line) => line.startsWith("-") && line.includes(D3))).toBeUndefined();
-      await expect(editTool.execute("e-dead", { remove_from: D2, remove_to: D2, replacement_lines: ["VIA_DEAD"] }, undefined, undefined, ctx)).rejects.toThrow(/E_STALE_ANCHOR/);
-      const survivorEdit: any = await editTool.execute("e-live", { remove_from: D3, remove_to: D3, replacement_lines: ["VIA_SURVIVOR"] }, undefined, undefined, ctx);
+      await expect(editTool.execute("e-dead", { remove_from: D2, remove_to: D2, text: ["VIA_DEAD"] }, undefined, undefined, ctx)).rejects.toThrow(/E_STALE_ANCHOR/);
+      const survivorEdit: any = await editTool.execute("e-live", { remove_from: D3, remove_to: D3, text: ["VIA_SURVIVOR"] }, undefined, undefined, ctx);
       expect(survivorEdit.content[0].text).toContain("Successfully replaced");
       const finalContent = await readFile(path, "utf-8");
       expect(finalContent).toContain("REPLACED");

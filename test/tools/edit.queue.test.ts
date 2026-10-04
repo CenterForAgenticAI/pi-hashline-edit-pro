@@ -13,14 +13,14 @@ describe("edit tool file mutation queue", () => {
 
       const r1 = await editTool.execute(
         "e1",
-        { remove_from: hashes[0]!, remove_to: hashes[0]!, replacement_lines: ["ALPHA"] },
+        { remove_from: hashes[0]!, remove_to: hashes[0]!, text: ["ALPHA"] },
         undefined, undefined, ctx,
       );
       expect(r1.content[0].text).toContain("Successfully replaced");
       expect(r1.content[0].text).toContain("Added 1 line(s), removed 1 line(s).");
       const r2 = await editTool.execute(
         "e2",
-        { remove_from: hashes[1]!, remove_to: hashes[1]!, replacement_lines: ["BETA"] },
+        { remove_from: hashes[1]!, remove_to: hashes[1]!, text: ["BETA"] },
         undefined, undefined, ctx,
       );
       expect(r2.content[0].text).toContain("Successfully replaced");
@@ -37,14 +37,14 @@ describe("edit tool file mutation queue", () => {
 
       const r1 = await editTool.execute(
         "e1",
-        { remove_from: hashes[0]!, remove_to: hashes[0]!, replacement_lines: ["ALPHA"] },
+        { remove_from: hashes[0]!, remove_to: hashes[0]!, text: ["ALPHA"] },
         undefined, undefined, ctx,
       );
       expect(r1.content[0].text).toContain("Successfully replaced");
       expect(r1.content[0].text).toContain("Added 1 line(s), removed 1 line(s).");
       const r2 = await editTool.execute(
         "e2",
-        { remove_from: hashes[1]!, remove_to: hashes[1]!, replacement_lines: ["BETA"] },
+        { remove_from: hashes[1]!, remove_to: hashes[1]!, text: ["BETA"] },
         undefined, undefined, ctx,
       );
       expect(r2.content[0].text).toContain("Successfully replaced");
@@ -69,14 +69,14 @@ describe("edit tool file mutation queue", () => {
 
     const r1 = await editTool.execute(
       "e1",
-      { remove_from: hashes[0]!, remove_to: hashes[0]!, replacement_lines: ["ALPHA"] },
+      { remove_from: hashes[0]!, remove_to: hashes[0]!, text: ["ALPHA"] },
       undefined, undefined, ctx,
     );
     expect(r1.content[0].text).toContain("Successfully replaced");
     expect(r1.content[0].text).toContain("Added 1 line(s), removed 1 line(s).");
     const r2 = await editTool.execute(
       "e2",
-      { remove_from: hashes[1]!, remove_to: hashes[1]!, replacement_lines: ["BETA"] },
+      { remove_from: hashes[1]!, remove_to: hashes[1]!, text: ["BETA"] },
       undefined, undefined, ctx,
     );
     expect(r2.content[0].text).toContain("Successfully replaced");

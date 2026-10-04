@@ -16,7 +16,7 @@ describe("regReplace", () => {
         editTool.execute(
           "e1",
           {
-            remove_from: hashes[0]!, remove_to: hashes[0]!, replacement_lines: null,
+            remove_from: hashes[0]!, remove_to: hashes[0]!, text: null,
           },
           undefined,
           undefined,
@@ -26,7 +26,7 @@ describe("regReplace", () => {
     });
   });
 
-  it("accepts multi-line replacement_lines as an array", async () => {
+  it("accepts multi-line text as an array", async () => {
     await withTempFile("sample.ts", "aaa\nbbb\n", async ({ cwd, path }) => {
       const { ctx, editTool } = setupIntegrationTest(cwd);
       const hashes = await lineHashes("aaa\nbbb\n", path);
@@ -35,7 +35,7 @@ describe("regReplace", () => {
         "e1",
         {
           remove_from: hashes[0]!, remove_to: hashes[0]!,
-          replacement_lines: ["a", "b"],
+          text: ["a", "b"],
         },
         undefined,
         undefined,
@@ -56,7 +56,7 @@ describe("regReplace", () => {
       const result = await editTool.execute(
         "e1",
         {
-          remove_from: hashes[1]!, remove_to: hashes[1]!, replacement_lines: ["BBB"],
+          remove_from: hashes[1]!, remove_to: hashes[1]!, text: ["BBB"],
         },
         undefined,
         undefined,
@@ -77,7 +77,7 @@ describe("regReplace", () => {
       const result = await editTool.execute(
         "e1",
         {
-          remove_from: hashes[1]!, remove_to: hashes[1]!, replacement_lines: [`${hashes[1]!}│BBB`],
+          remove_from: hashes[1]!, remove_to: hashes[1]!, text: [`${hashes[1]!}│BBB`],
         },
         undefined,
         undefined,
@@ -99,7 +99,7 @@ describe("regReplace", () => {
       const result = await editTool.execute(
         "e1",
         {
-          remove_from: hashes[1]!, remove_to: hashes[1]!, replacement_lines: [`+${hashes[1]!}│BBB`],
+          remove_from: hashes[1]!, remove_to: hashes[1]!, text: [`+${hashes[1]!}│BBB`],
         },
         undefined,
         undefined,
@@ -121,7 +121,7 @@ describe("regReplace", () => {
       const result = await editTool.execute(
         "e1",
         {
-          remove_from: hashes[2]!, remove_to: hashes[1]!, replacement_lines: ["X"],
+          remove_from: hashes[2]!, remove_to: hashes[1]!, text: ["X"],
         },
         undefined,
         undefined,
@@ -143,7 +143,7 @@ describe("regReplace", () => {
         "e1",
         {
           remove_from: `${hashes[1]!}│bbb`, remove_to: `${hashes[1]!}│bbb`,
-          replacement_lines: ["BBB"],
+          text: ["BBB"],
         },
         undefined,
         undefined,
@@ -173,7 +173,7 @@ describe("regReplace - robustness", () => {
           "e1",
           {
             remove_from: hashes[1]!, remove_to: hashes[1]!,
-            replacement_lines: ["BBB"],
+            text: ["BBB"],
           },
           undefined,
           undefined,
@@ -202,7 +202,7 @@ describe("regReplace - robustness", () => {
           "e1",
           {
             remove_from: hashes[1]!, remove_to: hashes[1]!,
-            replacement_lines: ["bbb"],
+            text: ["bbb"],
           },
           undefined,
           undefined,
@@ -231,7 +231,7 @@ describe("regReplace - robustness", () => {
           "e1",
           {
             remove_from: hashes[1]!, remove_to: hashes[1]!,
-            replacement_lines: ["BBB"],
+            text: ["BBB"],
           },
           undefined,
           undefined,
@@ -262,7 +262,7 @@ describe("regReplace - robustness", () => {
             "e1",
             {
               remove_from: hashes[1]!, remove_to: hashes[1]!,
-              replacement_lines: ["BBB"],
+              text: ["BBB"],
             },
             undefined,
             undefined,
@@ -285,18 +285,18 @@ describe("replace literal escape hints", () => {
       const hashes = await lineHashes("aaa\nbbb\nccc\n", join(cwd, "sample.ts"));
       const result = await editTool.execute(
         "e1",
-        { remove_from: hashes[1]!, remove_to: hashes[1]!, replacement_lines: [String.raw`stable\u200bCheckout`] },
+        { remove_from: hashes[1]!, remove_to: hashes[1]!, text: [String.raw`stable\u200bCheckout`] },
         undefined, undefined, ctx,
       );
-      expect(result.content[0].text).toContain(String.raw`[H_LITERAL_ESCAPE] replacement_lines: "\u200b" written as literal text`);
+      expect(result.content[0].text).toContain(String.raw`[H_LITERAL_ESCAPE] text: "\u200b" written as literal text`);
       const hint = result.details.hints?.[0] ?? "";
-      expect(hint).toContain(String.raw`[H_LITERAL_ESCAPE] replacement_lines: "\u200b" written as literal text`);
+      expect(hint).toContain(String.raw`[H_LITERAL_ESCAPE] text: "\u200b" written as literal text`);
       expect(hint).toContain("col 7");
       expect(result.details.metrics?.warnings).toBe(0);
       expect(await readFile(path, "utf-8")).toBe("aaa\nstable\\u200bCheckout\nccc\n");
       const writtenAnchor = hint.match(/([A-Za-z]{4})│ col/)?.[1];
       expect(writtenAnchor).toMatch(/^[A-Za-z]{4}$/);
-      const within = await getTool("replace_within").execute(
+      const within = await getTool("replace_match").execute(
         "e2",
         { replace_from: writtenAnchor!, replace_to: writtenAnchor!, old_string: String.raw`\u200b`, new_string: "\u200b" },
         undefined,
@@ -316,7 +316,7 @@ describe("edit fidelity hints", () => {
       const hashes = await lineHashes("alpha\nlegacy\u200bCheckout\n", join(cwd, "sample.ts"));
       const result = await editTool.execute(
         "e1",
-        { remove_from: hashes[1]!, remove_to: hashes[1]!, replacement_lines: ["stableCheckout"] },
+        { remove_from: hashes[1]!, remove_to: hashes[1]!, text: ["stableCheckout"] },
         undefined, undefined, ctx,
       );
       expect(result.content[0].text).toContain("[H_UNICODE_LOST]");
@@ -333,7 +333,7 @@ describe("edit fidelity hints", () => {
       const hashes = await lineHashes(content, join(cwd, "sample.ts"));
       const result = await editTool.execute(
         "e1",
-        { remove_from: hashes[1]!, remove_to: hashes[1]!, replacement_lines: ["BBB"] },
+        { remove_from: hashes[1]!, remove_to: hashes[1]!, text: ["BBB"] },
         undefined, undefined, ctx,
       );
       expect(result.details.hints).toBeUndefined();
@@ -342,13 +342,13 @@ describe("edit fidelity hints", () => {
 });
 
 describe("provided line endings", () => {
-  it("writes a CRLF separator embedded in replacement_lines", async () => {
+  it("writes a CRLF separator embedded in text", async () => {
     await withTempFile("sample.ts", "aaa\nbbb\nccc\n", async ({ cwd, path }) => {
       const { ctx, editTool } = setupIntegrationTest(cwd);
       const hashes = await lineHashes("aaa\nbbb\nccc\n", join(cwd, "sample.ts"));
       await editTool.execute(
         "e1",
-        { remove_from: hashes[1]!, remove_to: hashes[1]!, replacement_lines: ["B1\r\nB2"] },
+        { remove_from: hashes[1]!, remove_to: hashes[1]!, text: ["B1\r\nB2"] },
         undefined, undefined, ctx,
       );
       expect(await readFile(path, "utf-8")).toBe("aaa\nB1\r\nB2\nccc\n");
@@ -361,7 +361,7 @@ describe("provided line endings", () => {
       const hashes = await lineHashes("aaa\nbbb\nccc\n", join(cwd, "sample.ts"));
       await editTool.execute(
         "e1",
-        { remove_from: hashes[1]!, remove_to: hashes[1]!, replacement_lines: ["B1\rB2"] },
+        { remove_from: hashes[1]!, remove_to: hashes[1]!, text: ["B1\rB2"] },
         undefined, undefined, ctx,
       );
       expect(await readFile(path, "utf-8")).toBe("aaa\nB1\rB2\nccc\n");
@@ -377,7 +377,7 @@ describe("replace deletion keeps block separators", () => {
       const bbbIndex = rows.findIndex((row) => row.includes("│bbb"));
       const bbb = extractHash(rows[bbbIndex]!);
       const blankAfter = extractHash(rows[bbbIndex + 1]!);
-      const result = await editTool.execute("e1", { remove_from: bbb, remove_to: blankAfter, replacement_lines: [] }, undefined, undefined, ctx);
+      const result = await editTool.execute("e1", { remove_from: bbb, remove_to: blankAfter, text: [] }, undefined, undefined, ctx);
       expect(result.content[0].text).toContain("Added 0 line(s), removed 1 line(s).");
       expect(await readFile(path, "utf-8")).toBe("aaa\n\n\nccc\n");
     });
@@ -390,7 +390,7 @@ describe("replace deletion keeps block separators", () => {
       const bbbIndex = rows.findIndex((row) => row.includes("│bbb"));
       const blankBefore = extractHash(rows[bbbIndex - 1]!);
       const bbb = extractHash(rows[bbbIndex]!);
-      await editTool.execute("e1", { remove_from: blankBefore, remove_to: bbb, replacement_lines: [] }, undefined, undefined, ctx);
+      await editTool.execute("e1", { remove_from: blankBefore, remove_to: bbb, text: [] }, undefined, undefined, ctx);
       expect(await readFile(path, "utf-8")).toBe("aaa\n\nccc\n");
     });
   });
@@ -400,7 +400,7 @@ describe("replace deletion keeps block separators", () => {
       const { ctx, readTool, editTool } = setupIntegrationTest(cwd);
       const rows = getText(await readTool.execute("r1", { path: "sample.ts" }, undefined, undefined, ctx)).split("\n");
       const blank = extractHash(rows[1]!);
-      await editTool.execute("e1", { remove_from: blank, remove_to: blank, replacement_lines: [] }, undefined, undefined, ctx);
+      await editTool.execute("e1", { remove_from: blank, remove_to: blank, text: [] }, undefined, undefined, ctx);
       expect(await readFile(path, "utf-8")).toBe("aaa\nccc\n");
     });
   });
@@ -412,7 +412,7 @@ describe("replace deletion keeps block separators", () => {
       const bbbIndex = rows.findIndex((row) => row.includes("│bbb"));
       const blankBefore = extractHash(rows[bbbIndex - 1]!);
       const blankAfter = extractHash(rows[bbbIndex + 1]!);
-      await editTool.execute("e1", { remove_from: blankBefore, remove_to: blankAfter, replacement_lines: [] }, undefined, undefined, ctx);
+      await editTool.execute("e1", { remove_from: blankBefore, remove_to: blankAfter, text: [] }, undefined, undefined, ctx);
       expect(await readFile(path, "utf-8")).toBe("aaa\n\n\nccc\n");
     });
   });
@@ -424,7 +424,7 @@ describe("replace deletion keeps block separators", () => {
       const bbbIndex = rows.findIndex((row) => row.includes("│bbb"));
       const blankBefore = extractHash(rows[bbbIndex - 1]!);
       const blankAfter = extractHash(rows[bbbIndex + 1]!);
-      await editTool.execute("e1", { remove_from: blankBefore, remove_to: blankAfter, replacement_lines: ["X"] }, undefined, undefined, ctx);
+      await editTool.execute("e1", { remove_from: blankBefore, remove_to: blankAfter, text: ["X"] }, undefined, undefined, ctx);
       expect(await readFile(path, "utf-8")).toBe("aaa\nX\nccc\n");
     });
   });

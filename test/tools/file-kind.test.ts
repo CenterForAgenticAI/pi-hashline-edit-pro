@@ -24,7 +24,7 @@ describe("file kind guards in tools", () => {
       const result = await editTool.execute(
         "e1",
         {
-          remove_from: intRef, remove_to: intRef, replacement_lines: ["long"],
+          remove_from: intRef, remove_to: intRef, text: ["long"],
         },
         undefined,
         undefined,
@@ -45,7 +45,7 @@ describe("file kind guards in tools", () => {
         editTool.execute(
           "e1",
           {
-            remove_from: hashes[0]!, remove_to: hashes[0]!, replacement_lines: ["x"],
+            remove_from: hashes[0]!, remove_to: hashes[0]!, text: ["x"],
           },
           undefined,
           undefined,
@@ -65,7 +65,7 @@ describe("file kind guards in tools", () => {
         editTool.execute(
           "e1",
           {
-            remove_from: hashes[0]!, remove_to: hashes[0]!, replacement_lines: ["x"],
+            remove_from: hashes[0]!, remove_to: hashes[0]!, text: ["x"],
           },
           undefined,
           undefined,
@@ -85,7 +85,7 @@ describe("file kind guards in tools", () => {
         editTool.execute(
           "e1",
           {
-            remove_from: hashes[0]!, remove_to: hashes[0]!, replacement_lines: ["x"],
+            remove_from: hashes[0]!, remove_to: hashes[0]!, text: ["x"],
           },
           undefined,
           undefined,
@@ -104,7 +104,7 @@ describe("file kind guards in tools", () => {
         editTool.execute(
           "e1",
           {
-            remove_from: hashes[0]!, remove_to: hashes[0]!, replacement_lines: [],
+            remove_from: hashes[0]!, remove_to: hashes[0]!, text: [],
           },
           undefined,
           undefined,

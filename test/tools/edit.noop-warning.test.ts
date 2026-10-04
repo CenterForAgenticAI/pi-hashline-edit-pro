@@ -14,7 +14,7 @@ describe("edit tool noop + warnings", () => {
       const result = await editTool.execute(
         "e1",
         {
-          remove_from: hashes[1]!, remove_to: hashes[1]!, replacement_lines: ["bbb"],
+          remove_from: hashes[1]!, remove_to: hashes[1]!, text: ["bbb"],
         },
         undefined,
         undefined,

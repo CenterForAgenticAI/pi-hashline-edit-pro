@@ -12,21 +12,21 @@ describe("normReq", () => {
 	it("returns object input unchanged when no normalization needed", () => {
 		const input = {
 			remove_from: "ATIm", remove_to: "ATIm",
-			replacement_lines: "new",
+			text: "new",
 		};
 		const result = normReq(input);
 		expect(result).toEqual(input);
 	});
 
-	it("normalizes file_path to path", () => {
-		const input = { file_path: "test.txt", remove_from: "ATIm", remove_to: "BeSR", replacement_lines: ["new"] };
+	it("leaves file_path untouched", () => {
+		const input = { file_path: "test.txt", remove_from: "ATIm", remove_to: "BeSR", text: ["new"] };
 		const result = normReq(input) as Record<string, unknown>;
-		expect(result.path).toBe("test.txt");
-		expect(result.file_path).toBeUndefined();
+		expect(result.path).toBeUndefined();
+		expect(result.file_path).toBe("test.txt");
 	});
 
 	it("does not overwrite existing path with file_path", () => {
-		const input = { path: "original.txt", file_path: "alias.txt", remove_from: "ATIm", remove_to: "BeSR", replacement_lines: ["new"] };
+		const input = { path: "original.txt", file_path: "alias.txt", remove_from: "ATIm", remove_to: "BeSR", text: ["new"] };
 		const result = normReq(input) as Record<string, unknown>;
 		expect(result.path).toBe("original.txt");
 	});
@@ -42,7 +42,7 @@ describe("normReq", () => {
 	});
 
 	it("preserves other fields", () => {
-		const input = { remove_from: "ATIm", remove_to: "BeSR", replacement_lines: ["new"], custom: "value" };
+		const input = { remove_from: "ATIm", remove_to: "BeSR", text: ["new"], custom: "value" };
 		const result = normReq(input) as Record<string, unknown>;
 		expect(result.custom).toBe("value");
 	});
@@ -51,83 +51,84 @@ describe("normReq", () => {
 		const input = {
 			file_path: "src/main.ts",
 			remove_from: "ATIm", remove_to: "BeSR",
-			replacement_lines: ["x"],
+			text: ["x"],
 		};
 		const originalFilePath = input.file_path;
-		const originalNewContent = input.replacement_lines;
+		const originalNewContent = input.text;
 		normReq(input);
 		expect(input.file_path).toBe(originalFilePath);
-		expect(input.replacement_lines).toBe(originalNewContent);
+		expect(input.text).toBe(originalNewContent);
 	});
 });
 
 describe("normReq - top-level shape", () => {
-	it("keeps remove_from/remove_to and replacement_lines at top level", () => {
+	it("keeps remove_from/remove_to and text at top level", () => {
 		const input = {
 			remove_from: "ATIm", remove_to: "BeSR",
-			replacement_lines: ["new line"],
+			text: ["new line"],
 		};
 		const result = normReq(input) as Record<string, unknown>;
 		expect(result.remove_from).toEqual("ATIm");
 		expect(result.remove_to).toEqual("BeSR");
-		expect(result.replacement_lines).toEqual("new line");
+		expect(result.text).toEqual("new line");
 	});
 
-	it("handles flat format with file_path alias", () => {
+	it("leaves file_path untouched in the flat format", () => {
 		const input = {
 			file_path: "src/main.ts",
 			remove_from: "ATIm", remove_to: "BeSR",
-			replacement_lines: ["new"],
+			text: ["new"],
 		};
 		const result = normReq(input) as Record<string, unknown>;
-		expect(result.path).toBe("src/main.ts");
+		expect(result.path).toBeUndefined();
+		expect(result.file_path).toBe("src/main.ts");
 		expect(result.remove_from).toEqual("ATIm");
 		expect(result.remove_to).toEqual("BeSR");
 	});
 
-	it("normalizes replace_from and replace_to to remove_from and remove_to", () => {
+	it("leaves replace_from and replace_to untouched", () => {
 		const input = {
 			replace_from: "ATIm", replace_to: "BeSR",
-			replacement_lines: ["new"],
+			text: ["new"],
 		};
 		const result = normReq(input) as Record<string, unknown>;
-		expect(result.remove_from).toEqual("ATIm");
-		expect(result.remove_to).toEqual("BeSR");
-		expect(result.replace_from).toBeUndefined();
-		expect(result.replace_to).toBeUndefined();
+		expect(result.replace_from).toEqual("ATIm");
+		expect(result.replace_to).toEqual("BeSR");
+		expect(result.remove_from).toBeUndefined();
+		expect(result.remove_to).toBeUndefined();
 	});
 
 	it("does not mutate the original flat-format input", () => {
 		const input = {
 			remove_from: "ATIm", remove_to: "BeSR",
-			replacement_lines: ["new"],
+			text: ["new"],
 		};
 		const origFrom = input.remove_from;
 		const origTo = input.remove_to;
-		const origNc = input.replacement_lines;
+		const origNc = input.text;
 		normReq(input);
 		expect(input.remove_from).toBe(origFrom);
 		expect(input.remove_to).toBe(origTo);
-		expect(input.replacement_lines).toBe(origNc);
+		expect(input.text).toBe(origNc);
 	});
 
-	it("normalizes from and to to remove_from and remove_to", () => {
+	it("leaves from and to untouched", () => {
 		const input = {
 			from: "ATIm", to: "BeSR",
-			replacement_lines: ["new"],
+			text: ["new"],
 		};
 		const result = normReq(input) as Record<string, unknown>;
-		expect(result.remove_from).toEqual("ATIm");
-		expect(result.remove_to).toEqual("BeSR");
-		expect(result.from).toBeUndefined();
-		expect(result.to).toBeUndefined();
+		expect(result.from).toEqual("ATIm");
+		expect(result.to).toEqual("BeSR");
+		expect(result.remove_from).toBeUndefined();
+		expect(result.remove_to).toBeUndefined();
 	});
 
 	it("does not overwrite existing anchors with from and to", () => {
 		const input = {
 			remove_from: "ATIm", remove_to: "BeSR",
 			from: "Other", to: "Else",
-			replacement_lines: ["new"],
+			text: ["new"],
 		};
 		const result = normReq(input) as Record<string, unknown>;
 		expect(result.remove_from).toEqual("ATIm");
@@ -137,7 +138,7 @@ describe("normReq - top-level shape", () => {
 	});
 
 	it("does not mutate the original from/to input", () => {
-		const input = { from: "ATIm", to: "BeSR", replacement_lines: ["new"] };
+		const input = { from: "ATIm", to: "BeSR", text: ["new"] };
 		normReq(input);
 		expect(input.from).toBe("ATIm");
 		expect(input.to).toBe("BeSR");
@@ -150,52 +151,52 @@ describe("normReq - line fields", () => {
 	const glmMalformedPayload = '["    \\"pi-hashline-edit-pro\\": \\"^4.3.5\\",""]';
 
 	it("keeps a JSON-array-shaped string literal", () => {
-		const result = normReq({ remove_from: "ATIm", remove_to: "ATIm", replacement_lines: glmMapPayload }) as Record<string, unknown>;
-		expect(result.replacement_lines).toBe(glmMapPayload);
+		const result = normReq({ remove_from: "ATIm", remove_to: "ATIm", text: glmMapPayload }) as Record<string, unknown>;
+		expect(result.text).toBe(glmMapPayload);
 	});
 
 	it("keeps a multi-line JSON-array-shaped string literal", () => {
-		const result = normReq({ remove_from: "ATIm", remove_to: "ATIm", replacement_lines: glmSlicePayload }) as Record<string, unknown>;
-		expect(result.replacement_lines).toBe(glmSlicePayload);
+		const result = normReq({ remove_from: "ATIm", remove_to: "ATIm", text: glmSlicePayload }) as Record<string, unknown>;
+		expect(result.text).toBe(glmSlicePayload);
 	});
 
 	it("keeps a malformed JSON-array-shaped string literal", () => {
-		const result = normReq({ remove_from: "ATIm", remove_to: "ATIm", replacement_lines: glmMalformedPayload }) as Record<string, unknown>;
-		expect(result.replacement_lines).toBe(glmMalformedPayload);
+		const result = normReq({ remove_from: "ATIm", remove_to: "ATIm", text: glmMalformedPayload }) as Record<string, unknown>;
+		expect(result.text).toBe(glmMalformedPayload);
 	});
 
 	it("keeps a string payload with its line endings", () => {
-		const result = normReq({ remove_from: "ATIm", remove_to: "ATIm", replacement_lines: "line1\nline2" }) as Record<string, unknown>;
-		expect(result.replacement_lines).toBe("line1\nline2");
+		const result = normReq({ remove_from: "ATIm", remove_to: "ATIm", text: "line1\nline2" }) as Record<string, unknown>;
+		expect(result.text).toBe("line1\nline2");
 	});
 
 	it("keeps a stringified empty array literal", () => {
-		const result = normReq({ remove_from: "ATIm", remove_to: "ATIm", replacement_lines: "[]" }) as Record<string, unknown>;
-		expect(result.replacement_lines).toBe("[]");
+		const result = normReq({ remove_from: "ATIm", remove_to: "ATIm", text: "[]" }) as Record<string, unknown>;
+		expect(result.text).toBe("[]");
 	});
 
 	it("converts a legacy lines array into the exact text", () => {
-		const result = normReq({ remove_from: "ATIm", remove_to: "ATIm", replacement_lines: ["a", "b"] }) as Record<string, unknown>;
-		expect(result.replacement_lines).toBe("a\nb");
+		const result = normReq({ remove_from: "ATIm", remove_to: "ATIm", text: ["a", "b"] }) as Record<string, unknown>;
+		expect(result.text).toBe("a\nb");
 	});
 
 	it("keeps a trailing blank line when converting a legacy array", () => {
-		const result = normReq({ remove_from: "ATIm", remove_to: "ATIm", replacement_lines: ["a", ""] }) as Record<string, unknown>;
-		expect(result.replacement_lines).toBe("a\n\n");
+		const result = normReq({ remove_from: "ATIm", remove_to: "ATIm", text: ["a", ""] }) as Record<string, unknown>;
+		expect(result.text).toBe("a\n\n");
 	});
 
 	it("converts an empty legacy array into a deletion", () => {
-		const result = normReq({ remove_from: "ATIm", remove_to: "ATIm", replacement_lines: [] }) as Record<string, unknown>;
-		expect(result.replacement_lines).toBe("");
+		const result = normReq({ remove_from: "ATIm", remove_to: "ATIm", text: [] }) as Record<string, unknown>;
+		expect(result.text).toBe("");
 	});
 
 	it("still unwraps a legacy stringified array element", () => {
-		const result = normReq({ remove_from: "ATIm", remove_to: "ATIm", replacement_lines: [glmMapPayload] }) as Record<string, unknown>;
-		expect(result.replacement_lines).toBe('    "pi-hashline-edit-pro": "^4.3.5",');
+		const result = normReq({ remove_from: "ATIm", remove_to: "ATIm", text: [glmMapPayload] }) as Record<string, unknown>;
+		expect(result.text).toBe('    "pi-hashline-edit-pro": "^4.3.5",');
 	});
 
-	it("normalizes the insert lines field the same way", () => {
-		const result = normReq({ anchor: "ATIm", direction: "after", lines: ["a", "b"] }) as Record<string, unknown>;
-		expect(result.lines).toBe("a\nb");
+	it("normalizes the insert text field the same way", () => {
+		const result = normReq({ anchor: "ATIm", direction: "after", text: ["a", "b"] }) as Record<string, unknown>;
+		expect(result.text).toBe("a\nb");
 	});
 });

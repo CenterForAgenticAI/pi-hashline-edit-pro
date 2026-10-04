@@ -17,7 +17,7 @@ HDtm│}
 
 replace one line by its anchor:
 
-{ "remove_from": "Emno", "remove_to": "Emno", "replacement_lines": "  console.log('hi');" }
+{ "remove_from": "Emno", "remove_to": "Emno", "text": "  console.log('hi');" }
 
 the result is the post-edit diff with fresh anchors, so the next edit needs no re-read.
 ```
@@ -30,7 +30,7 @@ the result is the post-edit diff with fresh anchors, so the next edit needs no r
 - [Tools](#tools)
   - [read](#read)
   - [replace](#replace)
-  - [replace_within](#replace_within)
+  - [replace_match](#replace_match)
   - [insert](#insert)
   - [copy](#copy)
   - [move](#move)
@@ -90,7 +90,7 @@ pi install /path/to/pi-hashline-edit-pro
 | `edit` | disabled |
 | `grep` | disabled while `anchor_grep` is enabled |
 | `copy`, `move` | disabled while Copy/move is off |
-| `replace_within` | disabled while Replace within is off |
+| `replace_match` | disabled while Replace match is off |
 | `write` | kept; an auto-read block with fresh anchors is appended to its result |
 | `bash` | untouched |
 
@@ -130,7 +130,7 @@ pi uninstall npm:pi-hashline-edit-pro
    {
      "remove_from": "Emno",
      "remove_to": "Emno",
-     "replacement_lines": "  console.log('hi');"
+     "text": "  console.log('hi');"
    }
    ```
 
@@ -155,7 +155,7 @@ Nothing commits until an edit call returns: the extension validates the request 
 
 ## Tools
 
-The extension registers eight tools: `read`, `replace`, `replace_within`, `insert`, `copy`, `move`, `anchor_grep`, and `undo_last_change`. The built-in `edit` tool is disabled. `copy` and `move` are enabled by default; turn Copy/move off in `/hashline-config` to remove both. `replace_within` is enabled by default; turn Replace within off in `/hashline-config` to remove it. `replace`, `replace_within`, `insert`, `copy`, and `move` take no `path` parameter by default: the file is resolved from the anchors' session ownership alone, so an edit can only land on the file the anchors were served for. Opt in with `/hashline-config` to require `path` in `replace`, `replace_within`, `insert`, `copy`, and `move` for RPC visibility (for example pimacs.el); anchors still resolve the target and `path` must match.
+The extension registers eight tools: `read`, `replace`, `replace_match`, `insert`, `copy`, `move`, `anchor_grep`, and `undo_last_change`. The built-in `edit` tool is disabled. `copy` and `move` are enabled by default; turn Copy/move off in `/hashline-config` to remove both. `replace_match` is enabled by default; turn Replace match off in `/hashline-config` to remove it. `replace`, `replace_match`, `insert`, `copy`, and `move` take no `path` parameter by default: the file is resolved from the anchors' session ownership alone, so an edit can only land on the file the anchors were served for. Opt in with `/hashline-config` to require `path` in `replace`, `replace_match`, `insert`, `copy`, and `move` for RPC visibility (for example pimacs.el); anchors still resolve the target and `path` must match.
 
 ### read
 
@@ -188,7 +188,7 @@ Edge cases:
 | --- | --- |
 | `remove_from` | 4-char anchor marking the FIRST line to remove (inclusive). |
 | `remove_to` | 4-char anchor marking the LAST line to remove (inclusive). |
-| `replacement_lines` | The exact text to write in place of the removed range, as one string: `""` deletes the range, `"\n"` is one blank line, and a trailing line break sets the last line's ending instead of adding a blank line. Embedded `\r\n`/`\r`/`\n` are preserved; JSON decoding happens once, before the tool; the tool writes the string it receives and never decodes — `\uXXXX` is the character, `\\uXXXX` the literal text. Legacy arrays are converted to text (elements joined with LF); prefer the string form. |
+| `text` | The exact text to write in place of the removed range, as one string: `""` deletes the range, `"\n"` is one blank line, and a trailing line break sets the last line's ending instead of adding a blank line. Embedded `\r\n`/`\r`/`\n` are preserved; JSON decoding happens once, before the tool; the tool writes the string it receives and never decodes — `\uXXXX` is the character, `\\uXXXX` the literal text. Legacy arrays are converted to text (elements joined with LF); prefer the string form. |
 
 Example: read showed `Hasu│old` and `arvm│old2`; to replace both:
 
@@ -196,18 +196,18 @@ Example: read showed `Hasu│old` and `arvm│old2`; to replace both:
 {
   "remove_from": "Hasu",
   "remove_to": "arvm",
-  "replacement_lines": "new line 1\nnew line 2"
+  "text": "new line 1\nnew line 2"
 }
 ```
 
-Single line: use the same anchor for `remove_from` and `remove_to`. `replace_from`/`replace_to` and `from`/`to` work as aliases.
+Single line: use the same anchor for `remove_from` and `remove_to`.
 A deletion keeps blank lines at the edges of the removed range, so the separators around a block survive the edit; target a blank line on its own to delete it.
 
 The extension checks the request before any file I/O, so a bad request never touches the file.
 
-Auto-fixable slips fall into two groups. Fixed silently: a reversed range, embedded newlines, and a legacy array payload (a single-element array that holds stringified array text, even with a trailing JS method call, for example `[…].map(s => s)`, is unwrapped). Fixed with a warning: a leftover `anchor│` prefix in `replacement_lines` or the anchor fields (a prefix of 4 to 5 letters before `│`, for example `abde│`), and diff-preview rows pasted into the replacement.
+Auto-fixable slips fall into two groups. Fixed silently: a reversed range, embedded newlines, and a legacy array payload (a single-element array that holds stringified array text, even with a trailing JS method call, for example `[…].map(s => s)`, is unwrapped). Fixed with a warning: a leftover `anchor│` prefix in `text` or the anchor fields (a prefix of 4 to 5 letters before `│`, for example `abde│`), and diff-preview rows pasted into the replacement.
 
-Content containing a NUL byte (`U+0000`) is rejected with `[E_BAD_SHAPE]` before any file I/O: writing it would make the file binary, so use an empty replacement to delete. This applies to `replace`'s `replacement_lines` and `insert`'s `lines`.
+Content containing a NUL byte (`U+0000`) is rejected with `[E_BAD_SHAPE]` before any file I/O: writing it would make the file binary, so use an empty replacement to delete. This applies to the `text` field of both `replace` and `insert`.
 
 Every line in the removed range must match what was last shown to you, except that a pure deletion (an empty replacement) verifies only the first and last line of the range and removes the interior as it currently stands. The extension records the `anchor│content` rows it serves (`read` output, `anchor_grep` output, the auto-read block after `write`, the `+anchor│` and ` anchor│` rows of post-edit diffs, the current-range rows of `[E_RANGE_STALE]` feedback, and the context rows of stale-anchor feedback) and verifies the whole range against that record before writing. A line that changed on disk since it was shown, or an anchor that is not owned in this session, refuses the edit with `[E_RANGE_STALE]` or `[E_STALE_ANCHOR]` and returns the current range with fresh anchors, so the retry needs no `read`. An owned anchor enters the served record when its row is shown (after a restart, restored ownership counts as shown), so a file with no owned anchors cannot be edited by anchor at all; call `read` first. An owned line that was never shown, for example beyond an auto-read preview's truncation cap, is refused with `[E_RANGE_STALE]` and returns the current range, so the retry still needs no `read`; only lines strictly between the boundaries of a pure deletion are exempt.
 
@@ -215,13 +215,13 @@ An edit that changes neither content nor line endings reports `No changes made` 
 
 After a successful edit, the diff is capped at 50KB. A row over 50KB is shown as a marker that keeps the row's anchor, and only the rows shown in the capped diff are recorded as served. The same caps apply to the `insert` and `undo_last_change` diffs, to the interactive previews, and to `details.patch`.
 
-### replace_within
+### replace_match
 
-`replace_within` changes part of a line (or a range of lines) without retyping the rest. `replace_from` and `replace_to` are bare anchors marking the first and last line of the range; use the same anchor for a single line. `old_string` is the exact text to find inside that range, and `new_string` replaces just that match; every other character stays untouched. That makes it the tool for a change the request quotes as a substring: a whole-line `replace` has to reproduce the rest of the line, so a slipped character becomes a wrong byte, while `replace_within` leaves everything the request did not name untouched. It is enabled by default; turn Replace within off in `/hashline-config` to remove the tool.
+`replace_match` changes part of a line (or a range of lines) without retyping the rest. `replace_from` and `replace_to` are bare anchors marking the first and last line of the range; use the same anchor for a single line. `old_string` is the exact text to find inside that range, and `new_string` replaces just that match; every other character stays untouched. That makes it the tool for a change the request quotes as a substring: a whole-line `replace` has to reproduce the rest of the line, so a slipped character becomes a wrong byte, while `replace_match` leaves everything the request did not name untouched. It is enabled by default; turn Replace match off in `/hashline-config` to remove the tool.
 
 `old_string` is matched against the range's text (LF line breaks, no final terminator) and must occur exactly once. A missing match is refused with `[E_SUBSTRING_NOT_FOUND]` and the current `anchor│content` rows; a repeated match is refused with `[E_SUBSTRING_AMBIGUOUS]` and the matching line numbers. Both refusals carry enough to retry without a `read`.
 
-A `replace_within` call is never grouped into a batch; it commits on its own like `copy` and `move`. The post-edit diff carries fresh anchors, and the edit is undoable with `undo_last_change`.
+A `replace_match` call is never grouped into a batch; it commits on its own like `copy` and `move`. The post-edit diff carries fresh anchors, and the edit is undoable with `undo_last_change`.
 
 ### insert
 
@@ -231,14 +231,14 @@ A `replace_within` call is never grouped into a batch; it commits on its own lik
 | --- | --- |
 | `anchor` | 4-char anchor marking the line next to which the lines go. The anchor line is preserved. A pasted `+Hasu│x` diff row or `anchor│` prefix is stripped automatically with a warning. |
 | `direction` | `"after"` inserts below the anchor line, `"before"` above it. |
-| `lines` | The exact text to insert, as one string: `""` inserts one blank line (the same as `"\n"`), and a trailing line break sets the last line's ending instead of adding a blank line. Never include the anchor line. Embedded `\r\n`/`\r`/`\n` are preserved; JSON decoding happens once, before the tool; the tool writes the string it receives and never decodes — `\uXXXX` is the character, `\\uXXXX` the literal text. Legacy arrays are converted to text (elements joined with LF); prefer the string form. |
+| `text` | The exact text to insert, as one string: `""` inserts one blank line (the same as `"\n"`), and a trailing line break sets the last line's ending instead of adding a blank line. Never include the anchor line. Embedded `\r\n`/`\r`/`\n` are preserved; JSON decoding happens once, before the tool; the tool writes the string it receives and never decodes — `\uXXXX` is the character, `\\uXXXX` the literal text. Legacy arrays are converted to text (elements joined with LF); prefer the string form. |
 
-Nothing is removed and the inserted lines are written exactly as given; the anchor line and every other line stay in place. An empty `lines` payload inserts one blank line. To seed an empty file, read it and insert after the `anchor│` empty-line row.
+Nothing is removed and the inserted lines are written exactly as given; the anchor line and every other line stay in place. An empty `text` payload inserts one blank line. To seed an empty file, read it and insert after the `anchor│` empty-line row.
 
 Example: add a line after `Emno│`:
 
 ```json
-{ "anchor": "Emno", "direction": "after", "lines": "  // log the greeting" }
+{ "anchor": "Emno", "direction": "after", "text": "  // log the greeting" }
 ```
 
 The same safety machinery as `replace` applies: undo is saved before the write (a failed write restores the previous undo record), and line endings and BOMs survive.
@@ -276,7 +276,7 @@ Every matching line, and each requested context line, is returned as `lineNumber
 | Field | Description |
 | --- | --- |
 | `pattern` | Search pattern (regex, or literal text when `literal` is true). |
-| `path` | File or directory to search (default: the current working directory). `file_path` works as an alias. |
+| `path` | File or directory to search (default: the current working directory). |
 | `glob` | Filter files by glob; `*` matches across directories, for example `*.ts` or `**/*.spec.ts`. A leading `/` is ignored, and the pattern may be relative to the search root or the current directory. |
 | `ignoreCase` | Case-insensitive search (default: false). |
 | `literal` | Treat the pattern as literal text instead of a regex (default: false). |
@@ -291,11 +291,11 @@ Output is capped at `limit` matched lines, 2000 rows, and 50KB of text, whicheve
 
 ### undo_last_change
 
-`undo_last_change` reverts the most recent successful `replace`, `replace_within`, `insert`, `copy`, or `move` on a file, restoring the exact previous content, BOM and line endings included, plus the previous anchors.
+`undo_last_change` reverts the most recent successful `replace`, `replace_match`, `insert`, `copy`, or `move` on a file, restoring the exact previous content, BOM and line endings included, plus the previous anchors.
 
-- History is per-file and single-level: only the most recent `replace`, `replace_within`, `insert`, `copy`, or `move` can be reverted. A same-message batch of `replace`/`insert` calls on one file counts as one entry: one undo reverts the whole batch.
+- History is per-file and single-level: only the most recent `replace`, `replace_match`, `insert`, `copy`, or `move` can be reverted. A same-message batch of `replace`/`insert` calls on one file counts as one entry: one undo reverts the whole batch.
 - History is persisted and survives session restarts. A failed `write` does not clear it.
-- Every applied `replace`, `replace_within`, `insert`, `copy`, or `move` is undoable; the undo record is saved before the edit is written.
+- Every applied `replace`, `replace_match`, `insert`, `copy`, or `move` is undoable; the undo record is saved before the edit is written.
 - A cross-file `move` stores one undo entry per file; `undo_last_change` reverts the file you name, so revert both sides to undo the whole move.
 - A successful `write` clears the history for that file.
 - If the file was modified since the last edit, the undo is refused with `[E_UNDO_STALE]` rather than overwriting those changes, and the record is kept. Once the file matches the edited state again, `undo_last_change` succeeds.
@@ -308,7 +308,7 @@ Output is capped at `limit` matched lines, 2000 rows, and 50KB of text, whicheve
 Multiple `replace` and `insert` calls on the same file in one assistant message are grouped per file into one batch. The batch unit is the message, not the turn: calls from separate messages in the same turn run on their own, one after another.
 
 - A call outside a batch commits before its result returns.
-- A `copy`, `move`, or `replace_within` call is never grouped into a batch: it commits on its own, and a pending same-file batch aborts safely with `[E_OP_ABORTED]` if the file changed under it.
+- A `copy`, `move`, or `replace_match` call is never grouped into a batch: it commits on its own, and a pending same-file batch aborts safely with `[E_OP_ABORTED]` if the file changed under it.
 - A batch validates every call against the pre-batch state and commits once, during the batch's last call: earlier calls reply `In batch N (queued)`, and the batch's last call shows the combined diff, with one undo reverting the whole batch.
 - If a batch aborts, nothing is written: the failing call's error ends with `Aborts batch N.` and reports that the whole batch was discarded, and an earlier member's row renders the abort message instead of the queued placeholder. Nothing commits until the last call succeeds.
 - A batch member accepts the same request shapes and auto-fixes as a standalone call.
@@ -323,7 +323,7 @@ The hashline tools are sequential in pi, so a message that contains one runs all
 
 Auto-read is enabled by default. After a successful `write`, the extension reads the file and appends an `--- Auto-read (hashline anchors) ---` block, so you get fresh `anchor│content` anchors without a separate `read` call.
 
-After `replace`, `replace_within`, `insert`, `copy`, `move`, and `undo_last_change`, the result shows the post-edit diff. Inside a same-message batch, only the batch's last call shows the combined diff, headed by a `batch N:` line; earlier calls reply `In batch N (queued)`. The `+anchor│` and ` anchor│` rows carry the current anchors, so follow-up edits can anchor on the diff directly. The `-anchor│` rows show removed lines with their old anchors, which are stale after the edit. When the context line next to a change is blank or whitespace-only, one more context line is shown in that direction, so the change stays anchored to visible content. Call `read` when you want the full file's anchors.
+After `replace`, `replace_match`, `insert`, `copy`, `move`, and `undo_last_change`, the result shows the post-edit diff. Inside a same-message batch, only the batch's last call shows the combined diff, headed by a `batch N:` line; earlier calls reply `In batch N (queued)`. The `+anchor│` and ` anchor│` rows carry the current anchors, so follow-up edits can anchor on the diff directly. The `-anchor│` rows show removed lines with their old anchors, which are stale after the edit. When the context line next to a change is blank or whitespace-only, one more context line is shown in that direction, so the change stays anchored to visible content. Call `read` when you want the full file's anchors.
 
 An edit that changes only line endings has no content diff; the result still reports `applied`, and one `undo_last_change` reverts it.
 
@@ -345,7 +345,7 @@ The setting lives in `/hashline-config` as Auto-read all and in `config.json` as
 
 | Command | Description |
 | --- | --- |
-| `/hashline-config` | Open the settings window: auto-read anchors, auto-read all mode, ignore folders/files, diff context lines, `anchor_grep` tool, copy/move tools, replace_within tool, required `path`, and strict input. Persists across sessions. |
+| `/hashline-config` | Open the settings window: auto-read anchors, auto-read all mode, ignore folders/files, diff context lines, `anchor_grep` tool, copy/move tools, replace_match tool, required `path`, and strict input. Persists across sessions. |
 | `/clear-anchors` | Clear the session's anchor claims. Anchors are re-claimed on the next `read`. |
 
 Settings live in `~/.config/pi-hashline-edit-pro/config.json`, created when a setting is first changed in `/hashline-config`:
@@ -357,7 +357,7 @@ Settings live in `~/.config/pi-hashline-edit-pro/config.json`, created when a se
   "autoReadAllIgnore": [],
   "anchorGrepEnabled": true,
   "copyMoveEnabled": true,
-  "replaceWithinEnabled": true,
+  "replaceMatchEnabled": true,
   "requirePath": false,
   "strictInput": false,
   "diffContextLines": 1
@@ -371,8 +371,8 @@ Settings live in `~/.config/pi-hashline-edit-pro/config.json`, created when a se
 | `autoReadAllIgnore` | Ignore folders/files | `[]` | Extra folder names, file names, or globs skipped by auto-read all. |
 | `anchorGrepEnabled` | Anchor grep | `true` | Register `anchor_grep` and disable the built-in grep while it is on. |
 | `copyMoveEnabled` | Copy/move | `true` | Offer the `copy` and `move` tools; when off, both are removed from the active tools. |
-| `replaceWithinEnabled` | Replace within | `true` | Offer the `replace_within` tool; when off, it is removed from the active tools. |
-| `requirePath` | Require path | `false` | `replace`, `replace_within`, `insert`, `copy`, and `move` require a `path` argument that must match anchor ownership. |
+| `replaceMatchEnabled` | Replace match | `true` | Offer the `replace_match` tool; when off, it is removed from the active tools. |
+| `requirePath` | Require path | `false` | `replace`, `replace_match`, `insert`, `copy`, and `move` require a `path` argument that must match anchor ownership. |
 | `strictInput` | Strict input | `false` | Reject auto-fixable slips (`[W_BAD_SHAPE]`, `[W_BAD_REF]`, `[W_INVALID_PATCH]`, `[W_BARE_HASH_PREFIX]`) with `[E_BAD_SHAPE]` instead of applying them with a warning. |
 | `diffContextLines` | Diff context | `1` | Surrounding lines in post-edit diffs, 0-10 (needs Auto-read). |
 
@@ -384,7 +384,7 @@ When `PI_HASHLINE_DIR` is unset or empty, non-Windows platforms honor `XDG_CONFI
 | --- | --- | --- |
 | Output cap | 2000 lines and 50KB | `read`, auto-read after `write`, post-edit diffs, patches, previews, `details.patch` |
 | Oversized row | 50KB per `anchor│content` row | replaced by an anchor-keeping marker you can still edit through |
-| Line cap | 1,353,139 lines per file | `read`, `replace`, `replace_within`, `insert`, `copy`, `move` (`[E_FILE_TOO_LARGE]`) |
+| Line cap | 1,353,139 lines per file | `read`, `replace`, `replace_match`, `insert`, `copy`, `move` (`[E_FILE_TOO_LARGE]`) |
 | File size | 100MB | all tools (`[E_FILE_TOO_LARGE]`) |
 | Hash window | first 500 bytes of a line | anchor identity for long lines |
 | Patch guard | 1MB of pre-edit + post-edit text | patch generation is skipped and `patchTruncated` is set |
@@ -406,7 +406,7 @@ All eight tools return machine-readable metadata in `details` alongside the mode
 | --- | --- |
 | `read` | `truncation` (set when output was truncated), `snapshotId` (a `v2\|path\|ino\|mtime\|ctime\|size` fingerprint), `nextOffset` (use as the next `offset`), and `metrics` with `truncated` and `next_offset`. |
 | `replace`, `insert` | `diff` (post-edit diff, capped, with current anchors on `+anchor│` and ` anchor│` rows; a same-message batch reports the combined diff on its last call and an empty diff on earlier calls), `patch` (a standard unified patch for external tools, capped like the diff), `patchTruncated` (true when the patch was cut or skipped for a pair over 1MB and can no longer be applied as-is), `firstChangedLine`, `snapshotId`, `classification` (`"noop"` when nothing changed), `batch` (`{ id, size, last, total }` marking same-message batch membership; earlier members also carry `aborted: true` and `abortMessage` after a batch abort), `hints` (informative `[H_*]` notices, for example literal escaped text written as sent), and `metrics`: `edits_attempted`, `edits_noop`, `warnings`, `classification` (`"applied"` or `"noop"`), `changed_lines` (`{ first, last }`), `added_lines`, `removed_lines`. |
-| `replace_within` | Same shape as `replace`: `diff` (post-edit diff with current anchors), `patch`, `patchTruncated`, `firstChangedLine`, `snapshotId`, `classification` (`"noop"` when nothing changed), and `metrics` with the same counters. |
+| `replace_match` | Same shape as `replace`: `diff` (post-edit diff with current anchors), `patch`, `patchTruncated`, `firstChangedLine`, `snapshotId`, `classification` (`"noop"` when nothing changed), and `metrics` with the same counters. |
 | `copy`, `move` | Same shape as `replace`: `diff` (post-edit diff with current anchors), `patch`, `patchTruncated`, `firstChangedLine`, `snapshotId`, `classification` (`"noop"` when a move changes nothing), and `metrics` with the same counters. |
 | `undo_last_change` | `diff` (the undo diff with restored anchors), `patch`, `patchTruncated`, and `metrics` in the same shape as `replace`. |
 | `anchor_grep` | `metrics` with `matches` (capped at `limit`), `files`, and `truncated`; `truncation` (the standard pi truncation report) when output was cut; and `linesTruncated` (true when long lines were shown as fragments). |
@@ -431,17 +431,17 @@ Full reference:
 | Code | Meaning |
 | --- | --- |
 | `[E_CONFIG]` | `PI_HASHLINE_DIR` is nonempty but not an absolute path. |
-| `[E_BAD_SHAPE]` | Request envelope or edit item has unknown, missing, or wrongly-typed fields (for example `replacement_lines` must be a string holding the exact text), content contains a NUL byte (`U+0000`), which would make the file binary, or a grep `glob` has invalid bracket or brace syntax. |
+| `[E_BAD_SHAPE]` | Request envelope or edit item has unknown, missing, or wrongly-typed fields (for example `text` must be a string holding the exact text), content contains a NUL byte (`U+0000`), which would make the file binary, or a grep `glob` has invalid bracket or brace syntax. |
 | `[W_BAD_SHAPE]` | Auto-corrected request slip reported as a warning (for example legacy array text that could not be parsed and was kept as one literal line). |
 | `[E_BAD_REF]` | An anchor in `remove_from`/`remove_to` is not a bare 4-character anchor (the anchor table is letters only). |
-| `[E_SUBSTRING_NOT_FOUND]` | `replace_within` did not find `old_string` in the selected range. The current `anchor│content` rows are returned; copy `old_string` exactly from the served row and retry. |
-| `[E_SUBSTRING_AMBIGUOUS]` | `replace_within` found `old_string` more than once in the selected range. Narrow `replace_from`/`replace_to` or extend `old_string` so it matches exactly once. |
+| `[E_SUBSTRING_NOT_FOUND]` | `replace_match` did not find `old_string` in the selected range. The current `anchor│content` rows are returned; copy `old_string` exactly from the served row and retry. |
+| `[E_SUBSTRING_AMBIGUOUS]` | `replace_match` found `old_string` more than once in the selected range. Narrow `replace_from`/`replace_to` or extend `old_string` so it matches exactly once. |
 | `[W_BAD_REF]` | A pasted `anchor│` or diff-preview marker was stripped from an anchor field with a warning. |
 | `[E_STALE_ANCHOR]` | An anchor is not owned in this session (it was never shown to you, or its line was edited or the file was rewritten); call `read` for fresh anchors. |
-| `[W_INVALID_PATCH]` | A `replacement_lines` line is a diff-preview row (`+anchor│`, `-anchor│`, `-    │`). The marker is stripped automatically with a warning. |
-| `[W_BARE_HASH_PREFIX]` | A `replacement_lines` line starts with an `anchor│` prefix. The prefix is stripped automatically with a warning. |
+| `[W_INVALID_PATCH]` | A `text` line is a diff-preview row (`+anchor│`, `-anchor│`, `-    │`). The marker is stripped automatically with a warning. |
+| `[W_BARE_HASH_PREFIX]` | A `text` line starts with an `anchor│` prefix. The prefix is stripped automatically with a warning. |
 | `[W_ANCHOR_RECLAIMED]` | The session's anchor quota was exhausted, so all anchors of the listed files (the least recently read or edited) were freed to make room. Read those files again before editing them. |
-| `[H_LITERAL_ESCAPE]` | A payload field contains literal escaped text such as `\uXXXX`, `\n`, `\t`, `\r`, or `\"` (one hint per distinct escape, up to three). The file receives those backslash characters as written, because JSON decoding happens once, before the tool call (`\uXXXX` → the character), so a doubled escape (`\\uXXXX`) lands literally. The hint is one line: `lines: "\u200b" written as literal text (Kq3f│ col 31); resend with U+200B if unintended.` names the field, the escape, and up to three affected anchors with their columns, then the fix; when more than three rows carry it, it gives `on 10 rows; undo_last_change + resend with U+200B if unintended.` instead of the anchor list. |
+| `[H_LITERAL_ESCAPE]` | A payload field contains literal escaped text such as `\uXXXX`, `\n`, `\t`, `\r`, or `\"` (one hint per distinct escape, up to three). The file receives those backslash characters as written, because JSON decoding happens once, before the tool call (`\uXXXX` → the character), so a doubled escape (`\\uXXXX`) lands literally. The hint is one line: `text: "\u200b" written as literal text (Kq3f│ col 31); resend with U+200B if unintended.` names the field, the escape, and up to three affected anchors with their columns, then the fix; when more than three rows carry it, it gives `on 10 rows; undo_last_change + resend with U+200B if unintended.` instead of the anchor list. |
 | `[H_UNICODE_LOST]` | The new text is missing an invisible or look-alike character (for example `U+200B`, `U+2060`, `U+00A0`, or a smart quote) that a replaced row has, or that a context row sharing a long run with an inserted line has. The edit applied as sent; the one-line hint names the character, its column, and the reference anchor, for example `[H_UNICODE_LOST] U+2060 missing at col 31; Kq3f│ has it; resend with U+2060 if unintended.` When another look-alike character (including `U+FFFD`) takes its place, the hint reports the substitute with `[H_UNICODE_SWAPPED]` wording. |
 | `[H_UNICODE_SWAPPED]` | The new text uses a different invisible or look-alike character than the line it matches (for example `U+200D` where that line has `U+200B`, or an ASCII stand-in such as `.` for `。` or a space for `U+00A0`). The edit applied as sent; the one-line hint names both code points, the column, and the reference anchor, for example `[H_UNICODE_SWAPPED] U+200D at col 21 where Kq3f│ has U+200B; resend with U+200B if unintended.` The substitute may also be `U+FFFD`, for example where a row has `U+00A0`. |
 | `[H_TRAILING_WHITESPACE]` | The new text differs from the replaced line only in trailing whitespace. Anchor checksums trim trailing whitespace, so the change does not invalidate the anchor; the one-line hint names the old and new trailing-whitespace counts and the column, for example `[H_TRAILING_WHITESPACE] 1 trailing whitespace character at col 7; Kq3f│ had 0.` |
@@ -476,7 +476,7 @@ Full reference:
 - Reset the anchor state. Anchors live in `~/.config/pi-hashline-edit-pro/hash-store.sqlite` (with `-wal`/`-shm` sidecars) and in per-session ownership logs under `~/.config/pi-hashline-edit-pro/sessions/`. Quit pi, delete those files, and everything is rebuilt on the next session. Anchor history is lost, but no project files are touched.
 - Corrupt store. If the store fails its health check it is renamed to `hash-store.sqlite.corrupt-<timestamp>` and rebuilt automatically.
 - Config directory moved. If `XDG_CONFIG_HOME` is set on a non-Windows platform, the config directory (and the anchor state inside it) lives at `$XDG_CONFIG_HOME/pi-hashline-edit-pro` instead of `~/.config/pi-hashline-edit-pro`. An existing store is not migrated automatically. To keep anchor and undo history, move the old `hash-store.sqlite` files (plus `-wal`/`-shm` sidecars) into the new directory before the first run.
-- Windows drives in WSL. Editing a file under a Windows mount (`/mnt/c`, drvfs/9p) can fail with `EPERM` from `fchmod` because those filesystems do not store POSIX modes. Mode preservation is best-effort there, so `replace`, `replace_within`, `insert`, and `undo_last_change` still write the edit.
+- Windows drives in WSL. Editing a file under a Windows mount (`/mnt/c`, drvfs/9p) can fail with `EPERM` from `fchmod` because those filesystems do not store POSIX modes. Mode preservation is best-effort there, so `replace`, `replace_match`, `insert`, and `undo_last_change` still write the edit.
 - Not sure what the extension changed. `read` returns anchored rows and the built-in `edit` is gone; that is expected. See [What changes in your session](#what-changes-in-your-session).
 
 ## Privacy and on-disk state
@@ -503,7 +503,7 @@ Background snapshot pruning and registry sidecar GC skip `EPERM`/`EACCES` withou
 
 ### Allocation
 
-Anchors are allocated, never derived. Every line that is served to you, by `read`, `anchor_grep`, the auto-read block after `write`, or a post-edit diff, gets the next free anchor from the session's pool, claimed by walking the table with a stride of 836,286 entries (coprime to the 1,353,139-entry table), so consecutively minted anchors land in unrelated regions of the table instead of sharing leading characters. Each session seeds its walk from its own offset (derived from the session key and the process id), so concurrent sessions mint different sequences instead of identical ones: an anchor minted in one session is unknown in another and is rejected with `[E_STALE_ANCHOR]` rather than resolving to a different file. Ownership is exclusive: an anchor is owned by one file's line until it is freed (the line was edited, the file was written or deleted, you ran `/clear-anchors`, or the session's quota ran out and the file was the least recently read or edited, which frees all of its anchors and reports it in `[W_ANCHOR_RECLAIMED]`). Minting prefers anchors the session has never used; when a bounded fresh-anchor probe finds nothing, freed anchors are recycled after their stale served records are purged, so an anchor is never shared by two live lines. Because ownership is exclusive, an anchor resolves to exactly one file. Two byte-identical lines never share an anchor, and that guarantee sets the file size cap: the pool is the shipped table's 1,353,139 entries (not all 52⁴ letter combinations), so a file can hold at most 1,353,139 lines, beyond which `read`, `replace`, `replace_within`, `insert`, `copy`, and `move` reject with `[E_FILE_TOO_LARGE]` (use `write` for very large files).
+Anchors are allocated, never derived. Every line that is served to you, by `read`, `anchor_grep`, the auto-read block after `write`, or a post-edit diff, gets the next free anchor from the session's pool, claimed by walking the table with a stride of 836,286 entries (coprime to the 1,353,139-entry table), so consecutively minted anchors land in unrelated regions of the table instead of sharing leading characters. Each session seeds its walk from its own offset (derived from the session key and the process id), so concurrent sessions mint different sequences instead of identical ones: an anchor minted in one session is unknown in another and is rejected with `[E_STALE_ANCHOR]` rather than resolving to a different file. Ownership is exclusive: an anchor is owned by one file's line until it is freed (the line was edited, the file was written or deleted, you ran `/clear-anchors`, or the session's quota ran out and the file was the least recently read or edited, which frees all of its anchors and reports it in `[W_ANCHOR_RECLAIMED]`). Minting prefers anchors the session has never used; when a bounded fresh-anchor probe finds nothing, freed anchors are recycled after their stale served records are purged, so an anchor is never shared by two live lines. Because ownership is exclusive, an anchor resolves to exactly one file. Two byte-identical lines never share an anchor, and that guarantee sets the file size cap: the pool is the shipped table's 1,353,139 entries (not all 52⁴ letter combinations), so a file can hold at most 1,353,139 lines, beyond which `read`, `replace`, `replace_match`, `insert`, `copy`, and `move` reject with `[E_FILE_TOO_LARGE]` (use `write` for very large files).
 
 ### Ownership and mapping across edits
 

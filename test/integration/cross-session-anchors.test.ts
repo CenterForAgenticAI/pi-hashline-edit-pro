@@ -28,7 +28,7 @@ describe("cross-session anchor isolation", () => {
       await expect(
         editTool.execute(
           "e1",
-          { remove_from: anchorA, remove_to: anchorA, replacement_lines: ["HACKED"] },
+          { remove_from: anchorA, remove_to: anchorA, text: ["HACKED"] },
           undefined,
           undefined,
           ctx,

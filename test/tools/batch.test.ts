@@ -36,14 +36,14 @@ describe("same-turn edit batches", () => {
       const gammaRef = anchorFor(text, "gamma");
 
       const message = assistantMessage([
-        toolCall("b1", "replace", { remove_from: betaRef, remove_to: betaRef, replacement_lines: ["BETA"] }),
-        toolCall("b2", "replace", { remove_from: gammaRef, remove_to: gammaRef, replacement_lines: ["GAMMA"] }),
+        toolCall("b1", "replace", { remove_from: betaRef, remove_to: betaRef, text: ["BETA"] }),
+        toolCall("b2", "replace", { remove_from: gammaRef, remove_to: gammaRef, text: ["GAMMA"] }),
       ]);
       await (handlers.get("message_end")!({ type: "message_end", message }, ctx) as Promise<unknown>);
 
       const first = await editTool.execute(
         "b1",
-        { remove_from: betaRef, remove_to: betaRef, replacement_lines: ["BETA"] },
+        { remove_from: betaRef, remove_to: betaRef, text: ["BETA"] },
         undefined,
         undefined,
         ctx,
@@ -53,7 +53,7 @@ describe("same-turn edit batches", () => {
 
       const second = await editTool.execute(
         "b2",
-        { remove_from: gammaRef, remove_to: gammaRef, replacement_lines: ["GAMMA"] },
+        { remove_from: gammaRef, remove_to: gammaRef, text: ["GAMMA"] },
         undefined,
         undefined,
         ctx,
@@ -94,8 +94,8 @@ describe("same-turn edit batches", () => {
       const betaRef = anchorFor(text, "beta");
       const gammaRef = anchorFor(text, "gamma");
 
-      const firstArgs = { remove_from: betaRef, remove_to: betaRef, replacement_lines: ['["B1", "B2",]'] };
-      const secondArgs = { remove_from: gammaRef, remove_to: gammaRef, replacement_lines: ["GAMMA"] };
+      const firstArgs = { remove_from: betaRef, remove_to: betaRef, text: ['["B1", "B2",]'] };
+      const secondArgs = { remove_from: gammaRef, remove_to: gammaRef, text: ["GAMMA"] };
       const message = assistantMessage([
         toolCall("b1", "replace", firstArgs),
         toolCall("b2", "replace", secondArgs),
@@ -124,14 +124,14 @@ describe("same-turn edit batches", () => {
       const threeRef = anchorFor(text, "three");
 
       const message = assistantMessage([
-        toolCall("m1", "replace", { remove_from: oneRef, remove_to: oneRef, replacement_lines: ["ONE"] }),
-        toolCall("m2", "insert", { anchor: threeRef, direction: "before", lines: ["TWO-AND-A-HALF"] }),
+        toolCall("m1", "replace", { remove_from: oneRef, remove_to: oneRef, text: ["ONE"] }),
+        toolCall("m2", "insert", { anchor: threeRef, direction: "before", text: ["TWO-AND-A-HALF"] }),
       ]);
       await (handlers.get("message_end")!({ type: "message_end", message }, ctx) as Promise<unknown>);
 
       const first = await editTool.execute(
         "m1",
-        { remove_from: oneRef, remove_to: oneRef, replacement_lines: ["ONE"] },
+        { remove_from: oneRef, remove_to: oneRef, text: ["ONE"] },
         undefined,
         undefined,
         ctx,
@@ -140,7 +140,7 @@ describe("same-turn edit batches", () => {
 
       const second = await insertTool.execute(
         "m2",
-        { anchor: threeRef, direction: "before", lines: ["TWO-AND-A-HALF"] },
+        { anchor: threeRef, direction: "before", text: ["TWO-AND-A-HALF"] },
         undefined,
         undefined,
         ctx,
@@ -175,9 +175,9 @@ describe("same-turn edit batches", () => {
       const text = (await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx)).content[0].text as string;
       const oneRef = anchorFor(text, "one");
       const twoRef = anchorFor(text, "two");
-      const replaceArgs = { remove_from: oneRef, remove_to: oneRef, replacement_lines: ["ONE"] };
-      const beforeArgs = { anchor: twoRef, direction: "before", lines: ["ONE-A"] };
-      const afterArgs = { anchor: twoRef, direction: "after", lines: ["TWO-A"] };
+      const replaceArgs = { remove_from: oneRef, remove_to: oneRef, text: ["ONE"] };
+      const beforeArgs = { anchor: twoRef, direction: "before", text: ["ONE-A"] };
+      const afterArgs = { anchor: twoRef, direction: "after", text: ["TWO-A"] };
       const message = assistantMessage([
         toolCall("q1", "replace", replaceArgs),
         toolCall("q2", "insert", beforeArgs),
@@ -211,8 +211,8 @@ describe("same-turn edit batches", () => {
 
       const text = (await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx)).content[0].text as string;
       const twoRef = anchorFor(text, "two");
-      const beforeArgs = { anchor: twoRef, direction: "before", lines: ["ONE-A"] };
-      const afterArgs = { anchor: twoRef, direction: "after", lines: ["TWO-A"] };
+      const beforeArgs = { anchor: twoRef, direction: "before", text: ["ONE-A"] };
+      const afterArgs = { anchor: twoRef, direction: "after", text: ["TWO-A"] };
       const message = assistantMessage([
         toolCall("s1", "insert", afterArgs),
         toolCall("s2", "insert", beforeArgs),
@@ -235,8 +235,8 @@ describe("same-turn edit batches", () => {
 
       const text = (await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx)).content[0].text as string;
       const twoRef = anchorFor(text, "two");
-      const firstArgs = { anchor: twoRef, direction: "before", lines: ["A"] };
-      const secondArgs = { anchor: twoRef, direction: "before", lines: ["B"] };
+      const firstArgs = { anchor: twoRef, direction: "before", text: ["A"] };
+      const secondArgs = { anchor: twoRef, direction: "before", text: ["B"] };
       const message = assistantMessage([
         toolCall("t1", "insert", firstArgs),
         toolCall("t2", "insert", secondArgs),
@@ -264,8 +264,8 @@ describe("same-turn edit batches", () => {
 
       const text = (await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx)).content[0].text as string;
       const emptyRef = text.split("\n")[0]!.split("│")[0]!;
-      const beforeArgs = { anchor: emptyRef, direction: "before", lines: ["A"] };
-      const afterArgs = { anchor: emptyRef, direction: "after", lines: ["B"] };
+      const beforeArgs = { anchor: emptyRef, direction: "before", text: ["A"] };
+      const afterArgs = { anchor: emptyRef, direction: "after", text: ["B"] };
       const message = assistantMessage([
         toolCall("e1", "insert", beforeArgs),
         toolCall("e2", "insert", afterArgs),
@@ -301,16 +301,16 @@ describe("same-turn edit batches", () => {
       const b2Ref = anchorFor(readB.content[0].text as string, "b2");
 
       const message = assistantMessage([
-        toolCall("a1", "replace", { remove_from: a1Ref, remove_to: a1Ref, replacement_lines: ["A1"] }),
-        toolCall("b1", "replace", { remove_from: b1Ref, remove_to: b1Ref, replacement_lines: ["B1"] }),
-        toolCall("a2", "replace", { remove_from: a2Ref, remove_to: a2Ref, replacement_lines: ["A2"] }),
-        toolCall("b2", "replace", { remove_from: b2Ref, remove_to: b2Ref, replacement_lines: ["B2"] }),
+        toolCall("a1", "replace", { remove_from: a1Ref, remove_to: a1Ref, text: ["A1"] }),
+        toolCall("b1", "replace", { remove_from: b1Ref, remove_to: b1Ref, text: ["B1"] }),
+        toolCall("a2", "replace", { remove_from: a2Ref, remove_to: a2Ref, text: ["A2"] }),
+        toolCall("b2", "replace", { remove_from: b2Ref, remove_to: b2Ref, text: ["B2"] }),
       ]);
       await (handlers.get("message_end")!({ type: "message_end", message }, ctx) as Promise<unknown>);
 
       const firstA = await editTool.execute(
         "a1",
-        { remove_from: a1Ref, remove_to: a1Ref, replacement_lines: ["A1"] },
+        { remove_from: a1Ref, remove_to: a1Ref, text: ["A1"] },
         undefined,
         undefined,
         ctx,
@@ -319,7 +319,7 @@ describe("same-turn edit batches", () => {
 
       const firstB = await editTool.execute(
         "b1",
-        { remove_from: b1Ref, remove_to: b1Ref, replacement_lines: ["B1"] },
+        { remove_from: b1Ref, remove_to: b1Ref, text: ["B1"] },
         undefined,
         undefined,
         ctx,
@@ -327,7 +327,7 @@ describe("same-turn edit batches", () => {
       expect(firstB.content[0].text).toBe("In batch 2 (queued)");
       const lastB = await editTool.execute(
         "b2",
-        { remove_from: b2Ref, remove_to: b2Ref, replacement_lines: ["B2"] },
+        { remove_from: b2Ref, remove_to: b2Ref, text: ["B2"] },
         undefined,
         undefined,
         ctx,
@@ -341,7 +341,7 @@ describe("same-turn edit batches", () => {
 
       const lastA = await editTool.execute(
         "a2",
-        { remove_from: a2Ref, remove_to: a2Ref, replacement_lines: ["A2"] },
+        { remove_from: a2Ref, remove_to: a2Ref, text: ["A2"] },
         undefined,
         undefined,
         ctx,
@@ -368,7 +368,7 @@ describe("same-turn edit batches", () => {
       const ref = anchorFor(firstRead.content[0].text as string, "aaa");
       const solo = await editTool.execute(
         "solo",
-        { remove_from: ref, remove_to: ref, replacement_lines: ["AAA"] },
+        { remove_from: ref, remove_to: ref, text: ["AAA"] },
         undefined,
         undefined,
         ctx,
@@ -404,14 +404,14 @@ describe("same-turn edit batches", () => {
       const twoRef = anchorFor(text, "two");
 
       const message = assistantMessage([
-        toolCall("i1", "insert", { anchor: oneRef, direction: "after", lines: ["ONE-A"] }),
-        toolCall("i2", "insert", { anchor: twoRef, direction: "after", lines: ["TWO-A"] }),
+        toolCall("i1", "insert", { anchor: oneRef, direction: "after", text: ["ONE-A"] }),
+        toolCall("i2", "insert", { anchor: twoRef, direction: "after", text: ["TWO-A"] }),
       ]);
       await (handlers.get("message_end")!({ type: "message_end", message }, ctx) as Promise<unknown>);
 
       const first = await insertTool.execute(
         "i1",
-        { anchor: oneRef, direction: "after", lines: ["ONE-A"] },
+        { anchor: oneRef, direction: "after", text: ["ONE-A"] },
         undefined,
         undefined,
         ctx,
@@ -420,7 +420,7 @@ describe("same-turn edit batches", () => {
 
       const second = await insertTool.execute(
         "i2",
-        { anchor: twoRef, direction: "after", lines: ["TWO-A"] },
+        { anchor: twoRef, direction: "after", text: ["TWO-A"] },
         undefined,
         undefined,
         ctx,
@@ -455,14 +455,14 @@ describe("same-turn edit batches", () => {
       const bbbRef = anchorFor(text, "bbb");
 
       const message = assistantMessage([
-        toolCall("n1", "replace", { remove_from: aaaRef, remove_to: aaaRef, replacement_lines: ["aaa"] }),
-        toolCall("n2", "replace", { remove_from: bbbRef, remove_to: bbbRef, replacement_lines: ["bbb"] }),
+        toolCall("n1", "replace", { remove_from: aaaRef, remove_to: aaaRef, text: ["aaa"] }),
+        toolCall("n2", "replace", { remove_from: bbbRef, remove_to: bbbRef, text: ["bbb"] }),
       ]);
       await (handlers.get("message_end")!({ type: "message_end", message }, ctx) as Promise<unknown>);
 
       const first = await editTool.execute(
         "n1",
-        { remove_from: aaaRef, remove_to: aaaRef, replacement_lines: ["aaa"] },
+        { remove_from: aaaRef, remove_to: aaaRef, text: ["aaa"] },
         undefined,
         undefined,
         ctx,
@@ -471,7 +471,7 @@ describe("same-turn edit batches", () => {
 
       const second = await editTool.execute(
         "n2",
-        { remove_from: bbbRef, remove_to: bbbRef, replacement_lines: ["bbb"] },
+        { remove_from: bbbRef, remove_to: bbbRef, text: ["bbb"] },
         undefined,
         undefined,
         ctx,
@@ -503,14 +503,14 @@ describe("same-turn edit batches", () => {
       const bRef = anchorFor(text, "b");
 
       const message = assistantMessage([
-        toolCall("f1", "replace", { remove_from: bRef, remove_to: bRef, replacement_lines: ["B"] }),
-        toolCall("f2", "replace", { remove_from: bRef, remove_to: bRef, replacement_lines: ["B2"] }),
+        toolCall("f1", "replace", { remove_from: bRef, remove_to: bRef, text: ["B"] }),
+        toolCall("f2", "replace", { remove_from: bRef, remove_to: bRef, text: ["B2"] }),
       ]);
       await (handlers.get("message_end")!({ type: "message_end", message }, ctx) as Promise<unknown>);
 
       const first = await editTool.execute(
         "f1",
-        { remove_from: bRef, remove_to: bRef, replacement_lines: ["B"] },
+        { remove_from: bRef, remove_to: bRef, text: ["B"] },
         undefined,
         undefined,
         ctx,
@@ -521,7 +521,7 @@ describe("same-turn edit batches", () => {
       try {
         await editTool.execute(
           "f2",
-          { remove_from: bRef, remove_to: bRef, replacement_lines: ["B2"] },
+          { remove_from: bRef, remove_to: bRef, text: ["B2"] },
           undefined,
           undefined,
           ctx,
@@ -555,7 +555,7 @@ describe("same-turn edit batches", () => {
       const soloRef = anchorFor(soloRead.content[0].text as string, "c");
       await editTool.execute(
         "solo",
-        { remove_from: soloRef, remove_to: soloRef, replacement_lines: ["C"] },
+        { remove_from: soloRef, remove_to: soloRef, text: ["C"] },
         undefined,
         undefined,
         ctx,
@@ -568,21 +568,21 @@ describe("same-turn edit batches", () => {
       const bRef = anchorFor(text, "b");
 
       const message = assistantMessage([
-        toolCall("z1", "replace", { remove_from: bRef, remove_to: bRef, replacement_lines: [] }),
-        toolCall("z2", "insert", { anchor: aRef, direction: "after", lines: ["b"] }),
+        toolCall("z1", "replace", { remove_from: bRef, remove_to: bRef, text: [] }),
+        toolCall("z2", "insert", { anchor: aRef, direction: "after", text: ["b"] }),
       ]);
       await (handlers.get("message_end")!({ type: "message_end", message }, ctx) as Promise<unknown>);
 
       await editTool.execute(
         "z1",
-        { remove_from: bRef, remove_to: bRef, replacement_lines: [] },
+        { remove_from: bRef, remove_to: bRef, text: [] },
         undefined,
         undefined,
         ctx,
       );
       const second = await insertTool.execute(
         "z2",
-        { anchor: aRef, direction: "after", lines: ["b"] },
+        { anchor: aRef, direction: "after", text: ["b"] },
         undefined,
         undefined,
         ctx,
@@ -613,8 +613,8 @@ describe("same-turn edit batches", () => {
       const bRef = anchorFor(text, "b");
 
       const message = assistantMessage([
-        toolCall("g1", "replace", { remove_from: aRef, remove_to: aRef, replacement_lines: null }),
-        toolCall("g2", "replace", { remove_from: bRef, remove_to: bRef, replacement_lines: ["B"] }),
+        toolCall("g1", "replace", { remove_from: aRef, remove_to: aRef, text: null }),
+        toolCall("g2", "replace", { remove_from: bRef, remove_to: bRef, text: ["B"] }),
       ]);
       await (handlers.get("message_end")!({ type: "message_end", message }, ctx) as Promise<unknown>);
 
@@ -622,7 +622,7 @@ describe("same-turn edit batches", () => {
       try {
         await editTool.execute(
           "g1",
-          { remove_from: aRef, remove_to: aRef, replacement_lines: null },
+          { remove_from: aRef, remove_to: aRef, text: null },
           undefined,
           undefined,
           ctx,
@@ -636,7 +636,7 @@ describe("same-turn edit batches", () => {
       try {
         await editTool.execute(
           "g2",
-          { remove_from: bRef, remove_to: bRef, replacement_lines: ["B"] },
+          { remove_from: bRef, remove_to: bRef, text: ["B"] },
           undefined,
           undefined,
           ctx,
@@ -667,14 +667,14 @@ describe("same-turn edit batches", () => {
       const cRef = anchorFor(text, "c");
 
       const message = assistantMessage([
-        toolCall("h1", "replace", { remove_from: aRef, remove_to: aRef, replacement_lines: ["A"] }),
-        toolCall("h2", "replace", { remove_from: cRef, remove_to: cRef, replacement_lines: ["C"] }),
+        toolCall("h1", "replace", { remove_from: aRef, remove_to: aRef, text: ["A"] }),
+        toolCall("h2", "replace", { remove_from: cRef, remove_to: cRef, text: ["C"] }),
       ]);
       await (handlers.get("message_end")!({ type: "message_end", message }, ctx) as Promise<unknown>);
 
       const first = await editTool.execute(
         "h1",
-        { remove_from: aRef, remove_to: aRef, replacement_lines: ["A"] },
+        { remove_from: aRef, remove_to: aRef, text: ["A"] },
         undefined,
         undefined,
         ctx,
@@ -687,7 +687,7 @@ describe("same-turn edit batches", () => {
       try {
         await editTool.execute(
           "h2",
-          { remove_from: cRef, remove_to: cRef, replacement_lines: ["C"] },
+          { remove_from: cRef, remove_to: cRef, text: ["C"] },
           undefined,
           undefined,
           ctx,
@@ -723,14 +723,14 @@ describe("same-turn edit batches", () => {
       const bbbRef = anchorFor(text, "bbb");
 
       const message = assistantMessage([
-        toolCall("s1", "replace", { remove_from: aaaRef, remove_to: aaaRef, replacement_lines: [`${aaaRef}│AAA`] }),
-        toolCall("s2", "replace", { remove_from: bbbRef, remove_to: bbbRef, replacement_lines: ["BBB"] }),
+        toolCall("s1", "replace", { remove_from: aaaRef, remove_to: aaaRef, text: [`${aaaRef}│AAA`] }),
+        toolCall("s2", "replace", { remove_from: bbbRef, remove_to: bbbRef, text: ["BBB"] }),
       ]);
       await (handlers.get("message_end")!({ type: "message_end", message }, ctx) as Promise<unknown>);
 
       const first = await editTool.execute(
         "s1",
-        { remove_from: aaaRef, remove_to: aaaRef, replacement_lines: [`${aaaRef}│AAA`] },
+        { remove_from: aaaRef, remove_to: aaaRef, text: [`${aaaRef}│AAA`] },
         undefined,
         undefined,
         ctx,
@@ -741,7 +741,7 @@ describe("same-turn edit batches", () => {
       try {
         await editTool.execute(
           "s2",
-          { remove_from: bbbRef, remove_to: bbbRef, replacement_lines: ["BBB"] },
+          { remove_from: bbbRef, remove_to: bbbRef, text: ["BBB"] },
           undefined,
           undefined,
           ctx,
@@ -771,14 +771,14 @@ describe("same-turn edit batches", () => {
       const bRef = anchorFor(text, "b");
 
       const message = assistantMessage([
-        toolCall("e1", "replace", { remove_from: aRef, remove_to: aRef, replacement_lines: [] }),
-        toolCall("e2", "replace", { remove_from: bRef, remove_to: bRef, replacement_lines: [] }),
+        toolCall("e1", "replace", { remove_from: aRef, remove_to: aRef, text: [] }),
+        toolCall("e2", "replace", { remove_from: bRef, remove_to: bRef, text: [] }),
       ]);
       await (handlers.get("message_end")!({ type: "message_end", message }, ctx) as Promise<unknown>);
 
       const first = await editTool.execute(
         "e1",
-        { remove_from: aRef, remove_to: aRef, replacement_lines: [] },
+        { remove_from: aRef, remove_to: aRef, text: [] },
         undefined,
         undefined,
         ctx,
@@ -789,7 +789,7 @@ describe("same-turn edit batches", () => {
       try {
         await editTool.execute(
           "e2",
-          { remove_from: bRef, remove_to: bRef, replacement_lines: [] },
+          { remove_from: bRef, remove_to: bRef, text: [] },
           undefined,
           undefined,
           ctx,
@@ -821,9 +821,9 @@ describe("same-turn edit batches", () => {
       await writeFile(path, "A2\nb\nc\nd\n", "utf-8");
 
       const message = assistantMessage([
-        toolCall("t1", "replace", { remove_from: aRef, remove_to: aRef, replacement_lines: ["A"] }),
-        toolCall("t2", "replace", { remove_from: cRef, remove_to: cRef, replacement_lines: ["C"] }),
-        toolCall("t3", "replace", { remove_from: dRef, remove_to: dRef, replacement_lines: ["D"] }),
+        toolCall("t1", "replace", { remove_from: aRef, remove_to: aRef, text: ["A"] }),
+        toolCall("t2", "replace", { remove_from: cRef, remove_to: cRef, text: ["C"] }),
+        toolCall("t3", "replace", { remove_from: dRef, remove_to: dRef, text: ["D"] }),
       ]);
       await (handlers.get("message_end")!({ type: "message_end", message }, ctx) as Promise<unknown>);
 
@@ -831,7 +831,7 @@ describe("same-turn edit batches", () => {
         try {
           await editTool.execute(
             id,
-            { remove_from: ref, remove_to: ref, replacement_lines: [line] },
+            { remove_from: ref, remove_to: ref, text: [line] },
             undefined,
             undefined,
             ctx,
@@ -853,7 +853,7 @@ describe("same-turn edit batches", () => {
     });
   });
 
-  it("applies a batch whose member sent replacement_lines as a string after host coercion", async () => {
+  it("applies a batch whose member sent text as a string after host coercion", async () => {
     await withTempFile("sample.txt", "alpha\nbeta\ngamma\ndelta\n", async ({ cwd, path }) => {
       const { getTool, handlers, ctx } = await setupBatchTools(cwd);
       const readTool = getTool("read");
@@ -862,8 +862,8 @@ describe("same-turn edit batches", () => {
       const betaRef = anchorFor(text, "beta");
       const gammaRef = anchorFor(text, "gamma");
 
-      const firstArgs = { remove_from: betaRef, remove_to: betaRef, replacement_lines: "BETA\nBETA2" };
-      const secondArgs = { remove_from: gammaRef, remove_to: gammaRef, replacement_lines: ["GAMMA"] };
+      const firstArgs = { remove_from: betaRef, remove_to: betaRef, text: "BETA\nBETA2" };
+      const secondArgs = { remove_from: gammaRef, remove_to: gammaRef, text: ["GAMMA"] };
       const message = assistantMessage([
         toolCall("c1", "replace", firstArgs),
         toolCall("c2", "replace", secondArgs),
@@ -889,8 +889,8 @@ describe("same-turn edit batches", () => {
       const betaRef = anchorFor(text, "beta");
       const gammaRef = anchorFor(text, "gamma");
 
-      const firstArgs = { remove_from: betaRef, remove_to: betaRef, replacement_lines: ['["BETA"].map(s => s)'] };
-      const secondArgs = { remove_from: gammaRef, remove_to: gammaRef, replacement_lines: ["GAMMA"] };
+      const firstArgs = { remove_from: betaRef, remove_to: betaRef, text: ['["BETA"].map(s => s)'] };
+      const secondArgs = { remove_from: gammaRef, remove_to: gammaRef, text: ["GAMMA"] };
       const message = assistantMessage([
         toolCall("m1", "replace", firstArgs),
         toolCall("m2", "replace", secondArgs),
@@ -917,8 +917,8 @@ describe("same-turn edit batches", () => {
       const oneRef = anchorFor(text, "one");
       const twoRef = anchorFor(text, "two");
 
-      const insertArgs = { anchor: oneRef, direction: "after", lines: "ONE-A\nONE-B" };
-      const editArgs = { remove_from: twoRef, remove_to: twoRef, replacement_lines: ["TWO"] };
+      const insertArgs = { anchor: oneRef, direction: "after", text: "ONE-A\nONE-B" };
+      const editArgs = { remove_from: twoRef, remove_to: twoRef, text: ["TWO"] };
       const message = assistantMessage([
         toolCall("n1", "insert", insertArgs),
         toolCall("n2", "replace", editArgs),
@@ -944,9 +944,9 @@ describe("same-turn edit batches", () => {
       const bRef = anchorFor(text, "b");
       const cRef = anchorFor(text, "c");
 
-      const firstArgs = { remove_from: aRef, remove_to: aRef, replacement_lines: ["A"] };
+      const firstArgs = { remove_from: aRef, remove_to: aRef, text: ["A"] };
       const skippedArgs = { anchor: bRef, direction: "sideways", lines: ["B2"] };
-      const lastArgs = { remove_from: cRef, remove_to: cRef, replacement_lines: ["C"] };
+      const lastArgs = { remove_from: cRef, remove_to: cRef, text: ["C"] };
       const message = assistantMessage([
         toolCall("x1", "replace", firstArgs),
         toolCall("x2", "insert", skippedArgs),
@@ -980,8 +980,8 @@ describe("same-turn edit batches", () => {
 
       await writeFile(path, "alpha\nBETA\ngamma\n", "utf-8");
 
-      const firstArgs = { remove_from: betaRef, remove_to: betaRef, replacement_lines: ["B"] };
-      const secondArgs = { remove_from: gammaRef, remove_to: gammaRef, replacement_lines: ["G"] };
+      const firstArgs = { remove_from: betaRef, remove_to: betaRef, text: ["B"] };
+      const secondArgs = { remove_from: gammaRef, remove_to: gammaRef, text: ["G"] };
       const message = assistantMessage([
         toolCall("g1", "replace", firstArgs),
         toolCall("g2", "replace", secondArgs),
@@ -1017,8 +1017,8 @@ describe("same-turn edit batches", () => {
       const text = (await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx)).content[0].text as string;
       const bRef = anchorFor(text, "b");
 
-      const firstArgs = { remove_from: bRef, remove_to: bRef, replacement_lines: ["B"] };
-      const secondArgs = { remove_from: bRef, remove_to: bRef, replacement_lines: ["B2"] };
+      const firstArgs = { remove_from: bRef, remove_to: bRef, text: ["B"] };
+      const secondArgs = { remove_from: bRef, remove_to: bRef, text: ["B2"] };
       const message = assistantMessage([
         toolCall("v1a", "replace", firstArgs),
         toolCall("v1b", "replace", secondArgs),
@@ -1065,8 +1065,8 @@ describe("same-turn edit batches", () => {
 
       await writeFile(path, "a\nB\nc\n", "utf-8");
 
-      const firstArgs = { remove_from: aRef, remove_to: cRef, replacement_lines: ["X"] };
-      const lastArgs = { remove_from: cRef, remove_to: cRef, replacement_lines: ["C"] };
+      const firstArgs = { remove_from: aRef, remove_to: cRef, text: ["X"] };
+      const lastArgs = { remove_from: cRef, remove_to: cRef, text: ["C"] };
       const message = assistantMessage([
         toolCall("s1", "replace", firstArgs),
         toolCall("s2", "replace", lastArgs),
@@ -1107,8 +1107,8 @@ describe("same-turn edit batches", () => {
       const rows = ((await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx)).content[0].text as string).split("\n");
       const bIndex = rows.findIndex((row) => row.includes("│b"));
       const cIndex = rows.findIndex((row) => row.includes("│c"));
-      const bArgs = { remove_from: extractHash(rows[bIndex]!), remove_to: extractHash(rows[bIndex + 1]!), replacement_lines: [] };
-      const cArgs = { remove_from: extractHash(rows[cIndex]!), remove_to: extractHash(rows[cIndex + 1]!), replacement_lines: [] };
+      const bArgs = { remove_from: extractHash(rows[bIndex]!), remove_to: extractHash(rows[bIndex + 1]!), text: [] };
+      const cArgs = { remove_from: extractHash(rows[cIndex]!), remove_to: extractHash(rows[cIndex + 1]!), text: [] };
       const message = assistantMessage([toolCall("d1", "replace", bArgs), toolCall("d2", "replace", cArgs)]);
       await (handlers.get("message_end")!({ type: "message_end", message }, ctx) as Promise<unknown>);
       await editTool.execute("d1", bArgs, undefined, undefined, ctx);
@@ -1120,7 +1120,7 @@ describe("same-turn edit batches", () => {
 });
 
 describe("batched insert strip warnings", () => {
-  it("reports the lines field with the caller's index", async () => {
+  it("reports the text field with the caller's index", async () => {
     await withTempFile("sample.txt", "one\ntwo\nthree\n", async ({ cwd, path }) => {
       const { getTool, handlers, ctx } = await setupBatchTools(cwd);
       const readTool = getTool("read");
@@ -1128,8 +1128,8 @@ describe("batched insert strip warnings", () => {
       const text = (await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx)).content[0].text as string;
       const oneRef = anchorFor(text, "one");
       const threeRef = anchorFor(text, "three");
-      const firstArgs = { anchor: oneRef, direction: "after", lines: [`+${oneRef}│ONE-A`] };
-      const secondArgs = { anchor: threeRef, direction: "after", lines: ["THREE-A"] };
+      const firstArgs = { anchor: oneRef, direction: "after", text: [`+${oneRef}│ONE-A`] };
+      const secondArgs = { anchor: threeRef, direction: "after", text: ["THREE-A"] };
       const message = assistantMessage([
         toolCall("i1", "insert", firstArgs),
         toolCall("i2", "insert", secondArgs),
@@ -1137,8 +1137,7 @@ describe("batched insert strip warnings", () => {
       await (handlers.get("message_end")!({ type: "message_end", message }, ctx) as Promise<unknown>);
       await insertTool.execute("i1", firstArgs, undefined, undefined, ctx);
       const last = await insertTool.execute("i2", secondArgs, undefined, undefined, ctx);
-      expect(last.content[0].text).toContain("Stripped diff-preview marker from lines line 1.");
-      expect(last.content[0].text).not.toContain("replacement_lines");
+      expect(last.content[0].text).toContain("Stripped diff-preview marker from text line 1.");
       expect(await readFile(path, "utf-8")).toBe("one\nONE-A\ntwo\nthree\nTHREE-A\n");
     });
   });
@@ -1153,8 +1152,8 @@ describe("batched provided line endings", () => {
       const text = (await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx)).content[0].text as string;
       const aRef = anchorFor(text, "a");
       const cRef = anchorFor(text, "c");
-      const firstArgs = { remove_from: aRef, remove_to: aRef, replacement_lines: ["A1\r\nA2"] };
-      const secondArgs = { remove_from: cRef, remove_to: cRef, replacement_lines: ["C"] };
+      const firstArgs = { remove_from: aRef, remove_to: aRef, text: ["A1\r\nA2"] };
+      const secondArgs = { remove_from: cRef, remove_to: cRef, text: ["C"] };
       const message = assistantMessage([toolCall("p1", "replace", firstArgs), toolCall("p2", "replace", secondArgs)]);
       await (handlers.get("message_end")!({ type: "message_end", message }, ctx) as Promise<unknown>);
       await editTool.execute("p1", firstArgs, undefined, undefined, ctx);

@@ -105,10 +105,10 @@ function argsFor(edit: EditSpec, anchors: string[]): Record<string, unknown> {
     return {
       remove_from: anchors[edit.start - 1]!,
       remove_to: anchors[edit.end - 1]!,
-      replacement_lines: [...edit.lines],
+      text: [...edit.lines],
     };
   }
-  return { anchor: anchors[edit.start - 1]!, direction: edit.direction, lines: [...edit.lines] };
+  return { anchor: anchors[edit.start - 1]!, direction: edit.direction, text: [...edit.lines] };
 }
 
 const FIXED_CASES: Array<{ id: string; content: string; edits: EditSpec[] }> = [

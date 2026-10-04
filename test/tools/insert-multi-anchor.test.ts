@@ -33,9 +33,9 @@ describe("multiple insert anchors", () => {
       const cHash = anchorFor(text, "ccc");
       const dHash = anchorFor(text, "ddd");
       const eHash = anchorFor(text, "eee");
-      const bArgs = { anchor: bHash, direction: "before", lines: ["x-b"] };
-      const cArgs = { anchor: cHash, direction: "after", lines: ["x-c1", "x-c2"] };
-      const eArgs = { anchor: eHash, direction: "before", lines: ["x-e"] };
+      const bArgs = { anchor: bHash, direction: "before", text: ["x-b"] };
+      const cArgs = { anchor: cHash, direction: "after", text: ["x-c1", "x-c2"] };
+      const eArgs = { anchor: eHash, direction: "before", text: ["x-e"] };
       await handlers.get("message_end")!(
         {
           type: "message_end",
@@ -73,7 +73,7 @@ describe("multiple insert anchors", () => {
           {
             remove_from: followUp.hash,
             remove_to: followUp.hash,
-            replacement_lines: [followUp.replacement],
+            text: [followUp.replacement],
           },
           undefined,
           undefined,
@@ -94,9 +94,9 @@ describe("multiple insert anchors", () => {
       const bHash = anchorFor(text, "bbb");
       const dHash = anchorFor(text, "ddd");
       const eHash = anchorFor(text, "eee");
-      const bArgs = { anchor: bHash, direction: "before", lines: ["x"] };
-      const rArgs = { remove_from: dHash, remove_to: dHash, replacement_lines: ["DDD"] };
-      const eArgs = { anchor: eHash, direction: "before", lines: ["y"] };
+      const bArgs = { anchor: bHash, direction: "before", text: ["x"] };
+      const rArgs = { remove_from: dHash, remove_to: dHash, text: ["DDD"] };
+      const eArgs = { anchor: eHash, direction: "before", text: ["y"] };
       await handlers.get("message_end")!(
         {
           type: "message_end",
@@ -119,7 +119,7 @@ describe("multiple insert anchors", () => {
       expect(await readFile(join(cwd, "multi-mixed.txt"), "utf-8")).toBe("aaa\nx\nbbb\nccc\nDDD\ny\neee\n");
       const okB = await getTool("replace").execute(
         "e-b",
-        { remove_from: bHash, remove_to: bHash, replacement_lines: ["BBB"] },
+        { remove_from: bHash, remove_to: bHash, text: ["BBB"] },
         undefined,
         undefined,
         ctx,
@@ -127,7 +127,7 @@ describe("multiple insert anchors", () => {
       expect(okB.content[0].text).toContain("Successfully replaced");
       const okE = await getTool("replace").execute(
         "e-e",
-        { remove_from: eHash, remove_to: eHash, replacement_lines: ["EEE"] },
+        { remove_from: eHash, remove_to: eHash, text: ["EEE"] },
         undefined,
         undefined,
         ctx,
@@ -136,7 +136,7 @@ describe("multiple insert anchors", () => {
       await expect(
         getTool("replace").execute(
           "e-d",
-          { remove_from: dHash, remove_to: dHash, replacement_lines: ["DDD2"] },
+          { remove_from: dHash, remove_to: dHash, text: ["DDD2"] },
           undefined,
           undefined,
           ctx,

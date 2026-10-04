@@ -1,4 +1,4 @@
-- `replace`: same-file same-message calls batch: disjoint ranges, one undo. A call whose anchors resolve nowhere fails alone.
-- `replace`: a pure deletion (`replacement_lines: ""`) is the cheap way to clear a large range: it verifies only the first and last line against the served record and removes the interior as it currently stands.
-- `replace`: to delete several blocks, `anchor_grep` serves each block's first line and a short `read` around each block serves its closing line; then one message of pure-deletion `replace` calls (`remove_from`/`remove_to` per block, `replacement_lines: ""`) removes them all as one batch.
-- `replace`: `replacement_lines` is one string; a pasted `anchor│` prefix is stripped; single line: same anchor for `remove_from` and `remove_to`.
+- `replace`: same-message calls must target disjoint ranges; a call whose anchors resolve nowhere fails on its own while the rest of the batch still commits.
+- `replace`: a pure deletion (`text: ""`) is the cheap way to clear a large range: it verifies only the first and last line against the served record and removes the interior as it currently stands.
+- `replace`: to delete several blocks, `anchor_grep` serves each block's first line and a short `read` around each block serves its closing line; then one message of pure-deletion `replace` calls (`remove_from`/`remove_to` per block, `text: ""`) removes them all as one batch.
+- `replace`: for a single line, use the same anchor for `remove_from` and `remove_to`; a pasted `anchor│` prefix in `text` is stripped.

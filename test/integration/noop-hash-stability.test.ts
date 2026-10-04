@@ -21,7 +21,7 @@ describe("noop replace hash stability", () => {
         "e1",
         {
           remove_from: hashBefore, remove_to: hashBefore,
-          replacement_lines: ["bbb"],
+          text: ["bbb"],
         },
         undefined,
         undefined,
@@ -50,7 +50,7 @@ describe("noop replace hash stability", () => {
           `e${i}`,
           {
             remove_from: hashBefore, remove_to: hashBefore,
-            replacement_lines: ["bbb"],
+            text: ["bbb"],
           },
           undefined,
           undefined,
@@ -79,7 +79,7 @@ describe("noop replace hash stability", () => {
         "e1",
         {
           remove_from: bbbHash, remove_to: bbbHash,
-          replacement_lines: ["bbb"],
+          text: ["bbb"],
         },
         undefined,
         undefined,
@@ -91,7 +91,7 @@ describe("noop replace hash stability", () => {
         "e2",
         {
           remove_from: dddHash, remove_to: dddHash,
-          replacement_lines: ["DDD"],
+          text: ["DDD"],
         },
         undefined,
         undefined,
@@ -120,7 +120,7 @@ describe("noop replace hash stability", () => {
         "e1",
         {
           remove_from: hashBefore, remove_to: hashBefore,
-          replacement_lines: ["bbb"],
+          text: ["bbb"],
         },
         undefined,
         undefined,
@@ -132,7 +132,7 @@ describe("noop replace hash stability", () => {
         "e2",
         {
           remove_from: hashBefore, remove_to: hashBefore,
-          replacement_lines: ["BBB"],
+          text: ["BBB"],
         },
         undefined,
         undefined,

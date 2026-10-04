@@ -81,7 +81,7 @@ describe.skipIf(isRoot || isWindows)("permission errors", () => {
           editTool.execute(
             "e1",
             {
-              remove_from: anchor, remove_to: anchor, replacement_lines: ["new content"],
+              remove_from: anchor, remove_to: anchor, text: ["new content"],
             },
             undefined,
             undefined,

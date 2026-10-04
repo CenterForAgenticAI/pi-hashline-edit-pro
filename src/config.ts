@@ -14,7 +14,7 @@ export interface Config {
   autoRead: boolean;
   anchorGrepEnabled: boolean;
   copyMoveEnabled?: boolean;
-  replaceWithinEnabled?: boolean;
+  replaceMatchEnabled?: boolean;
   autoReadAll?: AutoReadAllMode;
   autoReadAllIgnore?: string[];
   requirePath?: boolean;
@@ -26,7 +26,7 @@ const DEFAULT_CONFIG: Config = {
   autoRead: true,
   anchorGrepEnabled: true,
   copyMoveEnabled: true,
-  replaceWithinEnabled: true,
+  replaceMatchEnabled: true,
   autoReadAll: "off",
   autoReadAllIgnore: [],
   requirePath: false,
@@ -77,7 +77,7 @@ function parseConfig(content: string): Config {
   const autoRead = parsed.autoRead;
   const anchorGrepEnabled = parsed.anchorGrepEnabled;
   const copyMoveEnabled = parsed.copyMoveEnabled;
-  const replaceWithinEnabled = parsed.replaceWithinEnabled;
+  const replaceMatchEnabled = parsed.replaceMatchEnabled;
   const autoReadAll = parsed.autoReadAll;
   const requirePath = parsed.requirePath;
   const strictInput = parsed.strictInput;
@@ -87,7 +87,7 @@ function parseConfig(content: string): Config {
     autoRead: typeof autoRead === "boolean" ? autoRead : DEFAULT_CONFIG.autoRead,
     anchorGrepEnabled: typeof anchorGrepEnabled === "boolean" ? anchorGrepEnabled : DEFAULT_CONFIG.anchorGrepEnabled,
     copyMoveEnabled: typeof copyMoveEnabled === "boolean" ? copyMoveEnabled : DEFAULT_CONFIG.copyMoveEnabled,
-    replaceWithinEnabled: typeof replaceWithinEnabled === "boolean" ? replaceWithinEnabled : DEFAULT_CONFIG.replaceWithinEnabled,
+    replaceMatchEnabled: typeof replaceMatchEnabled === "boolean" ? replaceMatchEnabled : DEFAULT_CONFIG.replaceMatchEnabled,
     autoReadAll: parseAutoReadAllMode(autoReadAll),
     requirePath: typeof requirePath === "boolean" ? requirePath : DEFAULT_CONFIG.requirePath,
     strictInput: typeof strictInput === "boolean" ? strictInput : DEFAULT_CONFIG.strictInput,
@@ -200,7 +200,7 @@ export async function writeConfig(config: Config): Promise<void> {
 }
 
 
-type ToggleKey = "autoRead" | "anchorGrepEnabled" | "copyMoveEnabled" | "replaceWithinEnabled" | "requirePath" | "strictInput";
+type ToggleKey = "autoRead" | "anchorGrepEnabled" | "copyMoveEnabled" | "replaceMatchEnabled" | "requirePath" | "strictInput";
 
 async function toggleFlag(key: ToggleKey): Promise<boolean> {
   const config = await updateConfig((c) => { c[key] = !(c[key] === true); });
@@ -209,7 +209,7 @@ async function toggleFlag(key: ToggleKey): Promise<boolean> {
 export const toggleAutoRead = (): Promise<boolean> => toggleFlag("autoRead");
 export const toggleAnchorGrep = (): Promise<boolean> => toggleFlag("anchorGrepEnabled");
 export const toggleCopyMove = (): Promise<boolean> => toggleFlag("copyMoveEnabled");
-export const toggleReplaceWithin = (): Promise<boolean> => toggleFlag("replaceWithinEnabled");
+export const toggleReplaceMatch = (): Promise<boolean> => toggleFlag("replaceMatchEnabled");
 export async function cycleAutoReadAllMode(): Promise<AutoReadAllMode> {
   let next: AutoReadAllMode = "off";
   await updateConfig((c) => {

@@ -14,7 +14,7 @@ describe("applyEdit - recovery scenarios", () => {
     const hashes = await lineHashes(content, home.testPath);
     const result = applyEdit(content, resEdit(
       { remove_from: hashes[3]!,
-      remove_to: hashes[1]!, replacement_lines: ["X"] },
+      remove_to: hashes[1]!, text: ["X"] },
     ), undefined, hashes);
     expect(result.content).toBe("a\nX\ne");
   });
@@ -25,7 +25,7 @@ describe("applyEdit - recovery scenarios", () => {
     expect(() =>
       applyEdit(content, resEdit(
         { remove_from: hashes[0]!,
-        remove_to: hashes[1]!, replacement_lines: ["X", "Y"] },
+        remove_to: hashes[1]!, text: ["X", "Y"] },
       ), undefined, ["STALE", "STALE", "STALE", "STALE", "STALE"])
     ).toThrow(/E_STALE_ANCHOR/);
   });
@@ -38,7 +38,7 @@ describe("applyEdit - recovery scenarios", () => {
     try {
       applyEdit(content, resEdit(
         { remove_from: staleStart,
-        remove_to: hashes[2]!, replacement_lines: ["X"] },
+        remove_to: hashes[2]!, text: ["X"] },
       ), undefined, hashes);
     } catch (error) {
       caught = error as Error;
@@ -57,7 +57,7 @@ describe("applyEdit - recovery scenarios", () => {
     try {
       applyEdit(content, resEdit(
         { remove_from: hashes[0]!,
-        remove_to: staleEnd, replacement_lines: ["X"] },
+        remove_to: staleEnd, text: ["X"] },
       ), undefined, hashes);
     } catch (error) {
       caught = error as Error;
@@ -74,7 +74,7 @@ describe("applyEdit - recovery scenarios", () => {
     try {
       applyEdit(content, resEdit(
         { remove_from: "PyBY",
-        remove_to: "YYY", replacement_lines: ["X"] },
+        remove_to: "YYY", text: ["X"] },
       ), undefined, hashes);
     } catch (error) {
       caught = error as Error;
@@ -84,38 +84,38 @@ describe("applyEdit - recovery scenarios", () => {
   });
 
   it("rejects unknown fields in edit items", () => {
-    const edit = { remove_from: "PyBY", remove_to: "PyBY", replacement_lines: ["x"], extra: true } as any;
+    const edit = { remove_from: "PyBY", remove_to: "PyBY", text: ["x"], extra: true } as any;
     expect(() => resEdit(edit)).toThrow(/unknown or unsupported fields/);
   });
 
-  it("rejects missing replacement_lines", () => {
+  it("rejects missing text", () => {
     const edit = { remove_from: "PyBY",
     remove_to: "PyBY" } as any;
-    expect(() => resEdit(edit)).toThrow(/requires a "replacement_lines" array/);
+    expect(() => resEdit(edit)).toThrow(/requires a "text" array/);
   });
 
-  it("rejects null replacement_lines", () => {
+  it("rejects null text", () => {
     const edit = { remove_from: "PyBY",
-    remove_to: "PyBY", replacement_lines: null } as any;
+    remove_to: "PyBY", text: null } as any;
     expect(() => resEdit(edit)).toThrow(/must be an array of strings/);
   });
 
-  it("accepts a single string replacement_lines", () => {
+  it("accepts a single string text", () => {
     const edit = { remove_from: "PyBY",
-    remove_to: "PyBY", replacement_lines: "hello" } as const;
+    remove_to: "PyBY", text: "hello" } as const;
     expect(resEdit(edit).content_lines).toEqual(["hello"]);
   });
 
-  it("accepts array replacement_lines", () => {
+  it("accepts array text", () => {
     const edit = { remove_from: "PyBY",
-    remove_to: "PyBY", replacement_lines: ["hello", "world", ""] } as any;
+    remove_to: "PyBY", text: ["hello", "world", ""] } as any;
     const resolved = resEdit(edit);
     expect(resolved.content_lines).toEqual(["hello", "world", ""]);
   });
 
   it("rejects malformed hash_bounds", () => {
     const edit = { remove_from: "not-valid",
-    remove_to: "not-valid", replacement_lines: ["x"] };
+    remove_to: "not-valid", text: ["x"] };
     expect(() => resEdit(edit)).toThrow(/Invalid anchor/);
   });
 
@@ -124,7 +124,7 @@ describe("applyEdit - recovery scenarios", () => {
     const hashes = await lineHashes(content, home.testPath);
     const result = applyEdit(content, resEdit(
       { remove_from: hashes[1]!,
-      remove_to: hashes[2]!, replacement_lines: [`${hashes[1]!}│b`, `X`] },
+      remove_to: hashes[2]!, text: [`${hashes[1]!}│b`, `X`] },
     ), undefined, hashes);
     expect(result.content).toBe("a\nb\nX\nd\ne");
     expect(result.warnings?.[0]).toMatch(/Stripped "anchor│" prefix/);
@@ -135,7 +135,7 @@ describe("applyEdit - recovery scenarios", () => {
     const hashes = await lineHashes(content, home.testPath);
     const result = applyEdit(content, resEdit(
       { remove_from: hashes[1]!,
-      remove_to: hashes[1]!, replacement_lines: [`+${hashes[1]!}│B`] },
+      remove_to: hashes[1]!, text: [`+${hashes[1]!}│B`] },
     ), undefined, hashes);
     expect(result.content).toBe("a\nB\nc");
     expect(result.warnings?.[0]).toMatch(/Stripped diff-preview marker/);
@@ -146,7 +146,7 @@ describe("applyEdit - recovery scenarios", () => {
     const hashes = await lineHashes(content, home.testPath);
     const result = applyEdit(content, resEdit(
       { remove_from: hashes[1]!,
-      remove_to: hashes[1]!, replacement_lines: ["\\uDDDD"] },
+      remove_to: hashes[1]!, text: ["\\uDDDD"] },
     ), undefined, hashes);
     expect(result.warnings).toBeDefined();
     expect(result.warnings![0]).toContain("\\uDDDD");
@@ -157,7 +157,7 @@ describe("applyEdit - recovery scenarios", () => {
     const hashes = await lineHashes(content, home.testPath);
     const result = applyEdit(content, resEdit(
       { remove_from: hashes[2]!,
-      remove_to: hashes[2]!, replacement_lines: ["\t\treplaced"] },
+      remove_to: hashes[2]!, text: ["\t\treplaced"] },
     ), undefined, hashes);
     expect(result.content).toBe("a\nb\n\t\treplaced");
   });
@@ -167,7 +167,7 @@ describe("applyEdit - recovery scenarios", () => {
     const hashes = await lineHashes(content, home.testPath);
     const result = applyEdit(content, resEdit(
       { remove_from: hashes[2]!,
-      remove_to: hashes[2]!, replacement_lines: ["\t\treplaced"] },
+      remove_to: hashes[2]!, text: ["\t\treplaced"] },
     ), undefined, hashes);
     expect(result.content).toContain("\t\treplaced");
   });
@@ -177,7 +177,7 @@ describe("applyEdit - recovery scenarios", () => {
     const hashes = await lineHashes(content, home.testPath);
     const result = applyEdit(content, resEdit(
       { remove_from: hashes[1]!,
-      remove_to: hashes[1]!, replacement_lines: ["b"] },
+      remove_to: hashes[1]!, text: ["b"] },
     ), undefined, hashes);
     expect(result.noopEdit).toBeDefined();
   });
@@ -187,7 +187,7 @@ describe("applyEdit - recovery scenarios", () => {
     const hashes = await lineHashes(content, home.testPath);
     const result = applyEdit(content, resEdit(
       { remove_from: hashes[1]!,
-      remove_to: hashes[2]!, replacement_lines: ["b", "c"] },
+      remove_to: hashes[2]!, text: ["b", "c"] },
     ), undefined, hashes);
     expect(result.noopEdit).toBeDefined();
   });
@@ -197,7 +197,7 @@ describe("applyEdit - recovery scenarios", () => {
     const hashes = await lineHashes(content, home.testPath);
     const result = applyEdit(content, resEdit(
       { remove_from: hashes[0]!,
-      remove_to: hashes[0]!, replacement_lines: ["world"] },
+      remove_to: hashes[0]!, text: ["world"] },
     ), undefined, hashes);
     expect(result.content).toBe("world");
   });
@@ -207,7 +207,7 @@ describe("applyEdit - recovery scenarios", () => {
     const hashes = await lineHashes(content, home.testPath);
     const result = applyEdit(content, resEdit(
       { remove_from: hashes[1]!,
-      remove_to: hashes[1]!, replacement_lines: ["b", "c"] },
+      remove_to: hashes[1]!, text: ["b", "c"] },
     ), undefined, hashes);
     expect(result.content).toBe("a\nb\nc");
   });
@@ -217,7 +217,7 @@ describe("applyEdit - recovery scenarios", () => {
     const hashes = await lineHashes(content, home.testPath);
     const result = applyEdit(content, resEdit(
       { remove_from: hashes[0]!,
-      remove_to: hashes[0]!, replacement_lines: [] },
+      remove_to: hashes[0]!, text: [] },
     ), undefined, hashes);
     expect(result.content).toBe("b\nc");
   });
@@ -227,7 +227,7 @@ describe("applyEdit - recovery scenarios", () => {
     const hashes = await lineHashes(content, home.testPath);
     const result = applyEdit(content, resEdit(
       { remove_from: hashes[2]!,
-      remove_to: hashes[2]!, replacement_lines: [] },
+      remove_to: hashes[2]!, text: [] },
     ), undefined, hashes);
     expect(result.content).toBe("a\nb");
   });
@@ -237,7 +237,7 @@ describe("applyEdit - recovery scenarios", () => {
     const hashes = await lineHashes(content, home.testPath);
     const result = applyEdit(content, resEdit(
       { remove_from: hashes[0]!,
-      remove_to: hashes[2]!, replacement_lines: ["x", "y"] },
+      remove_to: hashes[2]!, text: ["x", "y"] },
     ), undefined, hashes);
     expect(result.content).toBe("x\ny");
   });

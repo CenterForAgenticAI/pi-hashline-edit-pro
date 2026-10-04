@@ -33,7 +33,7 @@ describe("UTF-8 BOM preservation", () => {
       const bHash = extractHash(lines.find((l) => l.includes("│bbb"))!);
       await editTool.execute(
         "e1",
-        { remove_from: bHash, remove_to: bHash, replacement_lines: ["BBB"] },
+        { remove_from: bHash, remove_to: bHash, text: ["BBB"] },
         undefined,
         undefined,
         ctx,
@@ -52,7 +52,7 @@ describe("UTF-8 BOM preservation", () => {
       const bHash = extractHash(lines.find((l) => l.includes("│bbb"))!);
       await insertTool.execute(
         "i1",
-        { anchor: bHash, direction: "after", lines: ["new"] },
+        { anchor: bHash, direction: "after", text: ["new"] },
         undefined,
         undefined,
         ctx,
@@ -72,7 +72,7 @@ describe("UTF-8 BOM preservation", () => {
       const bHash = extractHash(lines.find((l) => l.includes("│bbb"))!);
       await editTool.execute(
         "e1",
-        { remove_from: bHash, remove_to: bHash, replacement_lines: ["BBB"] },
+        { remove_from: bHash, remove_to: bHash, text: ["BBB"] },
         undefined,
         undefined,
         ctx,
@@ -93,7 +93,7 @@ describe("UTF-8 BOM preservation", () => {
       const bHash = extractHash(lines.find((l) => l.includes("│bbb"))!);
       await editTool.execute(
         "e1",
-        { remove_from: bHash, remove_to: bHash, replacement_lines: ["BBB"] },
+        { remove_from: bHash, remove_to: bHash, text: ["BBB"] },
         undefined,
         undefined,
         ctx,

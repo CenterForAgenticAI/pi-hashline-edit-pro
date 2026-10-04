@@ -7,37 +7,10 @@ export function isRec(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-export function normalizeFilePath(record: Record<string, unknown>): void {
-  if (typeof record.path !== "string" && typeof record.file_path === "string") {
-    record.path = record.file_path;
-    delete record.file_path;
-  }
-}
-
-export function normalizeAnchors(record: Record<string, unknown>): void {
-  if (typeof record.remove_from !== "string" && typeof record.replace_from === "string") {
-    record.remove_from = record.replace_from;
-    delete record.replace_from;
-  }
-  if (typeof record.remove_to !== "string" && typeof record.replace_to === "string") {
-    record.remove_to = record.replace_to;
-    delete record.replace_to;
-  }
-  if (typeof record.remove_from !== "string" && typeof record.from === "string") {
-    record.remove_from = record.from;
-    delete record.from;
-  }
-  if (typeof record.remove_to !== "string" && typeof record.to === "string") {
-    record.remove_to = record.to;
-    delete record.to;
-  }
-}
 
 export function normalizeRequest(input: unknown): unknown {
   if (!isRec(input)) return input;
   const record: Record<string, unknown> = { ...input };
-  normalizeFilePath(record);
-  normalizeAnchors(record);
   normalizeEditLines(record);
   return record;
 }
@@ -331,7 +304,7 @@ function looksLikeStringArray(value: unknown): boolean {
 	return /^\[\s*['"]/.test(trimmed) && !trimmed.endsWith("].");
 }
 
-export function decodeStringArray(value: unknown, warnings?: string[], label = "replacement_lines"): string[] | undefined {
+export function decodeStringArray(value: unknown, warnings?: string[], label = "text"): string[] | undefined {
 	const candidate = typeof value === "string"
 		? value
 		: Array.isArray(value) && value.length === 1 && typeof value[0] === "string"
@@ -373,7 +346,7 @@ function legacyLinesToText(lines: string[]): string {
 }
 
 function normalizeEditLines(record: Record<string, unknown>): void {
-	for (const key of ["replacement_lines", "lines"]) {
+	for (const key of ["text"]) {
 		const value = record[key];
 		if (Array.isArray(value) && value.every((entry): entry is string => typeof entry === "string")) {
 			record[key] = legacyLinesToText(value);

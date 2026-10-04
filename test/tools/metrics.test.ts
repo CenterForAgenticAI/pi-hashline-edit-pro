@@ -14,7 +14,7 @@ describe("details.metrics surface (Phase 2 C - host-only observability)", () => 
       const result = await editTool.execute(
         "e1",
         {
-          remove_from: hashes[1]!, remove_to: hashes[1]!, replacement_lines: ["BETA"],
+          remove_from: hashes[1]!, remove_to: hashes[1]!, text: ["BETA"],
         },
         undefined,
         undefined,
@@ -33,7 +33,7 @@ describe("details.metrics surface (Phase 2 C - host-only observability)", () => 
       const result = await editTool.execute(
         "e1",
         {
-          remove_from: hashes[1]!, remove_to: hashes[1]!, replacement_lines: ["beta"],
+          remove_from: hashes[1]!, remove_to: hashes[1]!, text: ["beta"],
         },
         undefined,
         undefined,
@@ -52,7 +52,7 @@ describe("details.metrics surface (Phase 2 C - host-only observability)", () => 
       const result = await editTool.execute(
         "e1",
         {
-          remove_from: hashes[1]!, remove_to: hashes[1]!, replacement_lines: ["TWO"],
+          remove_from: hashes[1]!, remove_to: hashes[1]!, text: ["TWO"],
         },
         undefined,
         undefined,
@@ -70,7 +70,7 @@ describe("details.metrics surface (Phase 2 C - host-only observability)", () => 
       const result = await editTool.execute(
         "e1",
         {
-          remove_from: hashes[1]!, remove_to: hashes[1]!, replacement_lines: ["beta"],
+          remove_from: hashes[1]!, remove_to: hashes[1]!, text: ["beta"],
         },
         undefined,
         undefined,

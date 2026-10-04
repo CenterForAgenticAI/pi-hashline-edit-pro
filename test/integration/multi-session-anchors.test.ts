@@ -39,7 +39,7 @@ describe("multi-session anchor isolation", () => {
 
       const applied = await replaceTool.execute(
         "eA",
-        { remove_from: anchorA, remove_to: anchorA, replacement_lines: ["BETA"] },
+        { remove_from: anchorA, remove_to: anchorA, text: ["BETA"] },
         undefined,
         undefined,
         ctxA,
@@ -51,7 +51,7 @@ describe("multi-session anchor isolation", () => {
       await expect(
         replaceTool.execute(
           "eA2",
-          { remove_from: anchorB, remove_to: anchorB, replacement_lines: ["HACKED"] },
+          { remove_from: anchorB, remove_to: anchorB, text: ["HACKED"] },
           undefined,
           undefined,
           ctxA,
@@ -75,7 +75,7 @@ describe("multi-session anchor isolation", () => {
 
       const applied = await replaceTool.execute(
         "eA",
-        { remove_from: anchorA, remove_to: anchorA, replacement_lines: ["BETA"] },
+        { remove_from: anchorA, remove_to: anchorA, text: ["BETA"] },
         undefined,
         undefined,
         ctxA,
@@ -101,14 +101,14 @@ describe("multi-session anchor isolation", () => {
       await Promise.all([
         replaceTool.execute(
           "eA",
-          { remove_from: anchorA, remove_to: anchorA, replacement_lines: ["BETA"] },
+          { remove_from: anchorA, remove_to: anchorA, text: ["BETA"] },
           undefined,
           undefined,
           ctxA,
         ),
         replaceTool.execute(
           "eB",
-          { remove_from: anchorB, remove_to: anchorB, replacement_lines: ["TWO"] },
+          { remove_from: anchorB, remove_to: anchorB, text: ["TWO"] },
           undefined,
           undefined,
           ctxB,

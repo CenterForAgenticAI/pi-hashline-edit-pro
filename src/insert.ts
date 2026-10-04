@@ -25,7 +25,7 @@ const insertDirectionSchema = Type.Union(
   [Type.Literal("after"), Type.Literal("before")],
   { description: '"after" or "before"' },
 );
-const insertLinesSchema = Type.String({
+const insertTextSchema = Type.String({
   description:
     'The exact text to insert; an empty string inserts one blank line. "\\n" is one blank line, and a trailing line break sets the last line\'s ending instead of adding a blank line. Never include the anchor line.',
 });
@@ -39,7 +39,7 @@ const insertToolSchema = Type.Object(
   {
     anchor: insertAnchorSchema,
     direction: insertDirectionSchema,
-    lines: insertLinesSchema,
+    text: insertTextSchema,
   },
   { additionalProperties: true },
 );
@@ -51,7 +51,7 @@ export function buildInsertToolSchema(requirePath: boolean): typeof insertToolSc
       path: insertPathRequiredSchema,
       anchor: insertAnchorSchema,
       direction: insertDirectionSchema,
-      lines: insertLinesSchema,
+      text: insertTextSchema,
     },
     { additionalProperties: true },
   ) as typeof insertToolSchema;
@@ -70,14 +70,14 @@ export function buildInsertEdit(
   ref: Anchor,
   path: string,
 ): { editParams: HTEdit; anchorLine: string | undefined; contentSeparators: (LineEnding | undefined)[] } {
-  const parsed = parsePayloadText(req.lines.length === 0 ? "\n" : req.lines);
+  const parsed = parsePayloadText(req.text.length === 0 ? "\n" : req.text);
   const fileLines = splitLines(preload.normalized);
   const line = resolveAnchorLine(ref, fileLines, preload.fileHashes, path);
   const anchorLine = preload.normalized.length === 0 ? undefined : fileLines[line - 1];
   const editParams: HTEdit = {
     remove_from: ref.hash,
     remove_to: ref.hash,
-    replacement_lines:
+    text:
       anchorLine === undefined
         ? [...parsed.lines]
         : req.direction === "after"
@@ -93,7 +93,7 @@ export function buildInsertEdit(
 }
 
 function insertStripWarning(anchorLine: string | undefined, direction: "before" | "after"): StripWarningLocation {
-  return { label: "lines", indexOffset: anchorLine !== undefined && direction === "after" ? -1 : 0 };
+  return { label: "text", indexOffset: anchorLine !== undefined && direction === "after" ? -1 : 0 };
 }
 
 export async function insertPreview(request: unknown, cwd: string, signal?: AbortSignal): Promise<RPreview> {
@@ -131,7 +131,7 @@ export async function insertPreview(request: unknown, cwd: string, signal?: Abor
   }
 }
 
-function getInsertInput(args: unknown): { path?: string; anchor?: string; direction?: "before" | "after"; lines?: string } | null {
+function getInsertInput(args: unknown): { path?: string; anchor?: string; direction?: "before" | "after"; text?: string } | null {
   let normalized: unknown;
   try {
     normalized = normReq(args);
@@ -142,7 +142,7 @@ function getInsertInput(args: unknown): { path?: string; anchor?: string; direct
   if (
     typeof normalized.anchor !== "string" ||
     (normalized.direction !== "before" && normalized.direction !== "after") ||
-    typeof normalized.lines !== "string"
+    typeof normalized.text !== "string"
   ) {
     return null;
   }
@@ -150,7 +150,7 @@ function getInsertInput(args: unknown): { path?: string; anchor?: string; direct
     ...(typeof normalized.path === "string" ? { path: normalized.path } : {}),
     anchor: normalized.anchor as string,
     direction: normalized.direction as "before" | "after",
-    lines: normalized.lines,
+    text: normalized.text,
   };
 }
 
@@ -177,7 +177,7 @@ export function buildInsertToolDef(flags: EditToolFlags = DEFAULT_EDIT_FLAGS): I
         const canonical = normReq(params);
         assertInsertReq(canonical);
         const req = canonical;
-        const insertWarnings: string[] = [...literalEscapeHints([req.lines], "lines")];
+        const insertWarnings: string[] = [...literalEscapeHints([req.text], "text")];
         const targetPath = await resolveEditTargetWithRequirement({
           anchor: req.anchor,
           providedPath: req.path,
@@ -246,7 +246,7 @@ export function buildInsertToolDef(flags: EditToolFlags = DEFAULT_EDIT_FLAGS): I
             editAnchors: [editParams.remove_from, editParams.remove_to],
             ...(anchorLine === undefined
               ? {}
-              : { anchorCarry: req.direction === "after" ? 0 : editParams.replacement_lines.length - 1 }),
+              : { anchorCarry: req.direction === "after" ? 0 : editParams.text.length - 1 }),
             signal,
             verb: "inserted",
             noopNoun: "Insertion",

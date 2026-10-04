@@ -67,7 +67,7 @@ describe("auto-read all", () => {
 
       const editResult = await getTool("replace").execute(
         "e1",
-        { remove_from: anchor, remove_to: anchor, replacement_lines: ["ALPHA"] },
+        { remove_from: anchor, remove_to: anchor, text: ["ALPHA"] },
         undefined,
         undefined,
         ctx,

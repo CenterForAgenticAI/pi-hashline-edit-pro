@@ -29,7 +29,7 @@ describe("replace tool - end-to-end", () => {
         "e1",
         {
           remove_from: betaHash, remove_to: betaHash,
-          replacement_lines: ["BBB"],
+          text: ["BBB"],
         },
         undefined,
         undefined,
@@ -57,7 +57,7 @@ describe("replace tool - end-to-end", () => {
         "e1",
         {
           remove_from: bHash, remove_to: cHash,
-          replacement_lines: ["B", "C"],
+          text: ["B", "C"],
         },
         undefined,
         undefined,
@@ -85,7 +85,7 @@ describe("replace tool - end-to-end", () => {
         "e1",
         {
           remove_from: bHash, remove_to: cHash,
-          replacement_lines: [],
+          text: [],
         },
         undefined,
         undefined,
@@ -115,7 +115,7 @@ describe("replace tool - end-to-end", () => {
         "e1",
         {
           remove_from: betaRef, remove_to: betaRef,
-          replacement_lines: ["BBB"],
+          text: ["BBB"],
         },
         undefined,
         undefined,
@@ -127,7 +127,7 @@ describe("replace tool - end-to-end", () => {
           "e2",
           {
             remove_from: betaRef, remove_to: betaRef,
-            replacement_lines: ["BBB-AGAIN"],
+            text: ["BBB-AGAIN"],
           },
           undefined,
           undefined,
@@ -149,7 +149,7 @@ describe("replace tool - end-to-end", () => {
         "e1",
         {
           remove_from: emptyHash, remove_to: emptyHash,
-          replacement_lines: ["first", "second"],
+          text: ["first", "second"],
         },
         undefined,
         undefined,
@@ -175,7 +175,7 @@ describe("replace tool - end-to-end", () => {
         "e1",
         {
           remove_from: betaRef, remove_to: betaRef,
-          replacement_lines: ["BETA"],
+          text: ["BETA"],
         },
         undefined,
         undefined,
@@ -202,7 +202,7 @@ describe("replace tool - end-to-end", () => {
         "e1",
         {
           remove_from: betaRef, remove_to: betaRef,
-          replacement_lines: ["BETA"],
+          text: ["BETA"],
         },
         undefined,
         undefined,
@@ -247,7 +247,7 @@ describe("replace tool - end-to-end", () => {
             .split("│")[0]!;
           await editTool.execute(
             "e1",
-            { remove_from: betaRef, remove_to: betaRef, replacement_lines: [] },
+            { remove_from: betaRef, remove_to: betaRef, text: [] },
             undefined,
             undefined,
             ctx,
@@ -267,7 +267,7 @@ describe("replace tool - end-to-end", () => {
             .split("│")[0]!;
           await editTool.execute(
             "e1",
-            { remove_from: betaRef, remove_to: betaRef, replacement_lines: ["beta"] },
+            { remove_from: betaRef, remove_to: betaRef, text: ["beta"] },
             undefined,
             undefined,
             ctx,
@@ -278,7 +278,7 @@ describe("replace tool - end-to-end", () => {
       });
     }
   });
-  it("accepts top-level remove_from/remove_to and replacement_lines", async () => {
+  it("accepts top-level remove_from/remove_to and text", async () => {
     await withTempFile("sample.ts", "aaa\nbbb\nccc\n", async ({ cwd, path }) => {
       const { ctx, editTool } = setupIntegrationTest(cwd);
       const hashes = await lineHashes("aaa\nbbb\nccc\n", path);
@@ -287,7 +287,7 @@ describe("replace tool - end-to-end", () => {
         "e1",
         {
           remove_from: hashes[1]!, remove_to: hashes[1]!,
-          replacement_lines: ["BBB"],
+          text: ["BBB"],
         },
         undefined,
         undefined,
@@ -310,7 +310,7 @@ describe("replace tool - end-to-end", () => {
 
       const editResult = await editTool.execute(
         "e1",
-        { remove_from: bHash, remove_to: bHash, replacement_lines: ["BBB"] },
+        { remove_from: bHash, remove_to: bHash, text: ["BBB"] },
         undefined, undefined, ctx,
       );
 
@@ -334,7 +334,7 @@ describe("replace tool - end-to-end", () => {
 
       const editResult = await editTool.execute(
         "e1",
-        { remove_from: aHash, remove_to: aHash, replacement_lines: ["ALPHA"] },
+        { remove_from: aHash, remove_to: aHash, text: ["ALPHA"] },
         undefined, undefined, ctx,
       );
       const details = editResult.details as { diff?: string; patch?: string; patchTruncated?: boolean };
@@ -364,7 +364,7 @@ describe("replace tool - end-to-end", () => {
       const markerHash = markerRow.split("│")[0]!;
       const editResult = await editTool.execute(
         "e1",
-        { remove_from: markerHash, remove_to: markerHash, replacement_lines: ["REPLACED"] },
+        { remove_from: markerHash, remove_to: markerHash, text: ["REPLACED"] },
         undefined, undefined, ctx,
       );
       expect(editResult.content[0].text).toContain("Successfully replaced");

@@ -3,7 +3,7 @@ import { HASH_CLASS } from "./hashline/alphabet";
 import { HASH_SEP } from "./hashline/hash";
 import { servedForPath, withAnchorSession } from "./anchor-registry";
 import { resolveInCwd } from "./fs-write";
-import { abortIf, splitLines, isRec, normalizeFilePath } from "./utils";
+import { abortIf, splitLines, isRec } from "./utils";
 
 const HASH_ECHO_RE = new RegExp(`^(?: *[0-9]+ ${HASH_SEP} )?[+ -]?(${HASH_CLASS})${HASH_SEP}`);
 
@@ -35,10 +35,8 @@ export function registerWriteHook(pi: ExtensionAPI): void {
     if (event.toolName !== "write") return;
     const input = event.input as Record<string, unknown> | undefined;
     if (!input || !isRec(input)) return;
-    const normalized = { ...input };
-    normalizeFilePath(normalized);
-    const rawPath = normalized.path as unknown;
-    const content = normalized.content as unknown;
+    const rawPath = input.path as unknown;
+    const content = input.content as unknown;
     if (typeof rawPath !== "string" || typeof content !== "string") return;
     const signal = ctx.signal;
     try {

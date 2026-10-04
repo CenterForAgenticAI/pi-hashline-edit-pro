@@ -12,28 +12,28 @@ describe("assertReq", () => {
 	});
 
 	it("throws for unknown fields", () => {
-		expect(() => assertReq({ remove_from: "ATIm", remove_to: "BeSR", replacement_lines: ["new"], unknown: "field" }))
+		expect(() => assertReq({ remove_from: "ATIm", remove_to: "BeSR", text: ["new"], unknown: "field" }))
 			.toThrow("[E_BAD_SHAPE]");
 	});
 
   it("allows an optional path hint for require-path mode", () => {
-    expect(() => assertReq({ path: "test.txt", remove_from: "ATIm", remove_to: "BeSR", replacement_lines: "new" }))
+    expect(() => assertReq({ path: "test.txt", remove_from: "ATIm", remove_to: "BeSR", text: "new" }))
       .not.toThrow();
   });
 
 	it("throws for a passed file_path", () => {
-		expect(() => assertReq({ file_path: "test.txt", remove_from: "ATIm", remove_to: "BeSR", replacement_lines: ["new"] }))
+		expect(() => assertReq({ file_path: "test.txt", remove_from: "ATIm", remove_to: "BeSR", text: ["new"] }))
 			.toThrow("[E_BAD_SHAPE]");
 	});
 
-  it("throws when replacement_lines present but no remove_from/remove_to", () => {
-    expect(() => assertReq({ replacement_lines: ["a"] }))
+  it("throws when text present but no remove_from/remove_to", () => {
+    expect(() => assertReq({ text: ["a"] }))
       .toThrow(/remove_from/);
   });
 
-  it("throws when remove_from/remove_to present but no replacement_lines", () => {
+  it("throws when remove_from/remove_to present but no text", () => {
     expect(() => assertReq({ remove_from: "ATIm", remove_to: "BeSR" }))
-      .toThrow(/replacement_lines/);
+      .toThrow(/text/);
   });
 
   it("throws when neither edit field is present", () => {
@@ -44,13 +44,13 @@ describe("assertReq", () => {
   it("accepts the top-level edit shape", () => {
     expect(() => assertReq({
       remove_from: "ATIm", remove_to: "BeSR",
-      replacement_lines: "new",
+      text: "new",
     })).not.toThrow();
   });
 
-  it("throws for a NUL byte in replacement_lines", () => {
+  it("throws for a NUL byte in text", () => {
     const nul = String.fromCharCode(0);
-    expect(() => assertReq({ remove_from: "ATIm", remove_to: "BeSR", replacement_lines: `a${nul}b` }))
+    expect(() => assertReq({ remove_from: "ATIm", remove_to: "BeSR", text: `a${nul}b` }))
       .toThrow(/NUL byte/);
   });
 
@@ -67,7 +67,7 @@ describe("anchor validation order", () => {
 				"e1",
 				{
 					remove_from: "abc", remove_to: "abc",
-					replacement_lines: ["x"],
+					text: ["x"],
 				},
 				undefined,
 				undefined,
@@ -88,8 +88,8 @@ describe("prepareArguments normalization", () => {
 		const tool = buildToolDef();
 		const prepared = tool.prepareArguments!({
 			remove_from: "ATIm", remove_to: "BeSR",
-			replacement_lines: ["line1", "line2"],
+			text: ["line1", "line2"],
 		}) as Record<string, unknown>;
-		expect(prepared.replacement_lines).toEqual("line1\nline2");
+		expect(prepared.text).toEqual("line1\nline2");
 	});
 });

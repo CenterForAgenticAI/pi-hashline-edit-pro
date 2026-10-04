@@ -61,7 +61,7 @@ describe("grep tool", () => {
 
       const edit = await editTool.execute(
         "e1",
-        { remove_from: betaHash, remove_to: betaHash, replacement_lines: ["BETA"] },
+        { remove_from: betaHash, remove_to: betaHash, text: ["BETA"] },
         undefined, undefined, ctx,
       );
       expect(edit.content[0].text).toContain("Successfully replaced");
@@ -85,7 +85,7 @@ describe("grep tool", () => {
 
       const edit = await getTool("replace").execute(
         "e1",
-        { remove_from: betaHash, remove_to: betaHash, replacement_lines: ["BETA"] },
+        { remove_from: betaHash, remove_to: betaHash, text: ["BETA"] },
         undefined, undefined, ctx,
       );
       expect(edit.content[0]!.text).toContain("Successfully replaced");
@@ -109,7 +109,7 @@ describe("grep tool", () => {
 
       const edit = await getTool("replace").execute(
         "e1",
-        { remove_from: gammaHash, remove_to: gammaHash, replacement_lines: ["GAMMA"] },
+        { remove_from: gammaHash, remove_to: gammaHash, text: ["GAMMA"] },
         undefined, undefined, ctx,
       );
       expect(edit.content[0]!.text).toContain("Successfully replaced");
@@ -625,16 +625,17 @@ async function withSystemTempDir(prefix: string, run: (dir: string) => Promise<v
     });
   });
 
-  it("supports the file_path alias", async () => {
+  it("rejects the file_path alias", async () => {
     await withTempFile("sample.ts", "alpha\n", async ({ cwd }) => {
       const { ctx, getTool } = setupIntegrationTest(cwd);
       const grepTool = getTool("anchor_grep");
-      const result = await grepTool.execute(
-        "g1",
-        { file_path: "sample.ts", pattern: "alpha" },
-        undefined, undefined, ctx,
-      );
-      expect(getText(result)).toContain("│alpha");
+      await expect(
+        grepTool.execute(
+          "g1",
+          { file_path: "sample.ts", pattern: "alpha" },
+          undefined, undefined, ctx,
+        ),
+      ).rejects.toThrow("[E_BAD_SHAPE]");
     });
   });
   it("names unknown fields instead of a generic schema error", async () => {
@@ -670,7 +671,7 @@ async function withSystemTempDir(prefix: string, run: (dir: string) => Promise<v
       expect(served?.has(grepHash)).toBe(true);
       const edit = await editTool.execute(
         "e1",
-        { remove_from: grepHash, remove_to: grepHash, replacement_lines: ["REPLACED"] },
+        { remove_from: grepHash, remove_to: grepHash, text: ["REPLACED"] },
         undefined, undefined, ctx,
       );
       expect(edit.content[0].text).toContain("Successfully replaced");

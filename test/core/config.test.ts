@@ -4,7 +4,7 @@ import {
   cycleAutoReadAllMode,
   toggleAnchorGrep,
   toggleCopyMove,
-  toggleReplaceWithin,
+  toggleReplaceMatch,
   toggleRequirePath,
   toggleStrictInput,
   adjustDiffContextLines,
@@ -105,28 +105,28 @@ describe("config - toggleCopyMove", () => {
   });
 });
 
-describe("config - toggleReplaceWithin", () => {
+describe("config - toggleReplaceMatch", () => {
   it("toggles from default true to false", async () => {
     await withTempDir("pi-hashline-config-test-", async () => {
-      expect(await toggleReplaceWithin()).toBe(false);
-      expect((await readConfig()).replaceWithinEnabled).toBe(false);
+      expect(await toggleReplaceMatch()).toBe(false);
+      expect((await readConfig()).replaceMatchEnabled).toBe(false);
     });
   });
 
   it("toggles from false back to true", async () => {
     await withTempDir("pi-hashline-config-test-", async () => {
-      await writeConfig({ autoRead: true, anchorGrepEnabled: true, replaceWithinEnabled: false });
-      expect(await toggleReplaceWithin()).toBe(true);
-      expect((await readConfig()).replaceWithinEnabled).toBe(true);
+      await writeConfig({ autoRead: true, anchorGrepEnabled: true, replaceMatchEnabled: false });
+      expect(await toggleReplaceMatch()).toBe(true);
+      expect((await readConfig()).replaceMatchEnabled).toBe(true);
     });
   });
 
   it("round-trips correctly through multiple toggles", async () => {
     await withTempDir("pi-hashline-config-test-", async () => {
-      expect(await toggleReplaceWithin()).toBe(false);
-      expect(await toggleReplaceWithin()).toBe(true);
-      expect(await toggleReplaceWithin()).toBe(false);
-      expect((await readConfig()).replaceWithinEnabled).toBe(false);
+      expect(await toggleReplaceMatch()).toBe(false);
+      expect(await toggleReplaceMatch()).toBe(true);
+      expect(await toggleReplaceMatch()).toBe(false);
+      expect((await readConfig()).replaceMatchEnabled).toBe(false);
     });
   });
 });
@@ -252,9 +252,9 @@ describe("config - readConfig defaults", () => {
     });
   });
 
-  it("defaults replaceWithinEnabled to true when no config file exists", async () => {
+  it("defaults replaceMatchEnabled to true when no config file exists", async () => {
     await withTempDir("pi-hashline-config-test-", async () => {
-      expect((await readConfig()).replaceWithinEnabled).toBe(true);
+      expect((await readConfig()).replaceMatchEnabled).toBe(true);
     });
   });
 

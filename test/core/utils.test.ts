@@ -133,7 +133,7 @@ describe("rejectUnknownFields", () => {
     const obj = { path: "test.txt", extra: "value" };
     const allowed = new Set(["path"]);
     expect(() =>
-      rejectUnknownFields(obj, allowed, "Edit 0", "Each edit takes only { replacement_lines, remove_from, remove_to }."),
+      rejectUnknownFields(obj, allowed, "Edit 0", "Each edit takes only { text, remove_from, remove_to }."),
     ).toThrow(/Each edit takes only/);
   });
 
@@ -176,22 +176,22 @@ describe("makePrepareArguments", () => {
     expect(prepare("x")).toBe("x");
   });
 
-  it("normalizes file_path to path", () => {
+  it("leaves file_path untouched", () => {
     const prepare = makePrepareArguments();
     const result = prepare({ file_path: "a.txt", offset: 1 });
-    expect(result).toEqual({ path: "a.txt", offset: 1 });
+    expect(result).toEqual({ file_path: "a.txt", offset: 1 });
   });
 
-  it("normalizes replace_from and replace_to to remove_from and remove_to", () => {
+  it("leaves replace_from and replace_to untouched", () => {
     const prepare = makePrepareArguments();
     const result = prepare({ replace_from: "a", replace_to: "b" });
-    expect(result).toEqual({ remove_from: "a", remove_to: "b" });
+    expect(result).toEqual({ replace_from: "a", replace_to: "b" });
   });
 
-  it("normalizes each remove field only when it is missing", () => {
+  it("passes through mixed canonical and alias fields", () => {
     const prepare = makePrepareArguments();
     const result = prepare({ remove_from: "a", replace_from: "b", replace_to: "c" });
-    expect(result).toEqual({ remove_from: "a", replace_from: "b", remove_to: "c" });
+    expect(result).toEqual({ remove_from: "a", replace_from: "b", replace_to: "c" });
   });
 
   it("does not mutate the original input", () => {
@@ -207,16 +207,16 @@ describe("makePrepareArguments", () => {
     expect(result).toEqual({ path: "a.txt", file_path: "b.txt" });
   });
 
-  it("normalizes from and to to remove_from and remove_to", () => {
+  it("leaves from and to untouched", () => {
     const prepare = makePrepareArguments();
     const result = prepare({ from: "a", to: "b" });
-    expect(result).toEqual({ remove_from: "a", remove_to: "b" });
+    expect(result).toEqual({ from: "a", to: "b" });
   });
 
-  it("normalizes from and to only when the remove field is missing", () => {
+  it("passes through from and to next to canonical fields", () => {
     const prepare = makePrepareArguments();
     const result = prepare({ remove_from: "a", from: "b", to: "c" });
-    expect(result).toEqual({ remove_from: "a", from: "b", remove_to: "c" });
+    expect(result).toEqual({ remove_from: "a", from: "b", to: "c" });
   });
 });
 

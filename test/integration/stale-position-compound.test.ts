@@ -19,7 +19,7 @@ describe("stale-position compound edits", () => {
       const result = await editTool.execute(
         "e1",
         {
-          remove_from: line5Hash, remove_to: line5Hash, replacement_lines: ["E"],
+          remove_from: line5Hash, remove_to: line5Hash, text: ["E"],
         },
         undefined,
         undefined,
@@ -31,7 +31,7 @@ describe("stale-position compound edits", () => {
         await editTool.execute(
           "e2",
           {
-            remove_from: freshHash, remove_to: freshHash, replacement_lines: ["E-AGAIN"],
+            remove_from: freshHash, remove_to: freshHash, text: ["E-AGAIN"],
           },
           undefined,
           undefined,
@@ -54,7 +54,7 @@ describe("stale-position compound edits", () => {
       const result = await editTool.execute(
         "e1",
         {
-          remove_from: line2Hash, remove_to: line4Hash, replacement_lines: ["B", "C_D"],
+          remove_from: line2Hash, remove_to: line4Hash, text: ["B", "C_D"],
         },
         undefined,
         undefined,
@@ -78,7 +78,7 @@ describe("stale-position compound edits", () => {
       const result = await editTool.execute(
         "e1",
         {
-          remove_from: line2Hash, remove_to: line4Hash, replacement_lines: ["B", "C_D"],
+          remove_from: line2Hash, remove_to: line4Hash, text: ["B", "C_D"],
         },
         undefined,
         undefined,

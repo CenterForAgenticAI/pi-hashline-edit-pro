@@ -1,7 +1,7 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES } from "@earendil-works/pi-coding-agent";
 import { initHasher } from "./src/hashline";
-import { regReplaceWithin } from "./src/replace-within";
+import { regReplaceMatch } from "./src/replace-match";
 import { regReplace } from "./src/replace";
 import { regInsert } from "./src/insert";
 import { regCopy, regMove } from "./src/copy-move";
@@ -21,7 +21,7 @@ import {
   cycleAutoReadAllMode,
   toggleAnchorGrep,
   toggleCopyMove,
-  toggleReplaceWithin,
+  toggleReplaceMatch,
   toggleRequirePath,
   toggleStrictInput,
   adjustDiffContextLines,
@@ -45,7 +45,7 @@ export default function (pi: ExtensionAPI): void {
   regRead(pi);
 
   regReplace(pi);
-  regReplaceWithin(pi);
+  regReplaceMatch(pi);
   regInsert(pi);
   regCopy(pi);
   regMove(pi);
@@ -64,7 +64,7 @@ export default function (pi: ExtensionAPI): void {
       const flags = await currentEditFlags();
       regRead(pi, flags);
       regReplace(pi, flags);
-      regReplaceWithin(pi, flags);
+      regReplaceMatch(pi, flags);
       regInsert(pi, flags);
       regCopy(pi, flags);
       regMove(pi, flags);
@@ -104,7 +104,7 @@ export default function (pi: ExtensionAPI): void {
       pi.getActiveTools().filter((t) => {
         if (config.anchorGrepEnabled ? t === "grep" : t === "anchor_grep") return false;
         if (config.copyMoveEnabled === false && (t === "copy" || t === "move")) return false;
-        if (config.replaceWithinEnabled === false && t === "replace_within") return false;
+        if (config.replaceMatchEnabled === false && t === "replace_match") return false;
         return true;
       }),
     );
@@ -139,7 +139,7 @@ export default function (pi: ExtensionAPI): void {
   }));
 
   pi.registerCommand("hashline-config", {
-    description: "Open the hashline settings window (auto-read, auto-read all, ignore folders/files, diff context, grep, copy/move, replace_within, path, strict input)",
+    description: "Open the hashline settings window (auto-read, auto-read all, ignore folders/files, diff context, grep, copy/move, replace_match, path, strict input)",
     handler: async (_args, ctx) => {
       if (!ctx.hasUI) {
         ctx.ui.notify("/hashline-config requires interactive mode", "error");
@@ -165,10 +165,10 @@ export default function (pi: ExtensionAPI): void {
               const active = pi.getActiveTools();
               pi.setActiveTools(enabled ? [...new Set([...active, "copy", "move"])] : active.filter((t) => t !== "copy" && t !== "move"));
             }
-            else if (key === "replaceWithinEnabled") {
-              const enabled = await toggleReplaceWithin();
+            else if (key === "replaceMatchEnabled") {
+              const enabled = await toggleReplaceMatch();
               const active = pi.getActiveTools();
-              pi.setActiveTools(enabled ? [...new Set([...active, "replace_within"])] : active.filter((t) => t !== "replace_within"));
+              pi.setActiveTools(enabled ? [...new Set([...active, "replace_match"])] : active.filter((t) => t !== "replace_match"));
             }
             else if (key === "requirePath") await toggleRequirePath();
             else if (key === "strictInput") await toggleStrictInput();
@@ -262,7 +262,7 @@ export default function (pi: ExtensionAPI): void {
 
     if (
       event.toolName !== "replace" &&
-      event.toolName !== "replace_within" &&
+      event.toolName !== "replace_match" &&
       event.toolName !== "insert" &&
       event.toolName !== "copy" &&
       event.toolName !== "move" &&

@@ -73,8 +73,8 @@ describe("gap mkMdTheme", () => {
 
 describe("gap payload contract", () => {
   it("rejects non-string path", () => {
-    expect(() => assertReq({ path: 42, remove_from: "Hasu", remove_to: "Hasu", replacement_lines: [] })).toThrow("[E_BAD_SHAPE]");
-    expect(() => assertInsertReq({ path: 42, anchor: "Hasu", direction: "after", lines: [] })).toThrow("[E_BAD_SHAPE]");
+    expect(() => assertReq({ path: 42, remove_from: "Hasu", remove_to: "Hasu", text: [] })).toThrow("[E_BAD_SHAPE]");
+    expect(() => assertInsertReq({ path: 42, anchor: "Hasu", direction: "after", text: [] })).toThrow("[E_BAD_SHAPE]");
   });
   it("covers getPreviewInput catch via throwing getter", () => {
     const evil = {};
@@ -94,8 +94,8 @@ describe("gap resolve", () => {
     expect(() => fmtRegion(["a"], ["x", "y"])).toThrow("must match");
   });
   it("rejects non-string anchors in resEdit", () => {
-    expect(() => resEdit({ replacement_lines: [], remove_from: 42 as unknown as string, remove_to: "Hasu" })).toThrow("remove_from");
-    expect(() => resEdit({ replacement_lines: [], remove_from: "Hasu", remove_to: 42 as unknown as string })).toThrow("remove_to");
+    expect(() => resEdit({ text: [], remove_from: 42 as unknown as string, remove_to: "Hasu" })).toThrow("remove_from");
+    expect(() => resEdit({ text: [], remove_from: "Hasu", remove_to: 42 as unknown as string })).toThrow("remove_to");
   });
   it("throws AnchorMismatchError for unknown anchor", () => {
     expect(() => resolveAnchorLine({ hash: "ZZZZ" }, ["a"], ["Hasu"], undefined)).toThrow("[E_STALE_ANCHOR]");
@@ -189,7 +189,7 @@ describe("gap insert preview", () => {
     await withTempDir("insert-gap-", async (dir) => {
       const controller = new AbortController();
       controller.abort();
-      await expect(insertPreview({ anchor: "Hasu", direction: "after", lines: ["x"] }, dir, controller.signal)).rejects.toThrow();
+      await expect(insertPreview({ anchor: "Hasu", direction: "after", text: ["x"] }, dir, controller.signal)).rejects.toThrow();
     });
   });
   it("covers getInsertInput via renderCall", async () => {

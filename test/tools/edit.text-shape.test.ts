@@ -15,7 +15,7 @@ describe("edit tool text shape (token budget)", () => {
       const result = await editTool.execute(
         "e1",
         {
-          remove_from: hashes[1]!, remove_to: hashes[1]!, replacement_lines: ["BBB"],
+          remove_from: hashes[1]!, remove_to: hashes[1]!, text: ["BBB"],
         },
         undefined,
         undefined,
@@ -36,7 +36,7 @@ describe("edit tool text shape (token budget)", () => {
       const result = await editTool.execute(
         "e1",
         {
-          remove_from: hashes[1]!, remove_to: hashes[1]!, replacement_lines: ["BBB"],
+          remove_from: hashes[1]!, remove_to: hashes[1]!, text: ["BBB"],
         },
         undefined,
         undefined,
@@ -56,7 +56,7 @@ describe("edit tool text shape (token budget)", () => {
         editTool.execute(
           "e1",
           {
-            remove_from: hashes[0]!, remove_to: hashes[0]!, replacement_lines: [],
+            remove_from: hashes[0]!, remove_to: hashes[0]!, text: [],
           },
           undefined,
           undefined,
@@ -75,7 +75,7 @@ describe("edit tool text shape (token budget)", () => {
       const result = await editTool.execute(
         "e1",
         {
-          remove_from: hashes[1]!, remove_to: hashes[1]!, replacement_lines: [`b${longLine.slice(1)}`],
+          remove_from: hashes[1]!, remove_to: hashes[1]!, text: [`b${longLine.slice(1)}`],
         },
         undefined,
         undefined,
@@ -86,7 +86,7 @@ describe("edit tool text shape (token budget)", () => {
     });
   });
 
-  it("splits a replacement_lines element with embedded newlines", async () => {
+  it("splits a text element with embedded newlines", async () => {
     await withTempFile("sample.ts", "aaa\nbbb\nccc\n", async ({ cwd, path }) => {
       const { ctx, editTool } = setupIntegrationTest(cwd);
       const hashes = await lineHashes("aaa\nbbb\nccc\n", path);
@@ -94,7 +94,7 @@ describe("edit tool text shape (token budget)", () => {
       const result = await editTool.execute(
         "e1",
         {
-          remove_from: hashes[1]!, remove_to: hashes[1]!, replacement_lines: ["BBB\nCCC"],
+          remove_from: hashes[1]!, remove_to: hashes[1]!, text: ["BBB\nCCC"],
         },
         undefined,
         undefined,
