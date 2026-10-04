@@ -1,0 +1,1 @@
+- `copy`/`move`: for a block transfer, only the source's two boundary rows and the destination line need serving; the interior transfers verbatim and the block lands in one commit. To append at the end, use the destination's last served line as `insert_after`.

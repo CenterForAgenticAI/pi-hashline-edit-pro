@@ -720,7 +720,10 @@ export function buildTransferToolDef(kind: TransferKind, flags: EditToolFlags = 
     {
       description: loadP(`../prompts/${kind}.md`),
       snippet: loadP(`../prompts/${kind}-snippet.md`),
-      guidelines: loadGuide(`../prompts/${kind}-guidelines.md`),
+      guidelines: [
+        ...loadGuide(`../prompts/${kind}-guidelines.md`),
+        ...loadGuide("../prompts/transfer-guidelines.md"),
+      ],
     },
     flags,
   );

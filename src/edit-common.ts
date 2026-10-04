@@ -85,9 +85,8 @@ export function withReadPrompts(base: { description: string; snippet: string; gu
       .filter((guideline) => !guideline.includes("call again after an edit"))
     return { description: base.description, snippet: base.snippet, guidelines: [preference, ...rewritten] };
   }
-  const withoutAutoReadAll = base.guidelines.filter((guideline) => !guideline.includes("E_AUTO_READ_ALL"))
-  if (flags.autoRead) return { description: base.description, snippet: base.snippet, guidelines: [preference, ...withoutAutoReadAll] };
-  const guidelines = [preference, ...withoutAutoReadAll];
+  if (flags.autoRead) return { description: base.description, snippet: base.snippet, guidelines: [preference, ...base.guidelines] };
+  const guidelines = [preference, ...base.guidelines];
   const mapped = guidelines.map((guideline) => guideline.startsWith("`read`: call again after an edit") ? "`read`: call again after an edit when you need anchors you lack." : guideline);
   return { description: base.description, snippet: base.snippet, guidelines: mapped };
 }

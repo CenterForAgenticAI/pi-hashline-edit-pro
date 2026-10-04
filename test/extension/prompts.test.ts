@@ -293,18 +293,18 @@ describe("edit prompt flag variants", () => {
     expect(noTransfer.guidelines[0]).toContain("`replace_match`");
   });
 
-  it("withReadPrompts drops the auto-read-all guideline when auto-read-all is off", () => {
+  it("withReadPrompts prepends the preference line and keeps the read guidelines when auto-read-all is off", () => {
     const result = withReadPrompts(readBase, DEFAULT_EDIT_FLAGS);
     expect(result.description).toBe(readBase.description);
     expect(result.snippet).toBe(readBase.snippet);
     expect(result.guidelines[0]).toContain("Prefer the hashline tools for anything that touches files:");
-    expect(result.guidelines.slice(1)).toEqual(readBase.guidelines.filter((g) => !g.includes("E_AUTO_READ_ALL")));
+    expect(result.guidelines.slice(1)).toEqual(readBase.guidelines);
   });
 
-  it("withReadPrompts keeps the auto-read-all guideline and drops the re-read note when auto-read-all is on", () => {
+  it("withReadPrompts drops the re-read note when auto-read-all is on", () => {
     const result = withReadPrompts(readBase, { ...DEFAULT_EDIT_FLAGS, autoReadAllActive: true });
-    expect(result.guidelines.some((g) => g === "`read`: `E_AUTO_READ_ALL` on an attached file means its content is still exactly as it was when attached at the start of this session.")).toBe(true);
     expect(result.guidelines.some((g) => g.includes("call again after an edit"))).toBe(false);
+    expect(result.guidelines[0]).toContain("Prefer the hashline tools for anything that touches files:");
   });
 
   it("withReadPrompts rewrites the re-read note when auto-read is off", () => {

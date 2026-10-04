@@ -1,2 +1,1 @@
 - `copy`: the same anchor in `source_from` and `source_to` copies one line; copied lines get fresh anchors in the post-edit diff and the source rows keep theirs.
-- `copy`: for a block copy, this tool is the cheap path: only the source's two boundary rows and the destination line need serving, the interior transfers verbatim, and the block lands in one commit. Rebuilding the file with shell commands costs range verification, the post-edit diff, and undo; to append at the end, use the destination's last served line as `insert_after`.

@@ -1,3 +1,1 @@
 - `read`: call again after an edit when you need anchors you lack — post-edit diff `+anchor│`/` anchor│` rows and any served `anchor│content` rows already carry fresh anchors for the changed range.
-- `read`: `E_AUTO_READ_ALL` on an attached file means its content is still exactly as it was when attached at the start of this session.
-- `read`: `[W_ANCHOR_RECLAIMED]` means the session's anchor quota was tight and the listed files' anchors were freed; read a freed file again before editing it.
