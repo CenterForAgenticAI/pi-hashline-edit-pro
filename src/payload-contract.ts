@@ -162,14 +162,14 @@ export function assertTransferReq(request: unknown): asserts request is Transfer
   }
 }
 
-const WITHIN_KS = new Set(["path", "replace_from", "replace_to", "replace_old", "replace_new"]);
+const WITHIN_KS = new Set(["path", "replace_from", "replace_to", "old_string", "new_string"]);
 
 export interface ReplaceWithinReq {
   path?: string;
   replace_from: string;
   replace_to: string;
-  replace_old: string;
-  replace_new: string;
+  old_string: string;
+  new_string: string;
 }
 
 export function assertReplaceWithinReq(request: unknown): asserts request is ReplaceWithinReq {
@@ -180,7 +180,7 @@ export function assertReplaceWithinReq(request: unknown): asserts request is Rep
   if (request.path !== undefined && typeof request.path !== "string") {
     throw new Error('[E_BAD_SHAPE] Replace-within request field "path" must be a string when provided.');
   }
-  for (const key of ["replace_from", "replace_to", "replace_old", "replace_new"] as const) {
+  for (const key of ["replace_from", "replace_to", "old_string", "new_string"] as const) {
     if (typeof (request as Record<string, unknown>)[key] !== "string") {
       throw new Error(`[E_BAD_SHAPE] Replace-within request requires a "${key}" string.`);
     }
@@ -189,26 +189,30 @@ export function assertReplaceWithinReq(request: unknown): asserts request is Rep
   if (within.replace_from.length === 0 || within.replace_to.length === 0) {
     throw new Error('[E_BAD_SHAPE] Replace-within request requires non-empty "replace_from" and "replace_to" anchors.');
   }
-  if (within.replace_old.length === 0) {
-    throw new Error('[E_BAD_SHAPE] Replace-within request field "replace_old" must be a non-empty string holding the exact text to find.');
+  if (within.old_string.length === 0) {
+    throw new Error('[E_BAD_SHAPE] Replace-within request field "old_string" must be a non-empty string holding the exact text to find.');
   }
-  assertNoNul([within.replace_new]);
+  assertNoNul([within.new_string]);
 }
 
-const WITHIN_ANCHOR_ALIASES: Array<[string, "replace_from" | "replace_to"]> = [
+const WITHIN_ALIASES: Array<[string, "replace_from" | "replace_to" | "old_string" | "new_string"]> = [
   ["replace_from", "replace_from"],
   ["remove_from", "replace_from"],
   ["from", "replace_from"],
   ["replace_to", "replace_to"],
   ["remove_to", "replace_to"],
   ["to", "replace_to"],
+  ["old_string", "old_string"],
+  ["replace_old", "old_string"],
+  ["new_string", "new_string"],
+  ["replace_new", "new_string"],
 ];
 
 export function normalizeReplaceWithinRequest(input: unknown): unknown {
   if (!isRec(input)) return input;
   const record: Record<string, unknown> = { ...input };
   normalizeFilePath(record);
-  for (const [alias, canonical] of WITHIN_ANCHOR_ALIASES) {
+  for (const [alias, canonical] of WITHIN_ALIASES) {
     if (typeof record[canonical] !== "string" && typeof record[alias] === "string") {
       record[canonical] = record[alias];
     }
@@ -217,7 +221,7 @@ export function normalizeReplaceWithinRequest(input: unknown): unknown {
   return record;
 }
 
-export function getReplaceWithinInput(args: unknown): { path?: string; replace_from: string; replace_to: string; replace_old: string; replace_new: string } | null {
+export function getReplaceWithinInput(args: unknown): { path?: string; replace_from: string; replace_to: string; old_string: string; new_string: string } | null {
   let normalized: unknown;
   try {
     normalized = normalizeReplaceWithinRequest(args);
@@ -228,8 +232,8 @@ export function getReplaceWithinInput(args: unknown): { path?: string; replace_f
   if (
     typeof normalized.replace_from !== "string" ||
     typeof normalized.replace_to !== "string" ||
-    typeof normalized.replace_old !== "string" ||
-    typeof normalized.replace_new !== "string"
+    typeof normalized.old_string !== "string" ||
+    typeof normalized.new_string !== "string"
   ) {
     return null;
   }
@@ -237,8 +241,8 @@ export function getReplaceWithinInput(args: unknown): { path?: string; replace_f
     ...(typeof normalized.path === "string" ? { path: normalized.path } : {}),
     replace_from: normalized.replace_from,
     replace_to: normalized.replace_to,
-    replace_old: normalized.replace_old,
-    replace_new: normalized.replace_new,
+    old_string: normalized.old_string,
+    new_string: normalized.new_string,
   };
 }
 
@@ -250,11 +254,11 @@ const replaceWithinToSchema = Type.String({
   description:
     "4-char anchor of the LAST line of the range searched; same as replace_from for a single line.",
 });
-const replaceWithinOldSchema = Type.String({
+const replaceWithinOldStringSchema = Type.String({
   description:
     "The exact text to find inside the selected line(s), copied from the served row. It must occur exactly once; the text around it is left untouched. Matching uses LF line breaks and excludes the last line's terminator.",
 });
-const replaceWithinNewSchema = Type.String({
+const replaceWithinNewStringSchema = Type.String({
   description:
     'The exact replacement for the matched text. "" deletes the match, "\\n" inserts one blank line, and a trailing line break sets the last line\'s ending instead of adding a blank line; the rest of the range is kept byte-for-byte.',
 });
@@ -267,8 +271,8 @@ export const replaceWithinToolSchema = Type.Object(
   {
     replace_from: replaceWithinFromSchema,
     replace_to: replaceWithinToSchema,
-    replace_old: replaceWithinOldSchema,
-    replace_new: replaceWithinNewSchema,
+    old_string: replaceWithinOldStringSchema,
+    new_string: replaceWithinNewStringSchema,
   },
   { additionalProperties: true },
 );
@@ -280,8 +284,8 @@ export function buildReplaceWithinToolSchema(requirePath: boolean): typeof repla
       path: replaceWithinPathRequiredSchema,
       replace_from: replaceWithinFromSchema,
       replace_to: replaceWithinToSchema,
-      replace_old: replaceWithinOldSchema,
-      replace_new: replaceWithinNewSchema,
+      old_string: replaceWithinOldStringSchema,
+      new_string: replaceWithinNewStringSchema,
     },
     { additionalProperties: true },
   ) as typeof replaceWithinToolSchema;

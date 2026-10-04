@@ -217,9 +217,9 @@ After a successful edit, the diff is capped at 50KB. A row over 50KB is shown as
 
 ### replace_within
 
-`replace_within` changes part of a line (or a range of lines) without retyping the rest. `replace_from` and `replace_to` are bare anchors marking the first and last line of the range; use the same anchor for a single line. `replace_old` is the exact text to find inside that range, and `replace_new` replaces just that match; every other character stays untouched. That makes it the tool for a change the request quotes as a substring: a whole-line `replace` has to reproduce the rest of the line, so a slipped character becomes a wrong byte, while `replace_within` leaves everything the request did not name untouched. It is enabled by default; turn Replace within off in `/hashline-config` to remove the tool.
+`replace_within` changes part of a line (or a range of lines) without retyping the rest. `replace_from` and `replace_to` are bare anchors marking the first and last line of the range; use the same anchor for a single line. `old_string` is the exact text to find inside that range, and `new_string` replaces just that match; every other character stays untouched. That makes it the tool for a change the request quotes as a substring: a whole-line `replace` has to reproduce the rest of the line, so a slipped character becomes a wrong byte, while `replace_within` leaves everything the request did not name untouched. It is enabled by default; turn Replace within off in `/hashline-config` to remove the tool.
 
-`replace_old` is matched against the range's text (LF line breaks, no final terminator) and must occur exactly once. A missing match is refused with `[E_SUBSTRING_NOT_FOUND]` and the current `anchor│content` rows; a repeated match is refused with `[E_SUBSTRING_AMBIGUOUS]` and the matching line numbers. Both refusals carry enough to retry without a `read`.
+`old_string` is matched against the range's text (LF line breaks, no final terminator) and must occur exactly once. A missing match is refused with `[E_SUBSTRING_NOT_FOUND]` and the current `anchor│content` rows; a repeated match is refused with `[E_SUBSTRING_AMBIGUOUS]` and the matching line numbers. Both refusals carry enough to retry without a `read`.
 
 A `replace_within` call is never grouped into a batch; it commits on its own like `copy` and `move`. The post-edit diff carries fresh anchors, and the edit is undoable with `undo_last_change`.
 
@@ -434,8 +434,8 @@ Full reference:
 | `[E_BAD_SHAPE]` | Request envelope or edit item has unknown, missing, or wrongly-typed fields (for example `replacement_lines` must be a string holding the exact text), content contains a NUL byte (`U+0000`), which would make the file binary, or a grep `glob` has invalid bracket or brace syntax. |
 | `[W_BAD_SHAPE]` | Auto-corrected request slip reported as a warning (for example legacy array text that could not be parsed and was kept as one literal line). |
 | `[E_BAD_REF]` | An anchor in `remove_from`/`remove_to` is not a bare 4-character anchor (the anchor table is letters only). |
-| `[E_SUBSTRING_NOT_FOUND]` | `replace_within` did not find `replace_old` in the selected range. The current `anchor│content` rows are returned; copy `replace_old` exactly from the served row and retry. |
-| `[E_SUBSTRING_AMBIGUOUS]` | `replace_within` found `replace_old` more than once in the selected range. Narrow `replace_from`/`replace_to` or extend `replace_old` so it matches exactly once. |
+| `[E_SUBSTRING_NOT_FOUND]` | `replace_within` did not find `old_string` in the selected range. The current `anchor│content` rows are returned; copy `old_string` exactly from the served row and retry. |
+| `[E_SUBSTRING_AMBIGUOUS]` | `replace_within` found `old_string` more than once in the selected range. Narrow `replace_from`/`replace_to` or extend `old_string` so it matches exactly once. |
 | `[W_BAD_REF]` | A pasted `anchor│` or diff-preview marker was stripped from an anchor field with a warning. |
 | `[E_STALE_ANCHOR]` | An anchor is not owned in this session (it was never shown to you, or its line was edited or the file was rewritten); call `read` for fresh anchors. |
 | `[W_INVALID_PATCH]` | A `replacement_lines` line is a diff-preview row (`+anchor│`, `-anchor│`, `-    │`). The marker is stripped automatically with a warning. |

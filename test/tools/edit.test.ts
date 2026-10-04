@@ -298,7 +298,7 @@ describe("replace literal escape hints", () => {
       expect(writtenAnchor).toMatch(/^[A-Za-z]{4}$/);
       const within = await getTool("replace_within").execute(
         "e2",
-        { replace_from: writtenAnchor!, replace_to: writtenAnchor!, replace_old: String.raw`\u200b`, replace_new: "\u200b" },
+        { replace_from: writtenAnchor!, replace_to: writtenAnchor!, old_string: String.raw`\u200b`, new_string: "\u200b" },
         undefined,
         undefined,
         ctx,

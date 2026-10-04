@@ -68,14 +68,14 @@ function notFoundMessage(displayPath: string, start: number, end: number, fileHa
   const shownCount = Math.min(rangeLength, MAX_RANGE_STALE_LINES);
   const shown = fmtRegion(fileHashes.slice(start - 1, start - 1 + shownCount), fileLines.slice(start - 1, start - 1 + shownCount));
   const more = rangeLength > shownCount ? `\n[The range has ${rangeLength} lines; showing the first ${shownCount}.]` : "";
-  return `[E_SUBSTRING_NOT_FOUND] "replace_old" was not found in ${formatWithinRange(start, end)} of ${displayPath}. Current rows:\n\n${shown}${more}\n\nCopy replace_old exactly from the served row (comparison uses LF breaks and excludes the last line's terminator) and retry.`;
+  return `[E_SUBSTRING_NOT_FOUND] "old_string" was not found in ${formatWithinRange(start, end)} of ${displayPath}. Current rows:\n\n${shown}${more}\n\nCopy old_string exactly from the served row (comparison uses LF breaks and excludes the last line's terminator) and retry.`;
 }
 
 function ambiguousMessage(displayPath: string, start: number, end: number, matchLines: number[]): string {
   const shownCount = 8;
   const shown = matchLines.slice(0, shownCount).join(", ");
   const more = matchLines.length > shownCount ? ` (+${matchLines.length - shownCount} more)` : "";
-  return `[E_SUBSTRING_AMBIGUOUS] "replace_old" occurs ${matchLines.length} times in ${formatWithinRange(start, end)} of ${displayPath} (matching lines ${shown}${more}). Narrow replace_from/replace_to to one line, or extend replace_old so it matches exactly once.`;
+  return `[E_SUBSTRING_AMBIGUOUS] "old_string" occurs ${matchLines.length} times in ${formatWithinRange(start, end)} of ${displayPath} (matching lines ${shown}${more}). Narrow replace_from/replace_to to one line, or extend old_string so it matches exactly once.`;
 }
 
 export function parseWithinAnchors(req: ReplaceWithinReq): { refs: WithinRefs; warnings: string[] } {
@@ -93,7 +93,7 @@ export function buildReplaceWithinEdit(req: ReplaceWithinReq, refs: WithinRefs, 
   const end = Math.max(fromLine, toLine);
   const rangeLines = fileLines.slice(start - 1, end);
   const rangeText = rangeLines.join("\n");
-  const oldText = toLF(req.replace_old);
+  const oldText = toLF(req.old_string);
   const offsets = matchOffsets(rangeText, oldText);
   if (offsets.length === 0) {
     throw new Error(notFoundMessage(displayPath, start, end, preload.fileHashes, fileLines));
@@ -102,7 +102,7 @@ export function buildReplaceWithinEdit(req: ReplaceWithinReq, refs: WithinRefs, 
     throw new Error(ambiguousMessage(displayPath, start, end, offsets.map((offset) => start - 1 + offsetLineNumber(rangeLines, offset))));
   }
   const matchOffset = offsets[0]!;
-  const replacement = rangeText.slice(0, matchOffset) + req.replace_new + rangeText.slice(matchOffset + oldText.length);
+  const replacement = rangeText.slice(0, matchOffset) + req.new_string + rangeText.slice(matchOffset + oldText.length);
   const startRef = fromLine <= toLine ? refs.from : refs.to;
   const endRef = fromLine <= toLine ? refs.to : refs.from;
   return {
@@ -178,7 +178,7 @@ export function buildReplaceWithinToolDef(flags: EditToolFlags = DEFAULT_EDIT_FL
         const req = normalized;
         const { refs, warnings } = parseWithinAnchors(req);
         await throwIfStrictInput(warnings);
-        const hints = [...literalEscapeHints([req.replace_old], "replace_old"), ...literalEscapeHints([req.replace_new], "replace_new")];
+        const hints = [...literalEscapeHints([req.old_string], "old_string"), ...literalEscapeHints([req.new_string], "new_string")];
         const targetPath = await resolveEditTargetWithRequirement({
           removeFrom: req.replace_from,
           removeTo: req.replace_to,
