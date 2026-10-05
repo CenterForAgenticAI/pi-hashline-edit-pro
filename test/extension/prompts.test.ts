@@ -290,11 +290,11 @@ describe("edit prompt flag variants", () => {
     expect(transfer.guidelines.some((g) => g.includes("JSON decoding"))).toBe(false);
   });
 
-  it("keeps examples only where they carry unique information", () => {
-    expect(loadP("../prompts/replace.md")).not.toContain("Example:");
-    expect(loadP("../prompts/copy.md")).not.toContain("Example:");
-    expect(loadP("../prompts/move.md")).not.toContain("Example:");
-    expect(loadP("../prompts/replace-match.md")).toContain("Example:");
+  it("keeps tool descriptions free of examples and moves the fragment guidance into the replace_match guideline", () => {
+    for (const file of ["replace.md", "replace-match.md", "insert.md", "copy.md", "move.md", "read.md", "grep.md", "undo-last-change.md"]) {
+      expect(loadP(`../prompts/${file}`)).not.toContain("Example:");
+    }
+    expect(loadGuide("../prompts/replace-match-guidelines.md").some((g) => g.includes("fragment of the line"))).toBe(true);
   });
 
   it("withGrepPrompts drops copy and move when Copy/move is off", () => {
