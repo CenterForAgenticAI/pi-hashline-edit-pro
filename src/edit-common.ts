@@ -43,25 +43,47 @@ function preferenceGuideline(flags: EditToolFlags): string {
   return `Prefer the hashline tools for anything that touches files: ${joinOps(tools, { backtick: true })}.`;
 }
 
+const SHARED_EDIT_OPS = ["replace", "replace_match", "insert", "copy", "move"];
+const SHARED_PAYLOAD_OPS = ["replace", "replace_match", "insert"];
+
+function operationNames(ops: string[], flags: EditToolFlags): string {
+  return joinOps(gatedEditOps(ops, flags), { backtick: true, separator: "/" });
+}
+
+function batchGuideline(flags: EditToolFlags): string {
+  const tools = operationNames(SHARED_EDIT_OPS, flags);
+  const outcome = flags.autoRead ? "diff" : "result";
+  return `${tools}: same-file calls in one message are grouped into one batch; earlier calls reply \`In batch N (queued)\` and the last call shows the combined ${outcome}, with one undo for the whole batch.`;
+}
+
+function pathGuideline(flags: EditToolFlags): string {
+  const tools = operationNames(SHARED_EDIT_OPS, flags);
+  return flags.requirePath
+    ? `${tools}: pass \`path\` matching the file the anchors were served for; it is required and must match anchor ownership.`
+    : `${tools}: path resolution is anchor-only; do not pass \`path\`.`;
+}
+
+function payloadGuideline(flags: EditToolFlags): string {
+  const tools = operationNames(SHARED_PAYLOAD_OPS, flags);
+  return `${tools}: JSON decoding happens once, before the tool; the tool writes the string it receives and never decodes — \`\\uXXXX\` is the character, \`\\\\uXXXX\` the literal text.`;
+}
+
+function strictInputGuideline(flags: EditToolFlags): string {
+  const tools = operationNames(SHARED_EDIT_OPS, flags);
+  return `${tools}: strict-input mode is on; auto-fixable slips are rejected instead of fixed with warnings.`;
+}
+
 function finalizePrompts(
   description: string,
   snippet: string,
   guidelines: string[],
   flags: EditToolFlags,
-  requirePathNotice: string,
+  options?: { stringPayload?: boolean },
 ): { description: string; snippet: string; guidelines: string[] } {
-  const descriptionParts = [description];
-  const snippetParts = [snippet];
-  if (flags.requirePath) {
-    descriptionParts.push(requirePathNotice);
-    snippetParts.push("; include `path` (required)");
-  } else {
-    descriptionParts.push("Path resolution is anchor-only; do not pass `path`.");
-  }
-  if (flags.strictInput) {
-    descriptionParts.push("Strict-input mode is on: auto-fixable slips are rejected instead of fixed with warnings.");
-  }
-  return { description: descriptionParts.join(" "), snippet: snippetParts.join(""), guidelines };
+  const shared = [batchGuideline(flags), pathGuideline(flags)];
+  if (options?.stringPayload !== false) shared.push(payloadGuideline(flags));
+  if (flags.strictInput) shared.push(strictInputGuideline(flags));
+  return { description, snippet, guidelines: [...guidelines, ...shared] };
 }
 
 export function withReplacePrompts(base: { description: string; snippet: string; guidelines: string[] }, flags: EditToolFlags): { description: string; snippet: string; guidelines: string[] } {
@@ -70,12 +92,11 @@ export function withReplacePrompts(base: { description: string; snippet: string;
   if (!flags.autoRead) {
     description = description.replace(/\n\nExample:[\s\S]*$/, "");
     guidelines = guidelines.filter((guideline) => !guideline.includes("post-edit diff"));
-    description = description.replace("and the last call shows the combined diff,", "and the last call shows the combined result,");
   }
   if (!flags.replaceMatchEnabled) {
     description = description.replace(/\n?To change only part of a line without retyping the rest, use `replace_match` instead; it preserves every character the request does not name\./, "");
   }
-  return finalizePrompts(description, base.snippet, guidelines, flags, "Also give `path` matching the file the anchors were served for; it is required and must match anchor ownership.");
+  return finalizePrompts(description, base.snippet, guidelines, flags);
 }
 
 export function withReadPrompts(base: { description: string; snippet: string; guidelines: string[] }, flags: EditToolFlags): { description: string; snippet: string; guidelines: string[] } {
@@ -92,14 +113,13 @@ export function withReadPrompts(base: { description: string; snippet: string; gu
 }
 
 export function withInsertPrompts(base: { description: string; snippet: string; guidelines: string[] }, flags: EditToolFlags): { description: string; snippet: string; guidelines: string[] } {
-  const baseDescription = flags.autoRead ? base.description : base.description.replace("and the last call shows the combined diff,", "and the last call shows the combined result,");
   const guidelines = [...base.guidelines];
-  return finalizePrompts(baseDescription, base.snippet, guidelines, flags, "Also give `path` matching the file the anchor was served for; it is required and must match anchor ownership.");
+  return finalizePrompts(base.description, base.snippet, guidelines, flags);
 }
 
 export function withReplaceMatchPrompts(base: { description: string; snippet: string; guidelines: string[] }, flags: EditToolFlags): { description: string; snippet: string; guidelines: string[] } {
   const guidelines = [...base.guidelines];
-  return finalizePrompts(base.description, base.snippet, guidelines, flags, "Also give `path` matching the file the anchors were served for; it is required and must match anchor ownership.");
+  return finalizePrompts(base.description, base.snippet, guidelines, flags);
 }
 
 function gatedEditOps(ops: string[], flags: EditToolFlags): string[] {
@@ -145,7 +165,7 @@ export function withUndoPrompts(base: { description: string; snippet: string; gu
 
 export function withTransferPrompts(base: { description: string; snippet: string; guidelines: string[] }, flags: EditToolFlags): { description: string; snippet: string; guidelines: string[] } {
   const guidelines = [...base.guidelines];
-  return finalizePrompts(base.description, base.snippet, guidelines, flags, "Also give `path` matching the source or destination file the anchors were served for; it is required and must match anchor ownership.");
+  return finalizePrompts(base.description, base.snippet, guidelines, flags, { stringPayload: false });
 }
 
 function staleAnchorMessage(ref: string, hash: string, owners: Array<OwnedAnchor | undefined>): string {

@@ -176,13 +176,13 @@ describe("prompt file packaging", () => {
 describe("edit prompt flag variants", () => {
   it("withReplacePrompts adds the require-path contract", () => {
     const result = withReplacePrompts(replaceBase, { ...DEFAULT_EDIT_FLAGS, requirePath: true });
-    expect(result.description).toContain("Also give `path` matching the file the anchors were served for");
-    expect(result.snippet).toContain("; include `path` (required)");
+    expect(result.guidelines.some((g) => g.includes("pass `path` matching the file the anchors were served for"))).toBe(true);
+    expect(result.snippet).not.toContain("include `path` (required)");
   });
 
   it("withReplacePrompts adds the strict-input notice", () => {
     const result = withReplacePrompts(replaceBase, { ...DEFAULT_EDIT_FLAGS, strictInput: true });
-    expect(result.description).toContain("Strict-input mode is on: auto-fixable slips are rejected instead of fixed with warnings.");
+    expect(result.guidelines.some((g) => g.includes("strict-input mode is on; auto-fixable slips are rejected"))).toBe(true);
   });
 
   it("withReplacePrompts lists only the enabled edit tools in its preference guideline", () => {
@@ -213,18 +213,20 @@ describe("edit prompt flag variants", () => {
     expect(off.description).toContain("Replace a range of lines");
   });
 
-  it("withReplacePrompts rewrites the batch diff wording when auto-read is off", () => {
-    const result = withReplacePrompts(replaceBase, { ...DEFAULT_EDIT_FLAGS, autoRead: false });
-    expect(result.description).toContain("combined result");
-    expect(result.description).not.toContain("combined diff");
+  it("moves the batch wording into a shared guideline and uses the result wording when auto-read is off", () => {
+    const on = withReplacePrompts(replaceBase, DEFAULT_EDIT_FLAGS);
+    expect(on.guidelines.some((g) => g.includes("combined diff"))).toBe(true);
+    const off = withReplacePrompts(replaceBase, { ...DEFAULT_EDIT_FLAGS, autoRead: false });
+    expect(off.guidelines.some((g) => g.includes("combined result"))).toBe(true);
+    expect(off.guidelines.some((g) => g.includes("combined diff"))).toBe(false);
   });
 
-  it("withInsertPrompts rewrites the batch diff wording when auto-read is off", () => {
+  it("moves the insert batch wording into the shared edit guideline when auto-read is off", () => {
     const on = withInsertPrompts(insertBase, DEFAULT_EDIT_FLAGS);
-    expect(on.description).toContain("combined diff");
+    expect(on.guidelines.some((g) => g.includes("combined diff"))).toBe(true);
+    expect(on.description).not.toContain("combined");
     const off = withInsertPrompts(insertBase, { ...DEFAULT_EDIT_FLAGS, autoRead: false });
-    expect(off.description).toContain("combined result");
-    expect(off.description).not.toContain("combined diff");
+    expect(off.guidelines.some((g) => g.includes("combined result"))).toBe(true);
   });
 
   it("withUndoPrompts keeps diff detail when auto-read is on and neutralizes when off", () => {
@@ -256,21 +258,37 @@ describe("edit prompt flag variants", () => {
 
   it("withInsertPrompts adds the require-path and strict-input notices", () => {
     const result = withInsertPrompts(insertBase, { ...DEFAULT_EDIT_FLAGS, requirePath: true, strictInput: true });
-    expect(result.description).toContain("Also give `path` matching the file the anchor was served for");
-    expect(result.snippet).toContain("; include `path` (required)");
-    expect(result.description).toContain("Strict-input mode is on");
+    expect(result.guidelines.some((g) => g.includes("pass `path` matching the file the anchors were served for"))).toBe(true);
+    expect(result.snippet).not.toContain("include `path` (required)");
+    expect(result.guidelines.some((g) => g.includes("strict-input mode is on"))).toBe(true);
   });
 
   it("withReplaceMatchPrompts adds the require-path and strict-input notices", () => {
     const result = withReplaceMatchPrompts(replaceBase, { ...DEFAULT_EDIT_FLAGS, requirePath: true, strictInput: true });
-    expect(result.description).toContain("Also give `path` matching the file the anchors were served for");
-    expect(result.description).toContain("Strict-input mode is on");
+    expect(result.guidelines.some((g) => g.includes("pass `path` matching the file the anchors were served for"))).toBe(true);
+    expect(result.guidelines.some((g) => g.includes("strict-input mode is on"))).toBe(true);
   });
 
-  it("withReplaceMatchPrompts leaves guidelines unchanged when Copy/move is off", () => {
+  it("withReplaceMatchPrompts keeps its own guideline first and names only enabled tools", () => {
     const on = withReplaceMatchPrompts(withinBase, DEFAULT_EDIT_FLAGS);
     const off = withReplaceMatchPrompts(withinBase, { ...DEFAULT_EDIT_FLAGS, copyMoveEnabled: false });
-    expect(off.guidelines).toEqual(on.guidelines);
+    expect(on.guidelines[0]).toBe(withinBase.guidelines[0]);
+    expect(off.guidelines[0]).toBe(withinBase.guidelines[0]);
+    expect(off.guidelines.some((g) => g.includes("`copy`") || g.includes("`move`"))).toBe(false);
+  });
+
+  it("names every tool a shared edit guideline applies to", () => {
+    const result = withReplacePrompts(replaceBase, DEFAULT_EDIT_FLAGS);
+    const shared = result.guidelines.join("\n");
+    expect(shared).toContain("`replace`/`replace_match`/`insert`/`copy`/`move`: same-file calls in one message are grouped into one batch");
+    expect(shared).toContain("`replace`/`replace_match`/`insert`/`copy`/`move`: path resolution is anchor-only");
+    expect(shared).toContain("`replace`/`replace_match`/`insert`: JSON decoding happens once");
+    const transfer = withTransferPrompts({
+      description: loadP("../prompts/copy.md"),
+      snippet: loadP("../prompts/copy-snippet.md"),
+      guidelines: loadGuide("../prompts/copy-guidelines.md"),
+    }, DEFAULT_EDIT_FLAGS);
+    expect(transfer.guidelines.some((g) => g.includes("JSON decoding"))).toBe(false);
   });
 
   it("withGrepPrompts drops copy and move when Copy/move is off", () => {
@@ -319,7 +337,7 @@ describe("edit prompt flag variants", () => {
       guidelines: loadGuide("../prompts/copy-guidelines.md"),
     };
     const result = withTransferPrompts(base, DEFAULT_EDIT_FLAGS);
-    expect(result.description).toContain("Path resolution is anchor-only; do not pass `path`.");
+    expect(result.guidelines.some((g) => g.includes("path resolution is anchor-only; do not pass `path`."))).toBe(true);
   });
 
   it("withTransferPrompts adds the require-path and strict-input notices", () => {
@@ -329,8 +347,8 @@ describe("edit prompt flag variants", () => {
       guidelines: loadGuide("../prompts/move-guidelines.md"),
     };
     const result = withTransferPrompts(base, { ...DEFAULT_EDIT_FLAGS, requirePath: true, strictInput: true });
-    expect(result.description).toContain("Also give `path` matching the source or destination file the anchors were served for");
-    expect(result.snippet).toContain("; include `path` (required)");
-    expect(result.description).toContain("Strict-input mode is on");
+    expect(result.guidelines.some((g) => g.includes("pass `path` matching the file the anchors were served for"))).toBe(true);
+    expect(result.guidelines.some((g) => g.includes("strict-input mode is on"))).toBe(true);
+    expect(result.snippet).not.toContain("include `path` (required)");
   });
 });

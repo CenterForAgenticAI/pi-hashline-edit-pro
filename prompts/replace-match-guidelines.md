@@ -1,1 +1,1 @@
-- `replace_match`: every occurrence of `old_string` inside the range is replaced; scope the range with anchors when only some occurrences should change, and check the post-edit diff.
+- `replace_match`: every occurrence of `old_string` inside the range is replaced; scope the range with anchors when only some occurrences should change.
