@@ -1,4 +1,2 @@
 Replace a range of lines (or a single line) in a text file by anchor. `remove_from` and `remove_to` are the 4-character anchors of the first and last line to remove, and `text` is one string holding the exact replacement text. The text is written exactly as given, and nothing else in the file changes.
 To change only part of a line without retyping the rest, use `replace_match` instead; it preserves every character the request does not name. Deleting every line empties the file; the result names the new empty-line anchor, so a follow-up `replace` on it can seed content without a `read`.
-
-Example: read served `Hasu│old` and `arvm│old2`. Call { "remove_from": "Hasu", "remove_to": "arvm", "text": "new line 1\nnew line 2" }. The post-edit diff shows `-Hasu│old`, `-arvm│old2`, `+Qwer│new line 1`: the `-` rows are dead anchors now; the `+` and ` ` rows are live anchors for the next edit.

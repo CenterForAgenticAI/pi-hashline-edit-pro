@@ -45,6 +45,7 @@ function preferenceGuideline(flags: EditToolFlags): string {
 
 const SHARED_EDIT_OPS = ["replace", "replace_match", "insert", "copy", "move"];
 const SHARED_PAYLOAD_OPS = ["replace", "replace_match", "insert"];
+const SHARED_DIFF_OPS = ["replace", "replace_match", "insert", "copy", "move", "undo_last_change"];
 
 function operationNames(ops: string[], flags: EditToolFlags): string {
   return joinOps(gatedEditOps(ops, flags), { backtick: true, separator: "/" });
@@ -54,6 +55,11 @@ function batchGuideline(flags: EditToolFlags): string {
   const tools = operationNames(SHARED_EDIT_OPS, flags);
   const outcome = flags.autoRead ? "diff" : "result";
   return `${tools}: same-file calls in one message are grouped into one batch; earlier calls reply \`In batch N (queued)\` and the last call shows the combined ${outcome}, with one undo for the whole batch.`;
+}
+
+function diffGuideline(flags: EditToolFlags): string {
+  const tools = operationNames(SHARED_DIFF_OPS, flags);
+  return `${tools}: in the post-edit diff, \`-anchor│\` rows are dead anchors; \`+anchor│\` and \` anchor│\` rows are live anchors for the next edit.`;
 }
 
 function pathGuideline(flags: EditToolFlags): string {
@@ -81,6 +87,7 @@ function finalizePrompts(
   options?: { stringPayload?: boolean },
 ): { description: string; snippet: string; guidelines: string[] } {
   const shared = [batchGuideline(flags), pathGuideline(flags)];
+  if (flags.autoRead) shared.push(diffGuideline(flags));
   if (options?.stringPayload !== false) shared.push(payloadGuideline(flags));
   if (flags.strictInput) shared.push(strictInputGuideline(flags));
   return { description, snippet, guidelines: [...guidelines, ...shared] };
@@ -88,11 +95,7 @@ function finalizePrompts(
 
 export function withReplacePrompts(base: { description: string; snippet: string; guidelines: string[] }, flags: EditToolFlags): { description: string; snippet: string; guidelines: string[] } {
   let description = base.description;
-  let guidelines = [preferenceGuideline(flags), ...base.guidelines];
-  if (!flags.autoRead) {
-    description = description.replace(/\n\nExample:[\s\S]*$/, "");
-    guidelines = guidelines.filter((guideline) => !guideline.includes("post-edit diff"));
-  }
+  const guidelines = [preferenceGuideline(flags), ...base.guidelines];
   if (!flags.replaceMatchEnabled) {
     description = description.replace(/\n?To change only part of a line without retyping the rest, use `replace_match` instead; it preserves every character the request does not name\./, "");
   }

@@ -196,13 +196,11 @@ describe("edit prompt flag variants", () => {
     expect(noTransfer.guidelines[0]).toContain("`replace_match`");
   });
 
-  it("withReplacePrompts drops the diff-follow hint and example when auto-read is off", () => {
+  it("adds the diff-row guideline only when auto-read is on", () => {
     const on = withReplacePrompts(replaceBase, DEFAULT_EDIT_FLAGS);
-    expect(on.description).toContain("Example: read served");
-    const result = withReplacePrompts(replaceBase, { ...DEFAULT_EDIT_FLAGS, autoRead: false });
-    expect(result.description).not.toContain("Example: read served");
-    expect(result.description).not.toContain("Anchor follow-up edits on the `+anchor│`");
-    expect(result.guidelines.some((g) => g.includes("post-edit diff"))).toBe(false);
+    expect(on.guidelines.some((g) => g.includes("rows are dead anchors"))).toBe(true);
+    const off = withReplacePrompts(replaceBase, { ...DEFAULT_EDIT_FLAGS, autoRead: false });
+    expect(off.guidelines.some((g) => g.includes("rows are dead anchors"))).toBe(false);
   });
 
   it("withReplacePrompts drops the replace_match cross-reference when the tool is off", () => {
@@ -283,12 +281,20 @@ describe("edit prompt flag variants", () => {
     expect(shared).toContain("`replace`/`replace_match`/`insert`/`copy`/`move`: same-file calls in one message are grouped into one batch");
     expect(shared).toContain("`replace`/`replace_match`/`insert`/`copy`/`move`: path resolution is anchor-only");
     expect(shared).toContain("`replace`/`replace_match`/`insert`: JSON decoding happens once");
+    expect(shared).toContain("`replace`/`replace_match`/`insert`/`copy`/`move`/`undo_last_change`: in the post-edit diff, `-anchor│` rows are dead anchors");
     const transfer = withTransferPrompts({
       description: loadP("../prompts/copy.md"),
       snippet: loadP("../prompts/copy-snippet.md"),
       guidelines: loadGuide("../prompts/copy-guidelines.md"),
     }, DEFAULT_EDIT_FLAGS);
     expect(transfer.guidelines.some((g) => g.includes("JSON decoding"))).toBe(false);
+  });
+
+  it("keeps examples only where they carry unique information", () => {
+    expect(loadP("../prompts/replace.md")).not.toContain("Example:");
+    expect(loadP("../prompts/copy.md")).not.toContain("Example:");
+    expect(loadP("../prompts/move.md")).not.toContain("Example:");
+    expect(loadP("../prompts/replace-match.md")).toContain("Example:");
   });
 
   it("withGrepPrompts drops copy and move when Copy/move is off", () => {
