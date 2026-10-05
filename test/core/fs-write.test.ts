@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { resolveTarget, writeAtomic } from "../../src/fs-write";
-import { mkdtemp, writeFile, rm, readFile, symlink } from "fs/promises";
+import { mkdir, mkdtemp, writeFile, rm, readFile, symlink } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";
 
@@ -44,6 +44,24 @@ describe("resolveTarget", () => {
       await symlink("mid.txt", link);
       const resolved = await resolveTarget(link);
       expect(resolved).toBe(target);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it.skipIf(isWindows)("resolves a path that crosses the same symlink twice", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "pi-hashline-resolve-"));
+    try {
+      const realHome = join(dir, "real", "home");
+      const homeLink = join(dir, "home");
+      await mkdir(join(realHome, ".other", "skill"), { recursive: true });
+      await mkdir(join(realHome, ".pi"), { recursive: true });
+      const filePath = join(realHome, ".other", "skill", "SKILL.md");
+      await writeFile(filePath, "hi", "utf-8");
+      await symlink(realHome, homeLink);
+      await symlink(join(homeLink, ".other", "skill"), join(realHome, ".pi", "skill"));
+      const resolved = await resolveTarget(join(homeLink, ".pi", "skill", "SKILL.md"));
+      expect(resolved).toBe(filePath);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

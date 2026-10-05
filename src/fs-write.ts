@@ -38,7 +38,6 @@ export async function resolveTarget(path: string): Promise<string> {
     .slice(root.length)
     .split(sep)
     .filter((part) => part.length > 0);
-  const visitedSymlinks = new Set<string>();
 
   async function resParts(
     currentPath: string,
@@ -64,15 +63,6 @@ export async function resolveTarget(path: string): Promise<string> {
       if (!candidateStats.isSymbolicLink()) {
         return resParts(candidatePath, tail, symlinkDepth);
       }
-
-      if (visitedSymlinks.has(candidatePath)) {
-        const error = new Error(
-          `Too many symbolic links while resolving ${path}`,
-        ) as NodeJS.ErrnoException;
-        error.code = "ELOOP";
-        throw error;
-      }
-      visitedSymlinks.add(candidatePath);
 
       const linkTargetPath = resolve(
         dirname(candidatePath),
