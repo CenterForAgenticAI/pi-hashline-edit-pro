@@ -225,11 +225,11 @@ const replaceMatchToSchema = Type.String({
 });
 const replaceMatchOldStringSchema = Type.String({
   description:
-    "The exact text to find inside the selected line(s), copied from the served row. It must occur exactly once; the text around it is left untouched. Matching uses LF line breaks and excludes the last line's terminator.",
+    "The exact text to find inside the selected line(s), copied from the served row. Every occurrence inside the range is replaced; the text around each match is left untouched. Matching uses LF line breaks and excludes the last line's terminator.",
 });
 const replaceMatchNewStringSchema = Type.String({
   description:
-    'The exact replacement for the matched text. "" deletes the match, "\\n" inserts one blank line, and a trailing line break sets the last line\'s ending instead of adding a blank line; the rest of the range is kept byte-for-byte.',
+    'The exact replacement for every matched occurrence. "" deletes the matches, "\\n" inserts one blank line, and a trailing line break sets the last line\'s ending instead of adding a blank line; the rest of the range is kept byte-for-byte.',
 });
 const replaceMatchPathRequiredSchema = Type.String({
   description:

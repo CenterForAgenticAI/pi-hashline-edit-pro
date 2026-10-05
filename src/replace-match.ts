@@ -4,8 +4,8 @@ import { execPipeline, noteAnchorError, previewFromPipe, previewError, type Repl
 import { commitEdit } from "./commit";
 import { readNormFile, type NormFile } from "./file-reader";
 import { fmtRegion, MAX_HASH_LINES, parseHashRef, resEdit, resolveAnchorLine, stripAnchorRow, type Anchor, type HEdit } from "./hashline";
-import { withAnchorSession } from "./anchor-registry";
-import { batchMemberFor, ensureBatchBase, executeBatchMember, noteBatchFailure } from "./batch";
+import { servedForPath, withAnchorSession } from "./anchor-registry";
+import { batchMemberFor, batchServedFor, ensureBatchBase, executeBatchMember, noteBatchFailure } from "./batch";
 import { loadP, loadGuide } from "./prompts";
 import {
   assertReplaceMatchReq,
@@ -17,6 +17,7 @@ import { literalEscapeHints, splitLines } from "./utils";
 import { toLF } from "./normalize";
 import { MAX_RANGE_STALE_LINES } from "./constants";
 import {
+  assertBoundaryLinesServed,
   DEFAULT_EDIT_FLAGS,
   editRenderResultWrapper,
   editToolBase,
@@ -24,6 +25,7 @@ import {
   resolveEditTargetWithRequirement,
   throwIfStrictInput,
   tryResolveEditTarget,
+  trustRangeServed,
   withReplaceMatchPrompts,
   type EditToolFlags,
 } from "./edit-common";
@@ -36,31 +38,25 @@ interface MatchRefs {
 
 export interface MatchPlan {
   editParams: { remove_from: string; remove_to: string; text: string };
+  servedOverride?: ReadonlyMap<string, string>;
 }
 
 function formatMatchRange(start: number, end: number): string {
   return start === end ? `line ${start}` : `lines ${start}-${end}`;
 }
 
-function offsetLineNumber(rangeLines: string[], offset: number): number {
+function replaceAllOccurrences(text: string, oldText: string, newText: string): { text: string; count: number } {
+  let out = "";
   let cursor = 0;
-  for (let index = 0; index < rangeLines.length; index++) {
-    const length = rangeLines[index]!.length;
-    if (offset <= cursor + length) return index + 1;
-    cursor += length + 1;
-  }
-  return rangeLines.length;
-}
-
-function matchOffsets(text: string, oldText: string): number[] {
-  const offsets: number[] = [];
-  let from = 0;
+  let count = 0;
   for (;;) {
-    const found = text.indexOf(oldText, from);
-    if (found < 0) return offsets;
-    offsets.push(found);
-    from = found + 1;
+    const found = text.indexOf(oldText, cursor);
+    if (found < 0) break;
+    out += text.slice(cursor, found) + newText;
+    cursor = found + oldText.length;
+    count += 1;
   }
+  return count === 0 ? { text, count: 0 } : { text: out + text.slice(cursor), count };
 }
 
 function notFoundMessage(displayPath: string, start: number, end: number, fileHashes: string[], fileLines: string[]): string {
@@ -71,13 +67,6 @@ function notFoundMessage(displayPath: string, start: number, end: number, fileHa
   return `[E_SUBSTRING_NOT_FOUND] "old_string" was not found in ${formatMatchRange(start, end)} of ${displayPath}. Current rows:\n\n${shown}${more}\n\nCopy old_string exactly from the served row (comparison uses LF breaks and excludes the last line's terminator) and retry.`;
 }
 
-function ambiguousMessage(displayPath: string, start: number, end: number, matchLines: number[]): string {
-  const shownCount = 8;
-  const shown = matchLines.slice(0, shownCount).join(", ");
-  const more = matchLines.length > shownCount ? ` (+${matchLines.length - shownCount} more)` : "";
-  return `[E_SUBSTRING_AMBIGUOUS] "old_string" occurs ${matchLines.length} times in ${formatMatchRange(start, end)} of ${displayPath} (matching lines ${shown}${more}). Narrow replace_from/replace_to to one line, or extend old_string so it matches exactly once.`;
-}
-
 export function parseMatchAnchors(req: ReplaceMatchReq): { refs: MatchRefs; warnings: string[] } {
   const warnings: string[] = [];
   const from = stripAnchorRow(req.replace_from.trim(), "replace_from entry", warnings);
@@ -85,32 +74,36 @@ export function parseMatchAnchors(req: ReplaceMatchReq): { refs: MatchRefs; warn
   return { refs: { from: parseHashRef(from), to: parseHashRef(to) }, warnings };
 }
 
-export function buildReplaceMatchEdit(req: ReplaceMatchReq, refs: MatchRefs, preload: NormFile, displayPath: string): MatchPlan {
+export function buildReplaceMatchEdit(
+  req: ReplaceMatchReq,
+  refs: MatchRefs,
+  preload: NormFile,
+  displayPath: string,
+  served?: ReadonlyMap<string, string>,
+): MatchPlan {
   const fileLines = splitLines(preload.normalized);
   const fromLine = resolveAnchorLine(refs.from, fileLines, preload.fileHashes, displayPath);
   const toLine = resolveAnchorLine(refs.to, fileLines, preload.fileHashes, displayPath);
   const start = Math.min(fromLine, toLine);
   const end = Math.max(fromLine, toLine);
+  assertBoundaryLinesServed(fileLines, preload.fileHashes, served, start, end, displayPath);
   const rangeLines = fileLines.slice(start - 1, end);
   const rangeText = rangeLines.join("\n");
   const oldText = toLF(req.old_string);
-  const offsets = matchOffsets(rangeText, oldText);
-  if (offsets.length === 0) {
+  const { text: replacement, count } = replaceAllOccurrences(rangeText, oldText, req.new_string);
+  if (count === 0) {
     throw new Error(notFoundMessage(displayPath, start, end, preload.fileHashes, fileLines));
   }
-  if (offsets.length > 1) {
-    throw new Error(ambiguousMessage(displayPath, start, end, offsets.map((offset) => start - 1 + offsetLineNumber(rangeLines, offset))));
-  }
-  const matchOffset = offsets[0]!;
-  const replacement = rangeText.slice(0, matchOffset) + req.new_string + rangeText.slice(matchOffset + oldText.length);
   const startRef = fromLine <= toLine ? refs.from : refs.to;
   const endRef = fromLine <= toLine ? refs.to : refs.from;
+  const servedOverride = trustRangeServed(fileLines, preload.fileHashes, served, start, end);
   return {
     editParams: {
       remove_from: startRef.hash,
       remove_to: endRef.hash,
       text: replacement,
     },
+    ...(servedOverride !== undefined ? { servedOverride } : {}),
   };
 }
 
@@ -134,11 +127,12 @@ export async function replaceMatchPreview(request: unknown, cwd: string, signal?
       allocation: "shadow",
       signal,
     });
-    const plan = buildReplaceMatchEdit(req, refs, preload, targetPath);
+    const plan = buildReplaceMatchEdit(req, refs, preload, targetPath, servedForPath(preload.absolutePath));
     const pipe = await execPipeline(targetPath, plan.editParams, cwd, {
       accessMode: constants.R_OK,
       noPersist: true,
       preloadedNorm: preload,
+      served: plan.servedOverride,
       signal,
     });
     return previewFromPipe(pipe);
@@ -211,7 +205,7 @@ export function buildReplaceMatchToolDef(flags: EditToolFlags = DEFAULT_EDIT_FLA
           }
           let plan: MatchPlan;
           try {
-            plan = buildReplaceMatchEdit(req, refs, preload, targetPath);
+            plan = buildReplaceMatchEdit(req, refs, preload, targetPath, member ? batchServedFor(member) : servedForPath(preload.absolutePath));
           } catch (error) {
             await noteAnchorError(mutationTargetPath, error);
             if (member) noteBatchFailure(member, error);
@@ -235,12 +229,14 @@ export function buildReplaceMatchToolDef(flags: EditToolFlags = DEFAULT_EDIT_FLA
               signal,
               hedit,
               extraWarnings: [...warnings, ...hints, ...resWarnings],
+              ...(plan.servedOverride !== undefined ? { servedOverride: plan.servedOverride } : {}),
             });
           }
           const pipe = await execPipeline(targetPath, plan.editParams, ctx.cwd, {
             accessMode: constants.R_OK | constants.W_OK,
             signal,
             preloadedNorm: preload,
+            served: plan.servedOverride,
           });
           return commitEdit(pipe, {
             path: pipe.path,

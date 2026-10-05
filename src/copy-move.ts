@@ -6,8 +6,6 @@ import { execPipeline, noteAnchorError, previewFromPipe, previewError, type Pipe
 import { commitEdit } from "./commit";
 import { readNormFile, safeSnapId, type NormFile } from "./file-reader";
 import {
-  assertRangeServed,
-  lineChecksum,
   lineHashes,
   MAX_HASH_LINES,
   parseHashRef,
@@ -32,6 +30,7 @@ import { saveUndo, type UndoEntry } from "./replace-undo";
 import { buildChanged, buildMetrics, type TResult } from "./replace-response";
 import { servedHashesFromDiff, serveRows } from "./served";
 import {
+  assertBoundaryLinesServed,
   DEFAULT_EDIT_FLAGS,
   editRenderResultWrapper,
   editToolBase,
@@ -39,6 +38,7 @@ import {
   resolveEditTarget,
   throwIfStrictInput,
   tryResolveEditTarget,
+  trustRangeServed,
   withTransferPrompts,
   type EditToolFlags,
 } from "./edit-common";
@@ -67,45 +67,6 @@ interface PairFileCommit {
   mutationTargetPath: string;
   foldedAnchorLines: number;
   endingOverrides?: (LineEnding | undefined)[];
-}
-
-function assertRangeVerified(
-  fileLines: string[],
-  fileHashes: string[],
-  start: number,
-  end: number,
-  served: ReadonlyMap<string, string> | undefined,
-  displayPath: string,
-): void {
-  if (served === undefined) return;
-  assertRangeServed(
-    {
-      content_lines: [],
-      hash_bounds: [
-        { line: start, hash: fileHashes[start - 1]! },
-        { line: end, hash: fileHashes[end - 1]! },
-      ],
-    },
-    fileLines,
-    fileHashes,
-    served,
-    displayPath,
-  );
-}
-
-function trustSpan(
-  fileLines: string[],
-  fileHashes: string[],
-  served: ReadonlyMap<string, string> | undefined,
-  start: number,
-  end: number,
-): ReadonlyMap<string, string> | undefined {
-  if (served === undefined) return undefined;
-  const merged = new Map(served);
-  for (let line = start; line <= end; line++) {
-    merged.set(fileHashes[line - 1]!, lineChecksum(fileLines[line - 1]!));
-  }
-  return merged;
 }
 
 function dedupeWarnings(warnings: string[]): string[] {
@@ -160,9 +121,9 @@ export function buildTransferEdit(input: {
       `[E_BAD_SHAPE] "insert_after" resolves to line ${insertLine}, inside the source range (lines ${sourceStart}-${sourceEnd}). Use a line before source_from, or source_to to place the block right after itself.`,
     );
   }
-  assertRangeVerified(fileLines, preload.fileHashes, insertLine, insertLine, served, displayPath);
-  assertRangeVerified(fileLines, preload.fileHashes, sourceStart, sourceStart, served, displayPath);
-  assertRangeVerified(fileLines, preload.fileHashes, sourceEnd, sourceEnd, served, displayPath);
+  assertBoundaryLinesServed(fileLines, preload.fileHashes, served, insertLine, insertLine, displayPath);
+  assertBoundaryLinesServed(fileLines, preload.fileHashes, served, sourceStart, sourceStart, displayPath);
+  assertBoundaryLinesServed(fileLines, preload.fileHashes, served, sourceEnd, sourceEnd, displayPath);
   const sourceLines = fileLines.slice(sourceStart - 1, sourceEnd);
   const sourceEndings = endingsForRange(preload.endingSeparators, sourceStart, sourceEnd);
   if (kind === "copy") {
@@ -187,7 +148,7 @@ export function buildTransferEdit(input: {
         text: [...sourceLines, ...fileLines.slice(insertLine, sourceStart - 1)],
       },
       foldedAnchorLines: 0,
-      servedOverride: trustSpan(fileLines, preload.fileHashes, served, replacedStart, replacedEnd),
+      servedOverride: trustRangeServed(fileLines, preload.fileHashes, served, replacedStart, replacedEnd),
       endingOverrides: sourceEndings,
     };
   }
@@ -200,7 +161,7 @@ export function buildTransferEdit(input: {
       text: [...fileLines.slice(sourceEnd, insertLine), ...sourceLines],
     },
     foldedAnchorLines: 0,
-    servedOverride: trustSpan(fileLines, preload.fileHashes, served, replacedStart, replacedEnd),
+    servedOverride: trustRangeServed(fileLines, preload.fileHashes, served, replacedStart, replacedEnd),
     endingOverrides: offsetEndings(insertLine - sourceEnd, sourceEndings),
   };
 }
@@ -297,8 +258,8 @@ async function prepareCrossTransfer(input: {
     throw error;
   }
   try {
-    assertRangeVerified(sourceLines, sourcePreload.fileHashes, sourceStart, sourceStart, sourceServed, sourceDisplay);
-    assertRangeVerified(sourceLines, sourcePreload.fileHashes, sourceEnd, sourceEnd, sourceServed, sourceDisplay);
+    assertBoundaryLinesServed(sourceLines, sourcePreload.fileHashes, sourceServed, sourceStart, sourceStart, sourceDisplay);
+    assertBoundaryLinesServed(sourceLines, sourcePreload.fileHashes, sourceServed, sourceEnd, sourceEnd, sourceDisplay);
   } catch (error) {
     await adopt(sourcePreload.absolutePath, error);
     throw error;
@@ -312,7 +273,7 @@ async function prepareCrossTransfer(input: {
     throw error;
   }
   try {
-    assertRangeVerified(destinationLines, destinationPreload.fileHashes, insertLine, insertLine, destinationServed, destinationDisplay);
+    assertBoundaryLinesServed(destinationLines, destinationPreload.fileHashes, destinationServed, insertLine, insertLine, destinationDisplay);
   } catch (error) {
     await adopt(destinationPreload.absolutePath, error);
     throw error;

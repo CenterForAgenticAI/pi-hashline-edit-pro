@@ -81,22 +81,17 @@ describe("replace_match", () => {
     });
   });
 
-  it("refuses an ambiguous old_string and names the matching lines", async () => {
-    await withTempFile("dup.txt", "legacy\nkeep\nlegacy\n", async ({ cwd }) => {
+  it("replaces every occurrence of old_string inside the range", async () => {
+    await withTempFile("dup.txt", "legacy\nkeep\nlegacy\nlegacy\n", async ({ cwd, path }) => {
       const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
       const text = getText(await readTool.execute("r1", { path: "dup.txt" }, undefined, undefined, ctx));
-      const first = anchorFor(text, "legacy");
-      const rows = text.split("\n").filter((row) => row.includes("│"));
-      const last = rows[rows.length - 1]!.split("│")[0]!;
-      let caught: Error | undefined;
-      try {
-        await getTool("replace_match").execute("w1", { replace_from: first, replace_to: last, old_string: "legacy", new_string: "stable" }, undefined, undefined, ctx);
-      } catch (error) {
-        caught = error as Error;
-      }
-      expect(caught).toBeDefined();
-      expect(caught!.message).toMatch(/\[E_SUBSTRING_AMBIGUOUS\]/);
-      expect(caught!.message).toContain("matching lines 1, 3");
+      const legacyRows = text.split("\n").filter((row) => /│legacy$/.test(row));
+      expect(legacyRows).toHaveLength(3);
+      const first = extractHash(legacyRows[0]!);
+      const last = extractHash(legacyRows[1]!);
+      const result = await getTool("replace_match").execute("w1", { replace_from: first, replace_to: last, old_string: "legacy", new_string: "stable" }, undefined, undefined, ctx);
+      expect(getText(result)).toContain("Successfully replaced");
+      expect(await readFile(path, "utf-8")).toBe("stable\nkeep\nstable\nlegacy\n");
     });
   });
 
@@ -148,7 +143,7 @@ describe("replace_match", () => {
     });
   });
 
-  it("verifies the range against the served record", async () => {
+  it("matches the interior against the current file and tolerates an external interior change", async () => {
     const content = "a\nb\nc\nd\n";
     await withTempFile("sample.txt", content, async ({ cwd, path }) => {
       const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
@@ -156,8 +151,20 @@ describe("replace_match", () => {
       const hashes = await lineHashes(content, join(cwd, "sample.txt"));
       const { writeFile } = await import("node:fs/promises");
       await writeFile(path, "a\nB\nc\nd\n", "utf-8");
+      const result = await getTool("replace_match").execute("w1", { replace_from: hashes[0]!, replace_to: hashes[2]!, old_string: "a\nB\nc", new_string: "a\nb\nc" }, undefined, undefined, ctx);
+      expect(getText(result)).toContain("Successfully replaced");
+      expect(await readFile(path, "utf-8")).toBe("a\nb\nc\nd\n");
+    });
+  });
+
+  it("refuses when a boundary anchor was never shown", async () => {
+    const content = "a\nb\nc\nd\n";
+    await withTempFile("sample.txt", content, async ({ cwd }) => {
+      const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
+      await readTool.execute("r1", { path: "sample.txt", limit: 1 }, undefined, undefined, ctx);
+      const hashes = await lineHashes(content, join(cwd, "sample.txt"));
       await expect(
-        getTool("replace_match").execute("w1", { replace_from: hashes[0]!, replace_to: hashes[2]!, old_string: "a\nB\nc", new_string: "a\nb\nc" }, undefined, undefined, ctx),
+        getTool("replace_match").execute("w1", { replace_from: hashes[0]!, replace_to: hashes[3]!, old_string: "a", new_string: "A" }, undefined, undefined, ctx),
       ).rejects.toThrow(/\[E_RANGE_STALE\]/);
     });
   });

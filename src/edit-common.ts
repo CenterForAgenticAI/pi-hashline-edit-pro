@@ -2,7 +2,7 @@ import { withFileMutationQueue } from "@earendil-works/pi-coding-agent";
 import { resolveInCwd } from "./fs-write";
 import { abortIf, makePrepareArguments } from "./utils";
 import { ownerOf, ownersDifferingOnlyByCase, type OwnedAnchor } from "./anchor-registry";
-import { parseHashRef, stripAnchorRow } from "./hashline";
+import { assertRangeServed, lineChecksum, parseHashRef, stripAnchorRow } from "./hashline";
 import { readConfig } from "./config";
 import { makeRenderCall, renderEditResult, type RPreview, type FgT } from "./replace-render";
 import type { ReplaceDetails } from "./replace";
@@ -270,3 +270,41 @@ export async function queuedEdit<T>(
   });
 }
 
+export function trustRangeServed(
+  fileLines: string[],
+  fileHashes: string[],
+  served: ReadonlyMap<string, string> | undefined,
+  startLine: number,
+  endLine: number,
+): ReadonlyMap<string, string> | undefined {
+  if (served === undefined) return undefined;
+  const merged = new Map(served);
+  for (let line = startLine; line <= endLine; line += 1) {
+    merged.set(fileHashes[line - 1]!, lineChecksum(fileLines[line - 1]!));
+  }
+  return merged;
+}
+
+export function assertBoundaryLinesServed(
+  fileLines: string[],
+  fileHashes: string[],
+  served: ReadonlyMap<string, string> | undefined,
+  startLine: number,
+  endLine: number,
+  displayPath: string,
+): void {
+  if (served === undefined) return;
+  assertRangeServed(
+    {
+      content_lines: [],
+      hash_bounds: [
+        { line: startLine, hash: fileHashes[startLine - 1]! },
+        { line: endLine, hash: fileHashes[endLine - 1]! },
+      ],
+    },
+    fileLines,
+    fileHashes,
+    served,
+    displayPath,
+  );
+}

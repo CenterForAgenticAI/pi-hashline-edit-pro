@@ -217,11 +217,11 @@ After a successful edit, the diff is capped at 50KB. A row over 50KB is shown as
 
 ### replace_match
 
-`replace_match` changes part of a line (or a range of lines) without retyping the rest. `replace_from` and `replace_to` are bare anchors marking the first and last line of the range; use the same anchor for a single line. `old_string` is the exact text to find inside that range, and `new_string` replaces just that match; every other character stays untouched. That makes it the tool for a change the request quotes as a substring: a whole-line `replace` has to reproduce the rest of the line, so a slipped character becomes a wrong byte, while `replace_match` leaves everything the request did not name untouched. It is enabled by default; turn Replace match off in `/hashline-config` to remove the tool.
+`replace_match` changes part of a line (or a range of lines) without retyping the rest. `replace_from` and `replace_to` are bare anchors marking the first and last line of the range; use the same anchor for a single line. `old_string` is the exact text to find inside that range, and `new_string` replaces every occurrence of it; every other character stays untouched. That makes it the tool for a change the request quotes as a substring: a whole-line `replace` has to reproduce the rest of the line, so a slipped character becomes a wrong byte, while `replace_match` leaves everything the request did not name untouched. It is enabled by default; turn Replace match off in `/hashline-config` to remove the tool.
 
-`old_string` is matched against the range's text (LF line breaks, no final terminator) and must occur exactly once. A missing match is refused with `[E_SUBSTRING_NOT_FOUND]` and the current `anchor│content` rows; a repeated match is refused with `[E_SUBSTRING_AMBIGUOUS]` and the matching line numbers. Both refusals carry enough to retry without a `read`.
+`old_string` is matched against the range's text (LF line breaks, no final terminator) and every non-overlapping occurrence is replaced, left to right. A missing match is refused with `[E_SUBSTRING_NOT_FOUND]` and the current `anchor│content` rows, so the retry needs no `read`. The two boundary anchors are verified against what was last shown; lines strictly inside the range are matched against the file as it currently stands on disk.
 
-In a same-message batch it joins the other calls on its file: the batch validates everything against the pre-batch state and commits once, with one undo. A missing or ambiguous `old_string` aborts the whole batch unwritten. The post-edit diff carries fresh anchors, and the edit is undoable with `undo_last_change`.
+In a same-message batch it joins the other calls on its file: the batch validates everything against the pre-batch state and commits once, with one undo. A missing `old_string` aborts the whole batch unwritten. The post-edit diff carries fresh anchors, and the edit is undoable with `undo_last_change`.
 
 ### insert
 
@@ -436,7 +436,6 @@ Full reference:
 | `[W_BAD_SHAPE]` | Auto-corrected request slip reported as a warning (for example legacy array text that could not be parsed and was kept as one literal line). |
 | `[E_BAD_REF]` | An anchor in `remove_from`/`remove_to` is not a bare 4-character anchor (the anchor table is letters only). |
 | `[E_SUBSTRING_NOT_FOUND]` | `replace_match` did not find `old_string` in the selected range. The current `anchor│content` rows are returned; copy `old_string` exactly from the served row and retry. |
-| `[E_SUBSTRING_AMBIGUOUS]` | `replace_match` found `old_string` more than once in the selected range. Narrow `replace_from`/`replace_to` or extend `old_string` so it matches exactly once. |
 | `[W_BAD_REF]` | A pasted `anchor│` or diff-preview marker was stripped from an anchor field with a warning. |
 | `[E_STALE_ANCHOR]` | An anchor is not owned in this session (it was never shown to you, or its line was edited or the file was rewritten); call `read` for fresh anchors. |
 | `[W_INVALID_PATCH]` | A `text` line is a diff-preview row (`+anchor│`, `-anchor│`, `-    │`). The marker is stripped automatically with a warning. |

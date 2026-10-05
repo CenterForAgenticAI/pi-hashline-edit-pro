@@ -1,1 +1,1 @@
-- `replace_match`: when the same `old_string` occurs many times, `anchor_grep` with `literal: true` serves every matching row in one call, and one `replace_match` per row is cheap — only the named bytes change, so a wrong match costs one line, not a rewritten file.
+- `replace_match`: every occurrence of `old_string` inside the range is replaced; scope the range with anchors when only some occurrences should change, and check the post-edit diff.
