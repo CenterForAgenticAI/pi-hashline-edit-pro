@@ -1,0 +1,1 @@
+- `move`: moving a range to where it already sits reports `No changes made` and leaves the anchors alone.

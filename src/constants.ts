@@ -20,7 +20,7 @@ export const TEXT_NOT_STRING_MSG =
   `[E_BAD_SHAPE] "text" must be a string holding the exact text to insert. Use "\\n" for one blank line; line breaks inside the string separate lines.`;
 
 export const NUL_CONTENT_MSG =
-  `[E_BAD_SHAPE] Content contains a NUL byte (U+0000); a text file cannot contain NUL, and writing it would break further reads and edits. Remove the NUL byte and retry. An empty replacement ([]) deletes a range.`;
+  `[E_BAD_SHAPE] Content contains a NUL byte (U+0000); a text file cannot contain NUL, and writing it would break further reads and edits. Remove the NUL byte and retry.`;
 
 export const ANCHOR_POOL_EXHAUSTED_PREFIX =
   "[E_FILE_TOO_LARGE] The session's anchor pool is exhausted";
