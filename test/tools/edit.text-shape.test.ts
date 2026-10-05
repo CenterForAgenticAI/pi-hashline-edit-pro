@@ -47,22 +47,21 @@ describe("edit tool text shape (token budget)", () => {
     });
   });
 
-  it("changed mode rejects deleting all content from a non-empty file", async () => {
+  it("changed mode empties a file when all content is deleted", async () => {
     await withTempFile("sample.ts", "only\n", async ({ cwd }) => {
       const { ctx, editTool } = setupIntegrationTest(cwd);
       const hashes = await lineHashes("only\n", join(cwd, "sample.ts"));
 
-      await expect(
-        editTool.execute(
-          "e1",
-          {
-            remove_from: hashes[0]!, remove_to: hashes[0]!, text: [],
-          },
-          undefined,
-          undefined,
-          ctx,
-        ),
-      ).rejects.toThrow(/E_WOULD_EMPTY/);
+      const result = await editTool.execute(
+        "e1",
+        {
+          remove_from: hashes[0]!, remove_to: hashes[0]!, text: [],
+        },
+        undefined,
+        undefined,
+        ctx,
+      );
+      expect(result.content[0].text).toContain("File is empty");
     });
   });
 

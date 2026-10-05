@@ -82,7 +82,6 @@ export interface ExecPipelineOptions {
   noPersist?: boolean;
   preloadedNorm?: NormFile;
   served?: ReadonlyMap<string, string>;
-  allowEmpty?: boolean;
   stripWarning?: StripWarningLocation;
   endingOverrides?: (LineEnding | undefined)[];
   preserveDeletionSeparators?: boolean;
@@ -172,7 +171,6 @@ export async function execPipeline(
       originalHashes,
       displayPath,
       served,
-      options?.allowEmpty,
       options?.stripWarning,
     );
   } catch (error) {

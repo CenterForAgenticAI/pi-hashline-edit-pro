@@ -52,11 +52,10 @@ describe("resToSpan (via applyEdit)", () => {
   it("branch: empty replacement covering entire file", async () => {
     const content = "a\nb\nc";
     const hashes = await lineHashes(content, home.testPath);
-    expect(() =>
-      applyEdit(content, resEdit(
-        { remove_from: hashes[0]!, remove_to: hashes[2]!, text: [] },
-      ), undefined, hashes)
-    ).toThrow(/E_WOULD_EMPTY/);
+    const result = applyEdit(content, resEdit(
+      { remove_from: hashes[0]!, remove_to: hashes[2]!, text: [] },
+    ), undefined, hashes);
+    expect(result.content).toBe("");
   });
 
   it("branch: empty replacement ending at last line (not full file)", async () => {

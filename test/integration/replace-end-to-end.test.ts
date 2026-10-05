@@ -161,6 +161,27 @@ describe("replace tool - end-to-end", () => {
     });
   });
 
+  it("empties a file and reseeds it through the empty-line anchor", async () => {
+    await withTempFile("sample.ts", "aaa\nbbb\n", async ({ cwd, path }) => {
+      const { ctx, readTool, editTool } = setupIntegrationTest(cwd);
+
+      const readResult = await readTool.execute("r1", { path: "sample.ts" }, undefined, undefined, ctx);
+      const lines = getText(readResult).split("\n");
+      const aHash = extractHash(lines.find((l: string) => l.includes("│aaa"))!);
+      const bHash = extractHash(lines.find((l: string) => l.includes("│bbb"))!);
+
+      const emptied = await editTool.execute("e1", { remove_from: aHash, remove_to: bHash, text: [] }, undefined, undefined, ctx);
+      const emptiedText = getText(emptied);
+      expect(emptiedText).toContain("File is empty. Use replace on ");
+      expect(await readFile(path, "utf-8")).toBe("");
+      const emptyAnchor = emptiedText.match(/([A-Za-z]{4})│/)![1]!;
+
+      const seeded = await editTool.execute("e2", { remove_from: emptyAnchor, remove_to: emptyAnchor, text: ["first"] }, undefined, undefined, ctx);
+      expect(getText(seeded)).toContain("Successfully replaced");
+      expect(await readFile(path, "utf-8")).toBe("first");
+    });
+  });
+
   it("preserves CRLF line endings after edit", async () => {
     await withTempFile("crlf.ts", "alpha\r\nbeta\r\ngamma\r\n", async ({ cwd, path }) => {
       const { ctx, readTool, editTool } = setupIntegrationTest(cwd);

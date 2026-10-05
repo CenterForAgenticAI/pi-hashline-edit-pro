@@ -1,4 +1,4 @@
-import type { NEdit } from "./hashline";
+import { HASH_SEP, type NEdit } from "./hashline";
 import type { ReplaceDetails } from "./replace";
 import { genDiff, genPatch, type DiffSpan } from "./replace-diff";
 import { visLines, clipLine } from "./utils";
@@ -151,8 +151,11 @@ export function buildChanged(input: SuccessInput, verb = "replaced", diffContext
   const lineSummary = addedLines > 0 || removedLines > 0
     ? ` Added ${addedLines} line(s), removed ${removedLines} line(s).`
     : "";
+  const emptyAnchor = resultHashes[0];
   const text = resultLines.length === 0
-    ? "File is empty. Use replace to insert content."
+    ? emptyAnchor !== undefined
+      ? `File is empty. Use replace on ${emptyAnchor}${HASH_SEP} to insert content.`
+      : "File is empty. Use replace to insert content."
     : noticesBlock
       ? `${successPrefix}${lineSummary}${noticesBlock}`
       : `${successPrefix}${lineSummary}`;

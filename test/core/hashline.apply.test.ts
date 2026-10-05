@@ -102,15 +102,14 @@ describe("applyEdit - noop detection", () => {
 		expect(result.noopEdit).toBeDefined();
 	});
 
-	it("rejects deleting an entire non-empty file", async () => {
+	it("empties a file when the whole range is deleted", async () => {
 		const content = "aaa\nbbb";
 		const edit: HEdit = {
 			hash_bounds: [await makeTag(content, 1, home.testPath), await makeTag(content, 2, home.testPath)],
 			content_lines: [],
 		};
-		await expect(async () => applyWithAnchors(content, edit)).rejects.toThrow(
-			/^\[E_WOULD_EMPTY\]/,
-		);
+		const result = await applyWithAnchors(content, edit);
+		expect(result.content).toBe("");
 	});
 
 	it("allows whole-file rewrite when the final content is non-empty", async () => {
@@ -197,7 +196,8 @@ describe("applyEdit - edge cases (empty, single-line, no trailing newline)", () 
 	it("deletes the only line in a single-line file without trailing newline", async () => {
 		const content = "hello";
 		const edit: HEdit = { hash_bounds: [await makeTag(content, 1, home.testPath), await makeTag(content, 1, home.testPath)], content_lines: [] };
-		await expect(applyWithAnchors(content, edit)).rejects.toThrow(/^\[E_WOULD_EMPTY\]/);
+		const result = await applyWithAnchors(content, edit);
+		expect(result.content).toBe("");
 	});
 
 	it("replaces a line in a file with no trailing newline", async () => {

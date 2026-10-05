@@ -203,25 +203,24 @@ describe("regReplace", () => {
     });
   });
 
-  it("rejects deleting an entire non-empty file", async () => {
+  it("deletes an entire non-empty file", async () => {
     await withTempFile("sample.txt", "aaa\nbbb\n", async ({ cwd }) => {
       const { pi, getTool } = makeFakePiRegistry();
       regReplace(pi);
       const tool = getTool("replace");
       const hashes = await lineHashes("aaa\nbbb\n", join(cwd, "sample.txt"));
 
-      await expect(
-        tool.execute(
-          "e1",
-          {
-            remove_from: hashes[0]!, remove_to: hashes[1]!,
-            text: [],
-          },
-          undefined,
-          undefined,
-          { cwd } as any,
-        ),
-      ).rejects.toThrow(/E_WOULD_EMPTY/);
+      const result = await tool.execute(
+        "e1",
+        {
+          remove_from: hashes[0]!, remove_to: hashes[1]!,
+          text: [],
+        },
+        undefined,
+        undefined,
+        { cwd } as any,
+      );
+      expect(result.content[0].text).toContain("File is empty");
     });
   });
 

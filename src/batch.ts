@@ -8,7 +8,6 @@ import { resolveInCwd, writeAtomic, type FileIdentity } from "./fs-write";
 import {
   AnchorMismatchError,
   RangeStaleError,
-  assertNotEmpty,
   changedRange,
   lineHashes,
   planEdit,
@@ -799,7 +798,9 @@ async function finishBatch(member: PlannedMember, signal?: AbortSignal): Promise
     }
   }
   const composed = composeBatchLines(base.content, effectivePieces);
-  const spans = pieceMappingSpans(effectivePieces);
+  const spans = composed.length === 0
+    ? [{ start: 0, end: base.hashes.length - 1, replacementCount: 1 }]
+    : pieceMappingSpans(effectivePieces);
   const resultSeparators = separatorsForSpans(base.separators, base.hashes.length, spans, composed, base.ending);
   applySpanEndings(resultSeparators, effectivePieces.map((piece) => ({
     start: piece.start - 1,
@@ -813,7 +814,6 @@ async function finishBatch(member: PlannedMember, signal?: AbortSignal): Promise
   const originalBytes = base.bom + joinSeparators(base.content, base.separators);
   try {
     await throwIfStrictInput(dedupeWarnings(warnings));
-    assertNotEmpty(base.content, composed);
     assertLineLimit(composed, paths.displayPath, MAX_HASH_LINES);
     assertByteLimit(finalBytes, paths.displayPath);
   } catch (error) {
@@ -1030,7 +1030,9 @@ async function finishBatch(member: PlannedMember, signal?: AbortSignal): Promise
     changed.details.diffLineNumbers?.unshift(null);
   }
   try {
-    serveRows(runtime.target, resultHashes, splitLines(composed), servedHashesFromDiff(changed.details.diff));
+    const wanted = servedHashesFromDiff(changed.details.diff);
+    if (composed.length === 0) wanted.push(...resultHashes);
+    serveRows(runtime.target, resultHashes, splitLines(composed), wanted);
   } catch (error) {
     console.error("Failed to mark batch diff served:", error);
   }

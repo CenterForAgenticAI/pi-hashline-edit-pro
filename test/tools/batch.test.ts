@@ -759,11 +759,12 @@ describe("same-turn edit batches", () => {
     });
   });
 
-  it("refuses a batch that would empty the file", async () => {
+  it("commits a batch that empties the file and serves the empty-line anchor", async () => {
     await withTempFile("sample.txt", "a\nb\n", async ({ cwd, path }) => {
       const { getTool, handlers, ctx } = await setupBatchTools(cwd);
       const readTool = getTool("read");
       const editTool = getTool("replace");
+      const undoTool = getTool("undo_last_change");
 
       const firstRead = await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx);
       const text = firstRead.content[0].text as string;
@@ -776,34 +777,25 @@ describe("same-turn edit batches", () => {
       ]);
       await (handlers.get("message_end")!({ type: "message_end", message }, ctx) as Promise<unknown>);
 
-      const first = await editTool.execute(
-        "e1",
-        { remove_from: aRef, remove_to: aRef, text: [] },
-        undefined,
-        undefined,
-        ctx,
-      );
+      const first = await editTool.execute("e1", { remove_from: aRef, remove_to: aRef, text: [] }, undefined, undefined, ctx);
       expect(first.content[0].text).toBe("In batch 1 (queued)");
 
-      let failure = "";
-      try {
-        await editTool.execute(
-          "e2",
-          { remove_from: bRef, remove_to: bRef, text: [] },
-          undefined,
-          undefined,
-          ctx,
-        );
-      } catch (error) {
-        failure = error instanceof Error ? error.message : String(error);
-      }
-      expect(failure).toContain("[E_WOULD_EMPTY]");
-      expect(await readFile(path, "utf-8")).toBe("a\nb\n");
+      const last = await editTool.execute("e2", { remove_from: bRef, remove_to: bRef, text: [] }, undefined, undefined, ctx);
+      expect(last.details.metrics.classification).toBe("applied");
+      const lastText = last.content[0].text as string;
+      expect(lastText).toContain("File is empty. Use replace on ");
+      expect(await readFile(path, "utf-8")).toBe("");
+      const emptyAnchor = lastText.match(/([A-Za-z]{4})│/)![1]!;
+      expect(emptyAnchor).not.toBe(aRef);
 
       await (handlers.get("turn_end")!(
         { type: "turn_end", turnIndex: 0, message, toolResults: [{ toolCallId: "e1" }, { toolCallId: "e2" }] },
         ctx,
       ) as Promise<unknown>);
+
+      const undone = await undoTool.execute("u1", { path: "sample.txt" }, undefined, undefined, ctx);
+      expect((undone.content[0] as { text: string }).text).toContain("Undone last change");
+      expect(await readFile(path, "utf-8")).toBe("a\nb\n");
     });
   });
 

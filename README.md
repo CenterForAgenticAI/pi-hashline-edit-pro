@@ -201,7 +201,7 @@ Example: read showed `Hasu│old` and `arvm│old2`; to replace both:
 ```
 
 Single line: use the same anchor for `remove_from` and `remove_to`.
-A deletion keeps blank lines at the edges of the removed range, so the separators around a block survive the edit; target a blank line on its own to delete it.
+A deletion keeps blank lines at the edges of the removed range, so the separators around a block survive the edit; target a blank line on its own to delete it. Deleting every line empties the file; the result names the new empty-line anchor, so a follow-up `replace` on it can seed content without a `read`.
 
 The extension checks the request before any file I/O, so a bad request never touches the file.
 
@@ -449,7 +449,6 @@ Full reference:
 | `[H_INDENT_MISMATCH]` | The new line has fewer leading whitespace characters than a structurally similar row (a reference row near the anchor line for an insert, or the replaced line). The edit applied as sent; the one-line hint names both counts and the reference anchor, for example `[H_INDENT_MISMATCH] new line has 0 leading whitespace characters; Kq3f│ has 2.` Copied or moved blocks are not checked, because their indentation comes from the source lines. |
 | `[H_SEPARATOR_MOVED]` | An insert landed its text directly against the anchor line, and the blank line that separated the anchor from its neighbor was displaced to the other side of the inserted text. The edit applied as sent; the one-line hint names the anchor and which side lost the blank line, for example `[H_SEPARATOR_MOVED] blank separator above Kq3f│ was displaced; add a blank line before Kq3f│ if unintended.` |
 | `[H_SEPARATOR_LOST]` | A pure deletion removed a run of blank lines that sat between two content lines. The edit applied as sent; the one-line hint names the two surviving anchors and the removed count, for example `[H_SEPARATOR_LOST] deletion removed 2 blank lines between Aaaa│ and Dddd│.` |
-| `[E_WOULD_EMPTY]` | An edit would empty a non-empty file; use `write` instead. A cross-file `move` may empty its source file. |
 | `[E_NOT_FOUND]` | The path does not exist. |
 | `[E_ACCESS]` | The file is not readable or writable. |
 | `[E_NOT_TEXT]` | The path is a directory, binary file, image, or UTF-16/UTF-32 encoded text; hashline editing only supports text files. |

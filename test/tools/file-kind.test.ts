@@ -95,22 +95,21 @@ describe("file kind guards in tools", () => {
     });
   });
 
-  it("edit rejects empty file deletion", async () => {
+  it("edit empties a file when its only line is deleted", async () => {
     await withTempFile("empty.txt", "a\n", async ({ cwd }) => {
       const { ctx, editTool } = setupIntegrationTest(cwd);
       const hashes = await lineHashes("a\n", join(cwd, "empty.txt"));
 
-      await expect(
-        editTool.execute(
-          "e1",
-          {
-            remove_from: hashes[0]!, remove_to: hashes[0]!, text: [],
-          },
-          undefined,
-          undefined,
-          ctx,
-        ),
-      ).rejects.toThrow(/E_WOULD_EMPTY/);
+      const result = await editTool.execute(
+        "e1",
+        {
+          remove_from: hashes[0]!, remove_to: hashes[0]!, text: [],
+        },
+        undefined,
+        undefined,
+        ctx,
+      );
+      expect(result.content[0].text).toContain("File is empty");
     });
   });
   it("read rejects files over the byte limit with E_FILE_TOO_LARGE", async () => {

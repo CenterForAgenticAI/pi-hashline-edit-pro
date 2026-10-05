@@ -1,5 +1,5 @@
 Replace a range of lines (or a single line) in a text file by anchor. `remove_from` and `remove_to` are the 4-character anchors of the first and last line to remove, and `text` is one string holding the exact replacement text. JSON decoding happens once, before the tool; the tool writes the string it receives and never decodes — `\uXXXX` is the character, `\\uXXXX` the literal text. The text is written exactly as given, and nothing else in the file changes.
-To change only part of a line without retyping the rest, use `replace_match` instead; it preserves every character the request does not name.
+To change only part of a line without retyping the rest, use `replace_match` instead; it preserves every character the request does not name. Deleting every line empties the file; the result names the new empty-line anchor, so a follow-up `replace` on it can seed content without a `read`.
 
 Same-file calls in one message batch: earlier calls reply `In batch N (queued)` and the last call shows the combined diff, with one undo for the whole batch.
 

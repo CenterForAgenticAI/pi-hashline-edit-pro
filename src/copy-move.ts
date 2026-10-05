@@ -592,7 +592,6 @@ async function executeCrossFile(
       accessMode: constants.R_OK | constants.W_OK,
       signal,
       preloadedNorm: prepared.sourcePreload,
-      allowEmpty: true,
       preserveDeletionSeparators: false,
     });
     return commitMovePair({
@@ -756,7 +755,6 @@ async function executeBatchCrossMove(
       accessMode: constants.R_OK | constants.W_OK,
       signal,
       preloadedNorm: prepared.sourcePreload,
-      allowEmpty: true,
       preserveDeletionSeparators: false,
     });
   } catch (error) {
@@ -841,7 +839,6 @@ export async function transferPreview(kind: TransferKind, request: unknown, cwd:
       accessMode: constants.R_OK,
       noPersist: true,
       preloadedNorm: prepared.sourcePreload,
-      allowEmpty: true,
       preserveDeletionSeparators: false,
       signal,
     });

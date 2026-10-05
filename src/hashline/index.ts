@@ -52,5 +52,4 @@ export {
 	fmtRegion,
 	fmtRow,
 	changedRange,
-	assertNotEmpty,
 } from "./apply";

@@ -50,13 +50,6 @@ type NoopSpan = {
 	loc: string;
 	currentContent: string;
 };
-export function assertNotEmpty(originalContent: string, result: string): void {
-	if (originalContent.length > 0 && result.length === 0) {
-		throw new Error(
-			"[E_WOULD_EMPTY] A replace cannot empty a non-empty file. Use `write` to clear the file."
-		);
-	}
-}
 
 function resToSpan(
   edit: RHEdit,
@@ -218,7 +211,6 @@ export function applyEdit(
 	precomputedHashes?: string[],
 	filePath?: string,
 	servedHashes?: ReadonlyMap<string, string>,
-	allowEmpty = false,
 	stripWarning?: StripWarningLocation,
 	): {
 	content: string;
@@ -247,7 +239,6 @@ export function applyEdit(
 	}
 
 	const result = assemble(content, spanResult, signal);
-	if (!allowEmpty) assertNotEmpty(content, result);
 	const range = changedRange(content, result);
 
 	return {

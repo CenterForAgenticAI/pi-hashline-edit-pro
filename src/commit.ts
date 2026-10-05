@@ -153,8 +153,10 @@ export async function commitEdit(pipe: PipelineResult, meta: CommitMeta): Promis
     ...(span ? { spans: [span] } : {}),
   };
   const changed = buildChanged(successInput, meta.verb, await getDiffContextLines());
-  if (changed.details.diff) {
-    serveRows(mutationTargetPath, resultHashes, splitLines(pipe.result), servedHashesFromDiff(changed.details.diff));
+  if (changed.details.diff || pipe.result.length === 0) {
+    const wanted = servedHashesFromDiff(changed.details.diff);
+    if (pipe.result.length === 0) wanted.push(...resultHashes);
+    serveRows(mutationTargetPath, resultHashes, splitLines(pipe.result), wanted);
   }
   return changed;
 }

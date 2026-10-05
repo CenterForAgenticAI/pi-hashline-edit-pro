@@ -157,7 +157,7 @@ describe("buildChanged", () => {
       snapshotId: "snap1",
       editMeta: { editsAttempted: 1, noopEditsCount: 0, firstChangedLine: 1, lastChangedLine: 2, addedLines: 0, removedLines: 2 },
     });
-    expect(output.content[0].text).toBe("File is empty. Use replace to insert content.");
+    expect(output.content[0].text).toBe(`File is empty. Use replace on ${resultHashes[0]}│ to insert content.`);
   });
 
   it("computes added_lines and removed_lines from editMeta", async () => {
