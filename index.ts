@@ -8,6 +8,7 @@ import { regCopy, regMove } from "./src/copy-move";
 import { regGrep } from "./src/grep";
 import { regUndo, clearUndo } from "./src/replace-undo";
 import { regRead, fmtReadPreview } from "./src/read";
+import { ANCHOR_TOOL_NAMES, modelDisabled, type ModelLike } from "./src/model-gate";
 import { buildAutoReadAllInjection, autoReadAllBudget } from "./src/auto-read-all";
 import { clearAutoReadAllComplete } from "./src/auto-read-all-state";
 import type { RMetrics } from "./src/replace-response";
@@ -16,6 +17,7 @@ import { extractHints, extractWarnings } from "./src/replace-render";
 import { MAX_HASH_LINES } from "./src/hashline";
 import type { AutoReadAllMode } from "./src/config";
 import {
+  readConfig,
   readConfigWithStatus,
   toggleAutoRead,
   cycleAutoReadAllMode,
@@ -26,6 +28,7 @@ import {
   toggleStrictInput,
   adjustDiffContextLines,
   setAutoReadAllIgnoreFromText,
+  setDisableOnModelsFromText,
 } from "./src/config";
 import { loadHashStore, pruneMissing } from "./src/hash-store";
 import { initRegistry, gcRegistrySidecars, clearRegistry, freeAnchors, sessionKeyFor, withAnchorSession, releaseRegistrySession, formatAnchorReclaimNotice, takeReclaimedPaths } from "./src/anchor-registry";
@@ -51,13 +54,16 @@ export default function (pi: ExtensionAPI): void {
   regMove(pi);
   regGrep(pi);
   regUndo(pi);
-  registerWriteHook(pi);
+  registerWriteHook(pi, (model) => modelDisabled(model, disableOnModels));
 
   let autoRead = true;
   let autoReadAll: AutoReadAllMode = "off";
   let autoReadAllIgnore: string[] = [];
+  let disableOnModels: string[] = [];
   let autoReadAllInjected = false;
   let grepWasActive = false;
+  const baseAnchorTools = new Set<string>();
+  let gateApplied = false;
 
   async function refreshEditTools(): Promise<void> {
     try {
@@ -75,9 +81,37 @@ export default function (pi: ExtensionAPI): void {
     }
   }
 
+  async function syncModelGate(model: ModelLike | undefined): Promise<void> {
+    if (disableOnModels.length > 0 && modelDisabled(model, disableOnModels)) {
+      const active = pi.getActiveTools();
+      const next = active.filter((tool) => !ANCHOR_TOOL_NAMES.includes(tool));
+      if (grepWasActive && !next.includes("grep")) next.push("grep");
+      pi.setActiveTools(next);
+      gateApplied = true;
+      return;
+    }
+    if (!gateApplied) return;
+    gateApplied = false;
+    const config = await readConfig();
+    const enabled = ANCHOR_TOOL_NAMES.filter((tool) => {
+      if (!baseAnchorTools.has(tool)) return false;
+      if (tool === "replace_match") return config.replaceMatchEnabled !== false;
+      if (tool === "copy" || tool === "move") return config.copyMoveEnabled !== false;
+      if (tool === "anchor_grep") return config.anchorGrepEnabled === true;
+      return true;
+    });
+    let next = [...new Set([...pi.getActiveTools(), ...enabled])];
+    if (enabled.includes("anchor_grep") && grepWasActive) next = next.filter((tool) => tool !== "grep");
+    pi.setActiveTools(next);
+  }
+
   pi.on("session_start", async (_event, ctx) => withAnchorSession(ctx, async () => {
     const active = pi.getActiveTools();
     grepWasActive = active.includes("grep");
+    baseAnchorTools.clear();
+    for (const tool of ANCHOR_TOOL_NAMES) {
+      if (active.includes(tool)) baseAnchorTools.add(tool);
+    }
     pi.setActiveTools(active.filter((t) => t !== "edit"));
     await initHasher();
     loadHashStore()
@@ -97,6 +131,7 @@ export default function (pi: ExtensionAPI): void {
     autoRead = config.autoRead;
     autoReadAll = config.autoReadAll ?? "off";
     autoReadAllIgnore = config.autoReadAllIgnore ?? [];
+    disableOnModels = config.disableOnModels ?? [];
     const sessionBranch = (ctx as { sessionManager?: { getBranch?: () => Array<{ type?: string; customType?: string }> } }).sessionManager?.getBranch?.() ?? [];
     autoReadAllInjected = sessionBranch.some((entry) => entry.type === "custom_message" && entry.customType === AUTO_READ_ALL_CUSTOM_TYPE);
     await refreshEditTools();
@@ -108,6 +143,7 @@ export default function (pi: ExtensionAPI): void {
         return true;
       }),
     );
+    await syncModelGate(ctx.model);
     const debugValue = process.env.PI_HASHLINE_DEBUG;
     if (debugValue === "1" || debugValue === "true") {
       ctx.ui.notify(`Hashline Edit mode active`, "info");
@@ -123,9 +159,14 @@ export default function (pi: ExtensionAPI): void {
       console.error("Failed to release anchor registry session:", error);
     }
   });
+  pi.on("model_select", async (event, ctx) => withAnchorSession(ctx, async () => {
+    await syncModelGate(event.model);
+  }));
 
   pi.on("before_agent_start", async (_event, ctx) => withAnchorSession(ctx, async () => {
+    await syncModelGate(ctx.model);
     if (autoReadAll === "off" || autoReadAllInjected) return;
+    if (modelDisabled(ctx.model, disableOnModels)) return;
     autoReadAllInjected = true;
     try {
       const injection = await buildAutoReadAllInjection(ctx.cwd, autoReadAllBudget(ctx.model), autoReadAll, autoReadAllIgnore, sessionKeyFor(ctx));
@@ -139,7 +180,7 @@ export default function (pi: ExtensionAPI): void {
   }));
 
   pi.registerCommand("hashline-config", {
-    description: "Open the hashline settings window (auto-read, auto-read all, ignore folders/files, diff context, grep, copy/move, replace_match, path, strict input)",
+    description: "Open the hashline settings window (auto-read, auto-read all, ignore folders/files, disable on models, diff context, grep, copy/move, replace_match, path, strict input)",
     handler: async (_args, ctx) => {
       if (!ctx.hasUI) {
         ctx.ui.notify("/hashline-config requires interactive mode", "error");
@@ -154,25 +195,35 @@ export default function (pi: ExtensionAPI): void {
             if (key === "autoRead") autoRead = await toggleAutoRead();
             else if (key === "autoReadAll") { autoReadAll = await cycleAutoReadAllMode(); autoReadAllInjected = false; }
             else if (key === "autoReadAllIgnore") autoReadAllIgnore = await setAutoReadAllIgnoreFromText(value ?? "");
+            else if (key === "disableOnModels") disableOnModels = await setDisableOnModelsFromText(value ?? "");
             else if (key === "diffContextLines") await adjustDiffContextLines(delta ?? 1);
             else if (key === "anchorGrepEnabled") {
               const enabled = await toggleAnchorGrep();
               const active = pi.getActiveTools();
               pi.setActiveTools(enabled ? [...new Set([...active.filter((t) => t !== "grep"), "anchor_grep"])] : [...new Set([...active.filter((t) => t !== "anchor_grep"), ...(grepWasActive ? ["grep"] : [])])]);
+              if (enabled) baseAnchorTools.add("anchor_grep");
+              else baseAnchorTools.delete("anchor_grep");
             }
             else if (key === "copyMoveEnabled") {
               const enabled = await toggleCopyMove();
               const active = pi.getActiveTools();
               pi.setActiveTools(enabled ? [...new Set([...active, "copy", "move"])] : active.filter((t) => t !== "copy" && t !== "move"));
+              for (const tool of ["copy", "move"]) {
+                if (enabled) baseAnchorTools.add(tool);
+                else baseAnchorTools.delete(tool);
+              }
             }
             else if (key === "replaceMatchEnabled") {
               const enabled = await toggleReplaceMatch();
               const active = pi.getActiveTools();
               pi.setActiveTools(enabled ? [...new Set([...active, "replace_match"])] : active.filter((t) => t !== "replace_match"));
+              if (enabled) baseAnchorTools.add("replace_match");
+              else baseAnchorTools.delete("replace_match");
             }
             else if (key === "requirePath") await toggleRequirePath();
             else if (key === "strictInput") await toggleStrictInput();
             await refreshEditTools();
+            await syncModelGate(ctx.model);
           },
         });
         await overlay.load();
@@ -208,6 +259,7 @@ export default function (pi: ExtensionAPI): void {
   });
   pi.on("tool_result", async (event, ctx) => withAnchorSession(ctx, async () => {
     if (event.isError) return;
+    const gated = modelDisabled(ctx.model, disableOnModels);
 
     if (event.toolName === "write") {
       const writtenPath = (event.input as Record<string, unknown>)?.path;
@@ -221,7 +273,7 @@ export default function (pi: ExtensionAPI): void {
           console.error("Failed to clear undo after write:", error);
         }
       }
-      if (!autoRead) return;
+      if (!autoRead || gated) return;
       if (typeof writtenPath !== "string") return;
       try {
         resolvedPath ??= (await resolveInCwd(writtenPath, ctx.cwd)).resolved;
@@ -268,7 +320,7 @@ export default function (pi: ExtensionAPI): void {
       event.toolName !== "move" &&
       event.toolName !== "undo_last_change"
     ) return;
-    if (!autoRead) return;
+    if (!autoRead || gated) return;
 
     const metrics = (event.details as { metrics?: RMetrics } | undefined)?.metrics;
     if (metrics?.classification === "noop") return;

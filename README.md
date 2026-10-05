@@ -322,7 +322,7 @@ The hashline tools are sequential in pi, so a message that contains one runs all
 
 ## Auto-read
 
-Auto-read is enabled by default. After a successful `write`, the extension reads the file and appends an `--- Auto-read (hashline anchors) ---` block, so you get fresh `anchor│content` anchors without a separate `read` call.
+Auto-read is enabled by default. After a successful `write`, the extension reads the file and appends an `--- Auto-read (hashline anchors) ---` block, so you get fresh `anchor│content` anchors without a separate `read` call. A model matched by `disableOnModels` skips the block, and the post-edit diff substitution below is skipped with it.
 
 After `replace`, `replace_match`, `insert`, `copy`, `move`, and `undo_last_change`, the result shows the post-edit diff. Inside a same-message batch, only the batch's last call shows the combined diff, headed by a `batch N:` line; earlier calls reply `In batch N (queued)`. The `+anchor│` and ` anchor│` rows carry the current anchors, so follow-up edits can anchor on the diff directly. The `-anchor│` rows show removed lines with their old anchors, which are stale after the edit. When the context line next to a change is blank or whitespace-only, one more context line is shown in that direction, so the change stays anchored to visible content. Call `read` when you want the full file's anchors.
 
@@ -334,7 +334,7 @@ Auto-read keeps the same 50KB and 2000-line budget as `read`. Auto-read and Diff
 
 Auto-read all is off by default and has three modes, selected in `/hashline-config`: `off` injects nothing, `on` discovers every file in the working directory that is not git-ignored (`git ls-files`, falling back to `ripgrep`, then to a directory walk), and `git` uses `git ls-files` only, injecting nothing when the working directory is not a git repository. On the first turn of a session, the extension discovers the files, reads each one, and attaches the resulting `anchor│content` rows to the conversation as one extension message before the model answers. Those anchors are served exactly like `read` output, so the model can `replace` and `insert` immediately without calling `read` first. The message is injected once per session; resumed, forked, and cloned sessions that already contain it skip the injection.
 
-Files are filtered before injection: symlinks, directories, image extensions (including SVG), binary files (a NUL byte in the first 8KB), files over 200KB, any path with a vendored segment (vendor, node_modules, bower_components, third_party, thirdparty, jspm_packages, .venv, venv, site-packages, __pycache__, .tox, .gradle, .terraform, Pods, Carthage, DerivedData, coreui, coreui-icons, case-insensitive), and vendored or generated names and patterns (*.min.js, *.min.css, *.min.mjs, *-min.js, *-min.css, *.bundle.*, *.chunk.*, *.umd.js, *.map, *.lock, package-lock.json, yarn.lock, composer.lock, Gemfile.lock, Cargo.lock, poetry.lock, Pipfile.lock, go.sum, flake.lock, *.generated.*, *.gen.*, *_pb2.py, *.pb.go, *.g.dart, *.freezed.dart, *.designer.cs, *.g.cs, *.snap, .eslintcache, coreui-icons.*, coreui.css) are skipped. The attachment stops at 500 files or at a byte budget derived from the model context window (200KB floor, 2MB ceiling), and it never drops below one file. Skipped and not-attached files are named at the end of the message so the model can `read` them on demand.
+Files are filtered before injection: symlinks, directories, image extensions (including SVG), binary files (a NUL byte in the first 8KB), files over 200KB, any path with a vendored segment (vendor, node_modules, bower_components, third_party, thirdparty, jspm_packages, .venv, venv, site-packages, __pycache__, .tox, .gradle, .terraform, Pods, Carthage, DerivedData, coreui, coreui-icons, case-insensitive), and vendored or generated names and patterns (*.min.js, *.min.css, *.min.mjs, *-min.js, *-min.css, *.bundle.*, *.chunk.*, *.umd.js, *.map, *.lock, package-lock.json, yarn.lock, composer.lock, Gemfile.lock, Cargo.lock, poetry.lock, Pipfile.lock, go.sum, flake.lock, *.generated.*, *.gen.*, *_pb2.py, *.pb.go, *.g.dart, *.freezed.dart, *.designer.cs, *.g.cs, *.snap, .eslintcache, coreui-icons.*, coreui.css) are skipped. The attachment stops at 500 files or at a byte budget derived from the model context window (200KB floor, 2MB ceiling), and it never drops below one file. Skipped and not-attached files are named at the end of the message so the model can `read` them on demand. A model matched by `disableOnModels` skips the injection entirely.
 
 Each attached file is shown as `=== path ===` followed by its `anchor│content` rows. Edit directly from the attachment with replace and insert, so no `read` is needed. Files attach whole.
 
@@ -346,7 +346,7 @@ The setting lives in `/hashline-config` as Auto-read all and in `config.json` as
 
 | Command | Description |
 | --- | --- |
-| `/hashline-config` | Open the settings window: auto-read anchors, auto-read all mode, ignore folders/files, diff context lines, `anchor_grep` tool, copy/move tools, replace_match tool, required `path`, and strict input. Persists across sessions. |
+| `/hashline-config` | Open the settings window: auto-read anchors, auto-read all mode, ignore folders/files, disable on models, diff context lines, `anchor_grep` tool, copy/move tools, replace_match tool, required `path`, and strict input. Persists across sessions. |
 | `/clear-anchors` | Clear the session's anchor claims. Anchors are re-claimed on the next `read`. |
 
 Settings live in `~/.config/pi-hashline-edit-pro/config.json`, created when a setting is first changed in `/hashline-config`:
@@ -361,7 +361,8 @@ Settings live in `~/.config/pi-hashline-edit-pro/config.json`, created when a se
   "replaceMatchEnabled": true,
   "requirePath": false,
   "strictInput": false,
-  "diffContextLines": 1
+  "diffContextLines": 1,
+  "disableOnModels": []
 }
 ```
 
@@ -376,6 +377,9 @@ Settings live in `~/.config/pi-hashline-edit-pro/config.json`, created when a se
 | `requirePath` | Require path | `false` | `replace`, `replace_match`, `insert`, `copy`, and `move` require a `path` argument that must match anchor ownership. |
 | `strictInput` | Strict input | `false` | Reject auto-fixable slips (`[W_BAD_SHAPE]`, `[W_BAD_REF]`, `[W_INVALID_PATCH]`, `[W_BARE_HASH_PREFIX]`) with `[E_BAD_SHAPE]` instead of applying them with a warning. |
 | `diffContextLines` | Diff context | `1` | Surrounding lines in post-edit diffs, 0-10 (needs Auto-read). |
+| `disableOnModels` | Disable on models | `[]` | Model globs matched case-insensitively against `provider/id`, the bare `id`, and `api`, with `*` and `?` wildcards. A matching model gets no hashline tools, no auto-read, and no write-echo refusal. |
+
+`disableOnModels` turns off the whole anchored surface for the models you name, so another edit tool (`apply_patch`, a shell read) can own the session without competing instructions. A match removes `read`, `replace`, `replace_match`, `insert`, `copy`, `move`, `anchor_grep`, and `undo_last_change` from the active tools, restoring the built-in `grep` when it was active, and it also skips the auto-read-all injection, the auto-read block after `write`, the post-edit diff substitution, and the `write` hook that refuses a `write` echoing a served anchor. The list is checked on `session_start`, on `model_select`, and again on `before_agent_start`, so a model change inside a session switches the surface immediately and another extension cannot re-add the tools mid-session. The default `[]` leaves every model unchanged.
 
 When `PI_HASHLINE_DIR` is unset or empty, non-Windows platforms honor `XDG_CONFIG_HOME` when set (falling back to `~/.config`); on Windows the directory always uses `~/.config`, where `~` is `%USERPROFILE%`. To move the directory explicitly, see [Isolated state](#isolated-state).
 

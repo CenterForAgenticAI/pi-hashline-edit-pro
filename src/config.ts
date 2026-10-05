@@ -20,6 +20,7 @@ export interface Config {
   requirePath?: boolean;
   strictInput?: boolean;
   diffContextLines?: number;
+  disableOnModels?: string[];
 }
 
 const DEFAULT_CONFIG: Config = {
@@ -31,7 +32,8 @@ const DEFAULT_CONFIG: Config = {
   autoReadAllIgnore: [],
   requirePath: false,
   strictInput: false,
-  diffContextLines: DEFAULT_DIFF_CONTEXT_LINES
+  diffContextLines: DEFAULT_DIFF_CONTEXT_LINES,
+  disableOnModels: []
 };
 
 function parseAutoReadAllMode(value: unknown): AutoReadAllMode {
@@ -45,13 +47,13 @@ export function normalizeAutoReadAllIgnoreEntry(entry: string): string {
   return entry.trim().replace(/\\/g, "/").replace(/^\/+|\/+$/g, "").replace(/\/{2,}/g, "/");
 }
 
-export function parseAutoReadAllIgnore(value: unknown): string[] {
+function parseStringList(value: unknown, normalize: (entry: string) => string): string[] {
   const raw = typeof value === "string" ? value.split(",") : Array.isArray(value) ? value : [];
   const seen = new Set<string>();
   const out: string[] = [];
   for (const item of raw) {
     if (typeof item !== "string") continue;
-    const cleaned = normalizeAutoReadAllIgnoreEntry(item);
+    const cleaned = normalize(item);
     if (cleaned.length === 0) continue;
     const lower = cleaned.toLowerCase();
     if (seen.has(lower)) continue;
@@ -59,6 +61,14 @@ export function parseAutoReadAllIgnore(value: unknown): string[] {
     out.push(cleaned);
   }
   return out;
+}
+
+export function parseAutoReadAllIgnore(value: unknown): string[] {
+  return parseStringList(value, normalizeAutoReadAllIgnoreEntry);
+}
+
+export function parseDisableOnModels(value: unknown): string[] {
+  return parseStringList(value, (entry) => entry.trim());
 }
 
 export function normalizeDiffContextLines(value: unknown): number {
@@ -83,6 +93,7 @@ function parseConfig(content: string): Config {
   const strictInput = parsed.strictInput;
   const diffContextLines = parsed.diffContextLines;
   const autoReadAllIgnore = parsed.autoReadAllIgnore;
+  const disableOnModels = parsed.disableOnModels;
   return {
     autoRead: typeof autoRead === "boolean" ? autoRead : DEFAULT_CONFIG.autoRead,
     anchorGrepEnabled: typeof anchorGrepEnabled === "boolean" ? anchorGrepEnabled : DEFAULT_CONFIG.anchorGrepEnabled,
@@ -93,6 +104,7 @@ function parseConfig(content: string): Config {
     strictInput: typeof strictInput === "boolean" ? strictInput : DEFAULT_CONFIG.strictInput,
     diffContextLines: normalizeDiffContextLines(diffContextLines),
     autoReadAllIgnore: parseAutoReadAllIgnore(autoReadAllIgnore),
+    disableOnModels: parseDisableOnModels(disableOnModels),
   };
 }
 
@@ -242,4 +254,15 @@ export async function setAutoReadAllIgnore(dirs: string[]): Promise<string[]> {
 }
 export async function setAutoReadAllIgnoreFromText(text: string): Promise<string[]> {
   return setAutoReadAllIgnore(text.split(","));
+}
+export async function setDisableOnModels(patterns: string[]): Promise<string[]> {
+  let next: string[] = [];
+  await updateConfig((c) => {
+    next = parseDisableOnModels(patterns);
+    c.disableOnModels = next;
+  });
+  return next;
+}
+export async function setDisableOnModelsFromText(text: string): Promise<string[]> {
+  return setDisableOnModels(text.split(","));
 }

@@ -3,7 +3,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { discoverAutoReadAllFiles, buildAutoReadAllInjection, normalizeAutoReadAllIgnoreList, isExcludedByCustomIgnore } from "../../src/auto-read-all";
-import { parseAutoReadAllIgnore, setAutoReadAllIgnore, setAutoReadAllIgnoreFromText, readConfig } from "../../src/config";
+import { parseAutoReadAllIgnore, setAutoReadAllIgnore, setAutoReadAllIgnoreFromText, setDisableOnModels, readConfig } from "../../src/config";
 import { configRows, HashlineConfigOverlay } from "../../src/config-ui";
 import { makeTempDir, rmRetry, withTempDir } from "../support/fixtures";
 
@@ -188,13 +188,13 @@ describe("configRows ignore folders", () => {
     await withTempDir("ignore-rows-", async () => {
       await setAutoReadAllIgnore([]);
       const empty = configRows(await readConfig()).find((row) => row.key === "autoReadAllIgnore")!;
-      expect(empty.folders).toEqual([]);
+      expect(empty.entries).toEqual([]);
       expect(empty.label).toBe("Ignore folders/files");
       expect(empty.hint).toContain("globs");
       expect(empty.enabled).toBe(false);
       await setAutoReadAllIgnore(["docs", "tmp"]);
       const filled = configRows(await readConfig()).find((row) => row.key === "autoReadAllIgnore")!;
-      expect(filled.folders).toEqual(["docs", "tmp"]);
+      expect(filled.entries).toEqual(["docs", "tmp"]);
       expect(filled.enabled).toBe(true);
     });
   });
@@ -278,6 +278,22 @@ describe("HashlineConfigOverlay ignore editing", () => {
       expect(rendered).toContain("[2]");
       expect(rendered).toContain("Ignore folders");
       expect(rendered).toContain("docs");
+    });
+  });
+  it("edits the disable on models list from the overlay", async () => {
+    await withTempDir("disable-overlay-", async () => {
+      await setDisableOnModels([]);
+      const seen: Array<{ key: string; value?: string }> = [];
+      const overlay = makeOverlay(async (key, _delta, value) => {
+        seen.push({ key, value });
+      });
+      await overlay.load();
+      for (let step = 0; step < 9; step++) overlay.handleInput("j");
+      overlay.handleInput(" ");
+      for (const char of "openai/*") overlay.handleInput(char);
+      overlay.handleInput("\r");
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(seen).toEqual([{ key: "disableOnModels", value: "openai/*" }]);
     });
   });
 });

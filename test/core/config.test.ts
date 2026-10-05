@@ -11,7 +11,11 @@ import {
   readConfig,
   readConfigWithStatus,
   writeConfig,
+  parseDisableOnModels,
+  setDisableOnModels,
+  setDisableOnModelsFromText,
 } from "../../src/config";
+import { configRows } from "../../src/config-ui";
 import { configPath } from "../../src/paths";
 import { stat } from "fs/promises";
 import { withTempDir } from "../support/fixtures";
@@ -368,6 +372,44 @@ describe("config - diffContextLines", () => {
       expect(await adjustDiffContextLines(-5)).toBe(0);
       expect(await adjustDiffContextLines(50)).toBe(10);
       expect((await readConfig()).diffContextLines).toBe(10);
+    });
+  });
+});
+
+describe("config - disableOnModels", () => {
+  it("defaults to an empty list", async () => {
+    await withTempDir("pi-hashline-config-test-", async () => {
+      expect((await readConfig()).disableOnModels).toEqual([]);
+    });
+  });
+
+  it("parses arrays and comma-separated strings with trimming and dedupe", () => {
+    expect(parseDisableOnModels([" OpenAI/* ", "openai/*", "", 42])).toEqual(["OpenAI/*"]);
+    expect(parseDisableOnModels("openai/*, *gpt*,, *GPT*")).toEqual(["openai/*", "*gpt*"]);
+    expect(parseDisableOnModels(undefined)).toEqual([]);
+    expect(parseDisableOnModels(42)).toEqual([]);
+  });
+
+  it("persists globs through setDisableOnModels and its text form", async () => {
+    await withTempDir("pi-hashline-config-test-", async () => {
+      expect(await setDisableOnModels([" openai/* ", "openai/*"])).toEqual(["openai/*"]);
+      expect((await readConfig()).disableOnModels).toEqual(["openai/*"]);
+      expect(await setDisableOnModelsFromText("*gpt*, openai/*")).toEqual(["*gpt*", "openai/*"]);
+      expect((await readConfig()).disableOnModels).toEqual(["*gpt*", "openai/*"]);
+    });
+  });
+
+  it("exposes the disable row with its globs", async () => {
+    await withTempDir("pi-hashline-config-test-", async () => {
+      await setDisableOnModels([]);
+      const empty = configRows(await readConfig()).find((row) => row.key === "disableOnModels")!;
+      expect(empty.label).toBe("Disable on models");
+      expect(empty.entries).toEqual([]);
+      expect(empty.enabled).toBe(false);
+      await setDisableOnModels(["openai/*"]);
+      const filled = configRows(await readConfig()).find((row) => row.key === "disableOnModels")!;
+      expect(filled.entries).toEqual(["openai/*"]);
+      expect(filled.enabled).toBe(true);
     });
   });
 });

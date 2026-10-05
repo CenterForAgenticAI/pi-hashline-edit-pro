@@ -2,7 +2,7 @@ import { Key, matchesKey, visibleWidth } from "@earendil-works/pi-tui";
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import { readConfig, type Config } from "./config";
 
-export type ConfigToggleKey = "autoRead" | "autoReadAll" | "autoReadAllIgnore" | "anchorGrepEnabled" | "copyMoveEnabled" | "replaceMatchEnabled" | "requirePath" | "strictInput" | "diffContextLines";
+export type ConfigToggleKey = "autoRead" | "autoReadAll" | "autoReadAllIgnore" | "anchorGrepEnabled" | "copyMoveEnabled" | "replaceMatchEnabled" | "requirePath" | "strictInput" | "diffContextLines" | "disableOnModels";
 
 export interface ConfigRow {
   key: ConfigToggleKey;
@@ -12,7 +12,7 @@ export interface ConfigRow {
   mode?: string;
   cycle?: string[];
   value?: number;
-  folders?: string[];
+  entries?: string[];
   disabled?: boolean;
 }
 
@@ -20,13 +20,14 @@ export function configRows(config: Config): ConfigRow[] {
   return [
     { key: "autoRead", label: "Auto-read", hint: "Anchors after write + post-edit diffs", enabled: config.autoRead !== false },
     { key: "autoReadAll", label: "Auto-read all", hint: "Attach files on the first turn: off, on, git (git repos only)", enabled: (config.autoReadAll ?? "off") !== "off", mode: config.autoReadAll ?? "off", cycle: ["off", "on", "git"] },
-    { key: "autoReadAllIgnore", label: "Ignore folders/files", hint: "Extra folders, files, or globs skipped by auto-read all (comma-separated)", enabled: (config.autoReadAllIgnore ?? []).length > 0, folders: config.autoReadAllIgnore ?? [] },
+    { key: "autoReadAllIgnore", label: "Ignore folders/files", hint: "Extra folders, files, or globs skipped by auto-read all (comma-separated)", enabled: (config.autoReadAllIgnore ?? []).length > 0, entries: config.autoReadAllIgnore ?? [] },
     { key: "diffContextLines", label: "Diff context", hint: "Surrounding lines in post-edit diffs (needs Auto-read)", enabled: config.autoRead !== false, value: config.diffContextLines ?? 1, disabled: config.autoRead === false },
     { key: "anchorGrepEnabled", label: "Anchor grep", hint: "anchor_grep tool (builtin grep off while on)", enabled: config.anchorGrepEnabled === true },
     { key: "copyMoveEnabled", label: "Copy/move", hint: "copy and move tools (both off while disabled)", enabled: config.copyMoveEnabled !== false },
     { key: "requirePath", label: "Require path", hint: "replace, insert, copy, move need path (RPC visibility)", enabled: config.requirePath === true },
     { key: "strictInput", label: "Strict input", hint: "Reject auto-fixable slips instead of warnings", enabled: config.strictInput === true },
     { key: "replaceMatchEnabled", label: "Replace match", hint: "replace_match tool (off while disabled)", enabled: config.replaceMatchEnabled !== false },
+    { key: "disableOnModels", label: "Disable on models", hint: "Model globs (provider/id, model id, or api) that turn off read and the hashline tools (comma-separated)", enabled: (config.disableOnModels ?? []).length > 0, entries: config.disableOnModels ?? [] },
   ];
 }
 
@@ -45,19 +46,19 @@ function numberBox(theme: Theme, value: number, disabled?: boolean): string {
   if (disabled) return theme.fg("dim", `[${value}]`);
   return theme.fg("accent", `[${value}]`);
 }
-function ignoreBox(theme: Theme, folders: string[]): string {
-  return theme.fg("accent", `[${folders.length}]`);
+function listBox(theme: Theme, entries: string[]): string {
+  return theme.fg("accent", `[${entries.length}]`);
 }
-function formatIgnoreFolders(folders: string[]): string {
-  if (folders.length === 0) return "(empty)";
-  const joined = folders.join(", ");
+function formatList(entries: string[]): string {
+  if (entries.length === 0) return "(empty)";
+  const joined = entries.join(", ");
   return joined.length > 40 ? `${joined.slice(0, 37)}...` : joined;
 }
 
 export class HashlineConfigOverlay {
   private rows: ConfigRow[];
   private selected = 0;
-  private editingIgnore = false;
+  private editingList = false;
   private editBuffer = "";
 
   constructor(private readonly opts: { tui: { requestRender(force?: boolean): void }; theme: Theme; done: () => void; onToggle: (key: ConfigToggleKey, delta?: number, value?: string) => Promise<void> }) {
@@ -72,37 +73,37 @@ export class HashlineConfigOverlay {
     this.opts.tui.requestRender(true);
     void this.opts.onToggle(row.key, delta, value).then(async () => {
       this.rows = configRows(await readConfig());
-      this.editingIgnore = false;
+      this.editingList = false;
       this.opts.tui.requestRender(true);
     }).catch((error: unknown) => {
       console.error("Failed to toggle hashline setting:", error);
     });
   }
-  private startIgnoreEdit(row: ConfigRow): void {
-    this.editingIgnore = true;
-    this.editBuffer = (row.folders ?? []).join(", ");
+  private startListEdit(row: ConfigRow): void {
+    this.editingList = true;
+    this.editBuffer = (row.entries ?? []).join(", ");
     this.opts.tui.requestRender(true);
   }
-  private commitIgnoreEdit(): void {
+  private commitListEdit(): void {
     const row = this.rows[this.selected];
-    if (!row || row.key !== "autoReadAllIgnore") {
-      this.editingIgnore = false;
+    if (!row || row.entries === undefined) {
+      this.editingList = false;
       return;
     }
     const value = this.editBuffer;
-    this.editingIgnore = false;
+    this.editingList = false;
     this.runToggle(row, undefined, value);
   }
-  private cancelIgnoreEdit(): void {
-    this.editingIgnore = false;
+  private cancelListEdit(): void {
+    this.editingList = false;
     this.opts.tui.requestRender(true);
   }
 
   private toggleSelected(): void {
     const row = this.rows[this.selected];
     if (!row || row.disabled) return;
-    if (row.key === "autoReadAllIgnore") {
-      this.startIgnoreEdit(row);
+    if (row.entries !== undefined) {
+      this.startListEdit(row);
       return;
     }
     if (row.value !== undefined) {
@@ -129,13 +130,13 @@ export class HashlineConfigOverlay {
   }
 
   handleInput(data: string): void {
-    if (this.editingIgnore) {
+    if (this.editingList) {
       if (matchesKey(data, Key.escape) || data === "\x1b") {
-        this.cancelIgnoreEdit();
+        this.cancelListEdit();
         return;
       }
       if (matchesKey(data, Key.enter) || data === "\r" || data === "\n") {
-        this.commitIgnoreEdit();
+        this.commitListEdit();
         return;
       }
       if (data === "\x7f" || data === "\b" || data === "\x08") {
@@ -176,8 +177,8 @@ export class HashlineConfigOverlay {
       return;
     }
     const row = this.rows[this.selected];
-    if ((data === "e" || data === "E") && row && row.key === "autoReadAllIgnore" && !row.disabled) {
-      this.startIgnoreEdit(row);
+    if ((data === "e" || data === "E") && row && row.entries !== undefined && !row.disabled) {
+      this.startListEdit(row);
       return;
     }
     if (matchesKey(data, Key.escape) || data === "q") {
@@ -197,16 +198,16 @@ export class HashlineConfigOverlay {
     lines.push(theme.fg("border", `├${"─".repeat(innerWidth)}┤`));
     this.rows.forEach((row, index) => {
       const cursor = index === this.selected ? theme.fg("accent", "> ") : "  ";
-      const box = row.folders !== undefined ? ignoreBox(theme, row.folders) : row.value !== undefined ? numberBox(theme, row.value, row.disabled) : row.mode !== undefined ? modeBox(theme, row.mode) : row.enabled ? theme.fg("success", "[x]") : theme.fg("dim", "[ ]");
+      const box = row.entries !== undefined ? listBox(theme, row.entries) : row.value !== undefined ? numberBox(theme, row.value, row.disabled) : row.mode !== undefined ? modeBox(theme, row.mode) : row.enabled ? theme.fg("success", "[x]") : theme.fg("dim", "[ ]");
       const label = row.disabled ? theme.fg("dim", row.label) : index === this.selected ? theme.fg("accent", theme.bold(row.label)) : row.label;
-      const suffix = row.folders !== undefined ? ` — ${row.hint}: ${formatIgnoreFolders(row.folders)}` : ` — ${row.hint}`;
+      const suffix = row.entries !== undefined ? ` — ${row.hint}: ${formatList(row.entries)}` : ` — ${row.hint}`;
       lines.push(padRow(theme, innerWidth, `${cursor}${box} ${label} ${theme.fg("dim", suffix)}`));
-      if (row.key === "autoReadAllIgnore" && index === this.selected && this.editingIgnore) {
+      if (row.entries !== undefined && index === this.selected && this.editingList) {
         lines.push(padRow(theme, innerWidth, `  ${theme.fg("accent", "edit:")} ${this.editBuffer}█ ${theme.fg("dim", "(Enter save · Esc cancel · Ctrl-U clear)")}`));
       }
     });
     lines.push(theme.fg("border", `├${"─".repeat(innerWidth)}┤`));
-    const footer = this.editingIgnore ? " type to edit · Enter save · Esc cancel" : " ↑↓ navigate · space toggle · ←/→ or -/+ adjust · e edit list · q close";
+    const footer = this.editingList ? " type to edit · Enter save · Esc cancel" : " ↑↓ navigate · space toggle · ←/→ or -/+ adjust · e edit list · q close";
     lines.push(padRow(theme, innerWidth, theme.fg("dim", footer)));
     lines.push(theme.fg("border", `╰${"─".repeat(innerWidth)}╯`));
     return lines;

@@ -4,6 +4,7 @@ import { HASH_SEP } from "./hashline/hash";
 import { servedForPath, withAnchorSession } from "./anchor-registry";
 import { resolveInCwd } from "./fs-write";
 import { abortIf, splitLines, isRec } from "./utils";
+import type { ModelLike } from "./model-gate";
 
 const HASH_ECHO_RE = new RegExp(`^(?: *[0-9]+ ${HASH_SEP} )?[+ -]?(${HASH_CLASS})${HASH_SEP}`);
 
@@ -30,9 +31,10 @@ export async function servedHashEchoDenial(rawPath: string, content: string, cwd
   return `[E_WRITE_HASH_ECHO] Refused write to ${rawPath}: line ${echo.line} contains the copied ${echo.hash}${HASH_SEP} anchor served for this file. Remove the copied anchors and retry.`;
 }
 
-export function registerWriteHook(pi: ExtensionAPI): void {
+export function registerWriteHook(pi: ExtensionAPI, isModelDisabled?: (model: ModelLike | undefined) => boolean): void {
   pi.on("tool_call", async (event, ctx) => withAnchorSession(ctx, async () => {
     if (event.toolName !== "write") return;
+    if (isModelDisabled?.(ctx.model)) return;
     const input = event.input as Record<string, unknown> | undefined;
     if (!input || !isRec(input)) return;
     const rawPath = input.path as unknown;

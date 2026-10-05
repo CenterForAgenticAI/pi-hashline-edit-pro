@@ -428,7 +428,7 @@ describe("hashline-config overlay rendering", () => {
         expect(lines.filter((line) => line.includes("[on]")).length).toBe(0);
         expect(lines.filter((line) => line.includes("[off]")).length).toBe(1);
         overlay.handleInput("k");
-        expect(overlay.render(60).find((line) => line.includes("Replace match"))!).toContain("> ");
+        expect(overlay.render(60).find((line) => line.includes("Disable on models"))!).toContain("> ");
         overlay.handleInput("j");
         expect(overlay.render(60).find((line) => line.includes("Auto-read"))!).toContain("> ");
         overlay.invalidate();
@@ -535,6 +535,41 @@ describe("hashline-config overlay rendering", () => {
         overlay.handleInput(" ");
         await new Promise((resolve) => setTimeout(resolve, 100));
         expect((await readConfig()).diffContextLines).toBe(1);
+      } finally {
+        vi.unstubAllEnvs();
+        const { shutdownHashStore } = await import("../../src/hash-store");
+        shutdownHashStore();
+      }
+    });
+  });
+
+  it("edits the disable on models list through the config command and applies it on the next turn", async () => {
+    await withTempDir("model-gate-overlay-", async dir => {
+      const home = join(dir, "home");
+      await mkdir(join(home, ".config", "pi-hashline-edit-pro"), { recursive: true });
+      vi.stubEnv("HOME", home);
+      vi.stubEnv("XDG_CONFIG_HOME", "");
+      try {
+        const codex = { provider: "openai", id: "gpt-5.1-codex", api: "openai-codex-responses" };
+        const { pi, commands, handlers, getActive } = makePiStub(["read", "replace", "insert", "copy", "move", "anchor_grep", "undo_last_change", "grep"]);
+        const { default: register } = await import("../../index");
+        register(pi);
+        const sessionStart = handlers.get("session_start") as (a: unknown, b: unknown) => Promise<void>;
+        await sessionStart({}, { cwd: dir, model: codex, ui: { notify: vi.fn() } });
+        expect(getActive()).toContain("read");
+        const overlay = await openConfigOverlay(commands, dir);
+        for (let step = 0; step < 9; step++) overlay.handleInput("j");
+        overlay.handleInput(" ");
+        for (const char of "openai/*") overlay.handleInput(char);
+        overlay.handleInput("\r");
+        await waitForConfig(async () => (await readConfig()).disableOnModels?.[0] === "openai/*");
+        expect((await readConfig()).disableOnModels).toEqual(["openai/*"]);
+        const ctx = { cwd: dir, model: codex, hasUI: false, ui: { notify: vi.fn() }, sessionManager: { getBranch: () => [] } };
+        await waitForConfig(async () => {
+          await handlers.get("before_agent_start")!({}, ctx);
+          return !getActive().includes("read");
+        });
+        expect(getActive()).toContain("grep");
       } finally {
         vi.unstubAllEnvs();
         const { shutdownHashStore } = await import("../../src/hash-store");
