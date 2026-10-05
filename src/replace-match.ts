@@ -30,7 +30,7 @@ import {
   type EditToolFlags,
 } from "./edit-common";
 import { makeRenderCall, type RPreview, type RRState } from "./replace-render";
-import { editResultSchema, structuredFailure } from "./structured";
+import { editResultSchema, withStructuredErrors } from "./structured";
 
 interface MatchRefs {
   from: Anchor;
@@ -167,8 +167,7 @@ export function buildReplaceMatchToolDef(flags: EditToolFlags = DEFAULT_EDIT_FLA
     }),
     renderResult: editRenderResultWrapper,
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-      try {
-        return await withAnchorSession(ctx, async () => {
+      return withStructuredErrors(signal, { diff: "" }, () => withAnchorSession(ctx, async () => {
         const normalized: unknown = params;
         assertReplaceMatchReq(normalized);
         const req = normalized;
@@ -252,11 +251,7 @@ export function buildReplaceMatchToolDef(flags: EditToolFlags = DEFAULT_EDIT_FLA
             noopNoun: "Replacement",
           });
         });
-      });
-      } catch (error) {
-        if (signal?.aborted) throw error;
-        return structuredFailure(error, { diff: "" });
-      }
+      }));
     },
   };
 }

@@ -203,12 +203,14 @@ export function structuredError(error: unknown): StructuredError {
 	return { ok: false, kind: "error", error: { code: ERROR_CODE_RE.exec(message)?.[1] ?? "E_TOOL", message } };
 }
 
-export function structuredFailure<T>(error: unknown, details: T): {
+export type StructuredFailureResult<TDetails> = {
 	content: Array<{ type: "text"; text: string }>;
 	isError: true;
-	details: T;
+	details: TDetails;
 	structuredContent: StructuredError;
-} {
+};
+
+export function structuredFailure<TDetails>(error: unknown, details: TDetails): StructuredFailureResult<TDetails> {
 	const structuredContent = structuredError(error);
 	return {
 		content: [{ type: "text", text: structuredContent.error.message }],
@@ -216,6 +218,19 @@ export function structuredFailure<T>(error: unknown, details: T): {
 		details,
 		structuredContent,
 	};
+}
+
+export async function withStructuredErrors<TDetails, TSuccess extends { details: TDetails }>(
+	signal: AbortSignal | undefined,
+	details: TDetails,
+	run: () => Promise<TSuccess>,
+): Promise<TSuccess | StructuredFailureResult<TDetails>> {
+	try {
+		return await run();
+	} catch (error) {
+		if (signal?.aborted) throw error;
+		return structuredFailure(error, details);
+	}
 }
 
 export function withStructuredText(content: unknown, text: string): Json | undefined {

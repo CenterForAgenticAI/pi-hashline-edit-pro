@@ -308,6 +308,7 @@ describe("structuredContent for read and replace", () => {
 			expect(again.isError).toBe(true);
 			expect(structured(again).ok).toBe(false);
 			expect(structured(again).error!.message).toContain("No undo history");
+			expect(structured(again).error!.code).toBe("E_UNDO_NONE");
 		});
 	});
 

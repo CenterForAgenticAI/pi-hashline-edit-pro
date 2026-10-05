@@ -43,7 +43,7 @@ import {
   type EditToolFlags,
 } from "./edit-common";
 import { makeRenderCall, type RPreview, type RRState } from "./replace-render";
-import { anchoredLinesFromDiff, diffAnchorsOmitted, editResultSchema, structuredFailure, type EditStructured } from "./structured";
+import { anchoredLinesFromDiff, diffAnchorsOmitted, editResultSchema, withStructuredErrors, type EditStructured } from "./structured";
 
 export type TransferKind = "copy" | "move";
 
@@ -928,8 +928,7 @@ export function buildTransferToolDef(kind: TransferKind, flags: EditToolFlags = 
     ),
     renderResult: editRenderResultWrapper,
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-      try {
-        return await withAnchorSession(ctx, async () => {
+      return withStructuredErrors(signal, { diff: "" }, () => withAnchorSession(ctx, async () => {
         const canonical = normReq(params);
         assertTransferReq(canonical);
         const req = canonical;
@@ -1009,11 +1008,7 @@ export function buildTransferToolDef(kind: TransferKind, flags: EditToolFlags = 
           });
         }
         return executeCrossFile(kind, refs, warnings, sourcePath, destinationPath, ctx.cwd, signal);
-      });
-      } catch (error) {
-        if (signal?.aborted) throw error;
-        return structuredFailure(error, { diff: "" });
-      }
+      }));
     },
   };
 }

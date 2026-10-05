@@ -9,6 +9,7 @@ import {
   useTestHome,
   withTempFile,
   setupReadTest,
+  toolError,
 } from "../support/fixtures";
 import { resetRegistryForTests } from "../../src/anchor-registry";
 
@@ -58,9 +59,7 @@ describe("read tool line cap", () => {
     );
     await withTempFile("huge.ts", content, async ({ cwd }) => {
       const { readTool, ctx } = setupReadTest(cwd);
-      await expect(
-        readTool.execute("r1", { path: "huge.ts" }, undefined, undefined, ctx),
-      ).rejects.toThrow("E_FILE_TOO_LARGE");
+      expect(await toolError(() => readTool.execute("r1", { path: "huge.ts" }, undefined, undefined, ctx))).toContain("E_FILE_TOO_LARGE");
     });
   });
 

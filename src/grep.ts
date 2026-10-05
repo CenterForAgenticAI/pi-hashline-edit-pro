@@ -19,7 +19,7 @@ import { withAnchorSession, formatAnchorReclaimNotice, takeReclaimedPaths } from
 import { serveRows } from "./served";
 import { Text } from "@earendil-works/pi-tui";
 import { expandHint, getResultText, reuseText, type CallT, type FgT } from "./replace-render";
-import { anchoredLine, grepResultSchema, structuredFailure, type GrepStructured } from "./structured";
+import { anchoredLine, grepResultSchema, withStructuredErrors, type GrepStructured } from "./structured";
 export const RG_TIMEOUT_MS = 10_000;
 
 const GREP_KS = new Set(["pattern", "path", "glob", "context", "ignoreCase", "literal", "limit"]);
@@ -559,8 +559,7 @@ export function regGrep(pi: ExtensionAPI, flags: EditToolFlags = DEFAULT_EDIT_FL
     },
 
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-      try {
-        return await withAnchorSession(ctx, async () => {
+      return withStructuredErrors(signal, {}, () => withAnchorSession(ctx, async () => {
         const canonical = normReq(params);
         assertGrepReq(canonical);
         const req = canonical;
@@ -744,11 +743,7 @@ export function regGrep(pi: ExtensionAPI, flags: EditToolFlags = DEFAULT_EDIT_FL
           },
           structuredContent,
         };
-      });
-      } catch (error) {
-        if (signal?.aborted) throw error;
-        return structuredFailure(error, {});
-      }
+      }));
     },
   });
 }

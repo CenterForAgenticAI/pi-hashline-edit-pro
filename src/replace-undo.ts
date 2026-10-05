@@ -17,7 +17,7 @@ import { loadP, loadGuide } from "./prompts";
 import { withUndoPrompts, DEFAULT_EDIT_FLAGS, type EditToolFlags } from "./edit-common";
 import { buildMetrics } from "./replace-response";
 import { renderEditResult, fmtCall } from "./replace-render";
-import { anchoredLinesFromDiff, diffAnchorsOmitted, editResultSchema, structuredFailure, type EditStructured } from "./structured";
+import { anchoredLinesFromDiff, diffAnchorsOmitted, editResultSchema, structuredFailure, withStructuredErrors, type EditStructured } from "./structured";
 import { Text } from "@earendil-works/pi-tui";
 import { changedRange, lineHashes } from "./hashline";
 export interface UndoEntry {
@@ -140,8 +140,7 @@ export function regUndo(pi: ExtensionAPI, flags: EditToolFlags = DEFAULT_EDIT_FL
       return renderEditResult(result as never, opts as { isPartial: boolean; expanded?: boolean }, theme as never, context as never);
     },
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-      try {
-        return await withAnchorSession(ctx, async () => {
+      return withStructuredErrors(signal, {}, () => withAnchorSession(ctx, async () => {
         const path = params.path;
         if (typeof path !== "string" || path.length === 0) {
           throw new Error('[E_BAD_SHAPE] Undo request requires a non-empty "path" string.');
@@ -150,7 +149,7 @@ export function regUndo(pi: ExtensionAPI, flags: EditToolFlags = DEFAULT_EDIT_FL
 
         const undo = await getUndo(mutationTargetPath);
         if (!undo) {
-          return structuredFailure(new Error(`No undo history for ${path}.`), {});
+          return structuredFailure(new Error(`[E_UNDO_NONE] No undo history for ${path}.`), {});
         }
 
         return withFileMutationQueue(mutationTargetPath, async () => {
@@ -273,11 +272,7 @@ export function regUndo(pi: ExtensionAPI, flags: EditToolFlags = DEFAULT_EDIT_FL
             structuredContent,
           };
         });
-      });
-      } catch (error) {
-        if (signal?.aborted) throw error;
-        return structuredFailure(error, {});
-      }
+      }));
     },
   });
 }

@@ -23,7 +23,7 @@ import { withAnchorSession, servedForPath, sessionKeyFor, formatAnchorReclaimNot
 import { serveRows } from "./served";
 import { getAutoReadAllSnapshot } from "./auto-read-all-state";
 import { Text } from "@earendil-works/pi-tui";
-import { anchoredLine, structuredFailure, readResultSchema, type AnchoredLine, type ReadResult } from "./structured";
+import { anchoredLine, readResultSchema, withStructuredErrors, type AnchoredLine, type ReadResult } from "./structured";
 const R_DESC = loadP("../prompts/read.md");
 const R_SNIPPET = loadP("../prompts/read-snippet.md");
 function readGuide(): string[] {
@@ -237,8 +237,7 @@ export function regRead(pi: ExtensionAPI, flags: EditToolFlags = DEFAULT_EDIT_FL
 		},
 
 		async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-			try {
-				return await withAnchorSession(ctx, async () => {
+			return withStructuredErrors(signal, {}, () => withAnchorSession(ctx, async () => {
 				const rawPath = params.path;
 				const absolutePath = toCwd(rawPath, ctx.cwd);
 
@@ -329,11 +328,7 @@ export function regRead(pi: ExtensionAPI, flags: EditToolFlags = DEFAULT_EDIT_FL
 					},
 					structuredContent,
 				};
-				});
-			} catch (error) {
-				if (signal?.aborted) throw error;
-				return structuredFailure(error, {});
-			}
+			}));
 		},
 	});
 }

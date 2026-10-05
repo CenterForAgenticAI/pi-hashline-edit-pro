@@ -14,7 +14,7 @@ import { assertInsertReq, normReq, type InsertReq } from "./payload-contract";
 import { isRec, literalEscapeHints, splitLines } from "./utils";
 import { queuedEdit, editToolBase, editRenderCallWrapper, editRenderResultWrapper, resolveEditTargetWithRequirement, throwIfStrictInput, withInsertPrompts, DEFAULT_EDIT_FLAGS, type EditToolFlags } from "./edit-common";
 import type { RPreview, RRState } from "./replace-render";
-import { editResultSchema, structuredFailure } from "./structured";
+import { editResultSchema, withStructuredErrors } from "./structured";
 export { assertInsertReq, type InsertReq };
 
 const insertAnchorSchema = Type.String({
@@ -175,8 +175,7 @@ export function buildInsertToolDef(flags: EditToolFlags = DEFAULT_EDIT_FLAGS): I
     renderCall: editRenderCallWrapper(insertPreview, getInsertInput, "insert"),
     renderResult: editRenderResultWrapper,
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-      try {
-        return await withAnchorSession(ctx, async () => {
+      return withStructuredErrors(signal, { diff: "" }, () => withAnchorSession(ctx, async () => {
         const canonical = normReq(params);
         assertInsertReq(canonical);
         const req = canonical;
@@ -258,11 +257,7 @@ export function buildInsertToolDef(flags: EditToolFlags = DEFAULT_EDIT_FLAGS): I
             endingOverrides: contentSeparators,
           });
         });
-      });
-      } catch (error) {
-        if (signal?.aborted) throw error;
-        return structuredFailure(error, { diff: "" });
-      }
+      }));
     },
   };
 }
