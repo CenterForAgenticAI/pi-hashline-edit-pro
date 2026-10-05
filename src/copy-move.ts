@@ -11,12 +11,15 @@ import {
   lineHashes,
   MAX_HASH_LINES,
   parseHashRef,
+  resEdit,
   resolveAnchorLine,
   stripAnchorRow,
   type Anchor,
+  type HEdit,
   type HTEdit,
 } from "./hashline";
 import { formatAnchorReclaimNotice, servedForPath, takeReclaimedPaths, withAnchorSession } from "./anchor-registry";
+import { batchMemberFor, batchServedFor, ensureBatchBase, executeBatchMember, noteBatchFailure, pendingBatchMemberFor, type BatchBase, type PlannedMember } from "./batch";
 import { loadP, loadGuide } from "./prompts";
 import { assertTransferReq, normReq, type TransferReq } from "./payload-contract";
 import { abortIf, assertByteLimit, isRec, splitLines } from "./utils";
@@ -221,6 +224,23 @@ async function resolveTransferTargets(req: TransferReq, cwd: string): Promise<{ 
   return { sourcePath, destinationPath };
 }
 
+async function assertTransferPathOption(req: TransferReq, cwd: string, member: PlannedMember): Promise<void> {
+  const { requirePath } = await readConfig();
+  if (!requirePath && req.path !== undefined) {
+    throw new Error("[E_BAD_SHAPE] Edit request contains unknown or unsupported fields: path. Path resolution is anchor-only; retry without `path`.");
+  }
+  if (requirePath && (typeof req.path !== "string" || req.path.length === 0)) {
+    throw new Error('[E_BAD_SHAPE] Copy/move request requires a non-empty "path" string when require-path mode is on. Provide `path` matching the source or destination file the anchors were served for.');
+  }
+  if (requirePath) {
+    const sourceTarget = member.sourceTarget ?? member.target;
+    const { resolved } = await resolveInCwd(req.path as string, cwd);
+    if (resolved !== sourceTarget && resolved !== member.target) {
+      throw new Error(`[E_BAD_SHAPE] Provided "path" "${req.path}" does not match the source file "${sourceTarget}" or the destination file "${member.target}".`);
+    }
+  }
+}
+
 interface CrossTransferPreparation {
   sourcePreload: NormFile;
   destinationPreload: NormFile;
@@ -240,16 +260,20 @@ async function prepareCrossTransfer(input: {
   cwd: string;
   signal?: AbortSignal;
   noPersist: boolean;
+  sourcePreload?: NormFile;
+  destinationPreload?: NormFile;
+  sourceServed?: ReadonlyMap<string, string>;
+  destinationServed?: ReadonlyMap<string, string>;
 }): Promise<CrossTransferPreparation> {
   const { kind, refs, sourcePath, destinationPath, cwd, signal, noPersist } = input;
   const common = { signal, maxLines: MAX_HASH_LINES };
   const sourceAccessMode = kind === "move" ? constants.R_OK | constants.W_OK : constants.R_OK;
-  const sourcePreload = await readNormFile(sourcePath, cwd, noPersist ? { ...common, accessMode: constants.R_OK, noPersist: true, allocation: "shadow" } : { ...common, accessMode: sourceAccessMode });
-  const destinationPreload = await readNormFile(destinationPath, cwd, noPersist ? { ...common, accessMode: constants.R_OK, noPersist: true, allocation: "shadow" } : { ...common, accessMode: constants.R_OK | constants.W_OK });
+  const sourcePreload = input.sourcePreload ?? (await readNormFile(sourcePath, cwd, noPersist ? { ...common, accessMode: constants.R_OK, noPersist: true, allocation: "shadow" } : { ...common, accessMode: sourceAccessMode }));
+  const destinationPreload = input.destinationPreload ?? (await readNormFile(destinationPath, cwd, noPersist ? { ...common, accessMode: constants.R_OK, noPersist: true, allocation: "shadow" } : { ...common, accessMode: constants.R_OK | constants.W_OK }));
   const sourceDisplay = toDisplayPath(cwd, sourcePreload.absolutePath, sourcePath);
   const destinationDisplay = toDisplayPath(cwd, destinationPreload.absolutePath, destinationPath);
-  const sourceServed = servedForPath(sourcePreload.absolutePath);
-  const destinationServed = servedForPath(destinationPreload.absolutePath);
+  const sourceServed = input.sourceServed ?? servedForPath(sourcePreload.absolutePath);
+  const destinationServed = input.destinationServed ?? servedForPath(destinationPreload.absolutePath);
   const sourceLines = splitLines(sourcePreload.normalized);
   const destinationLines = splitLines(destinationPreload.normalized);
 
@@ -587,6 +611,120 @@ async function executeCrossFile(
   });
 }
 
+function preloadFromBase(base: BatchBase): NormFile {
+  return {
+    absolutePath: base.absolutePath,
+    normalized: base.content,
+    bom: base.bom,
+    originalEnding: base.ending,
+    endingSeparators: base.separators,
+    fileHashes: base.hashes,
+    hadUtf8DecodeErrors: base.hadUtf8DecodeErrors,
+    identity: base.identity,
+  };
+}
+
+async function executeBatchTransfer(
+  kind: TransferKind,
+  member: PlannedMember,
+  refs: TransferRefs,
+  warnings: string[],
+  targetPath: string,
+  mutationTargetPath: string,
+  cwd: string,
+  signal?: AbortSignal,
+): Promise<TResult> {
+  const base = await ensureBatchBase({ member, targetPath, mutationTargetPath, cwd, signal });
+  const displayPath = toDisplayPath(cwd, base.absolutePath, targetPath);
+  let plan: TransferPlan;
+  try {
+    plan = buildTransferEdit({ kind, refs, preload: preloadFromBase(base), displayPath, served: batchServedFor(member) });
+  } catch (error) {
+    await noteAnchorError(base.absolutePath, error);
+    noteBatchFailure(member, error);
+    throw error;
+  }
+  const resWarnings: string[] = [];
+  let hedit: HEdit;
+  try {
+    hedit = resEdit(plan.editParams, resWarnings);
+  } catch (error) {
+    noteBatchFailure(member, error);
+    throw error;
+  }
+  return executeBatchMember({
+    kind,
+    member,
+    targetPath,
+    mutationTargetPath,
+    cwd,
+    signal,
+    hedit,
+    extraWarnings: [...warnings, ...resWarnings],
+    foldedLines: plan.foldedAnchorLines,
+    ...(plan.anchorCarry !== undefined ? { carryIndex: plan.anchorCarry } : {}),
+    ...(plan.servedOverride !== undefined ? { servedOverride: plan.servedOverride } : {}),
+    ...(plan.endingOverrides !== undefined ? { contentSeparators: plan.endingOverrides } : {}),
+  });
+}
+
+async function executeBatchCrossCopy(
+  member: PlannedMember,
+  refs: TransferRefs,
+  warnings: string[],
+  sourcePath: string,
+  destinationPath: string,
+  mutationTargetPath: string,
+  cwd: string,
+  signal?: AbortSignal,
+): Promise<TResult> {
+  const destinationBase = await ensureBatchBase({ member, targetPath: destinationPath, mutationTargetPath, cwd, signal });
+  let prepared: CrossTransferPreparation;
+  try {
+    const sourceMember = pendingBatchMemberFor(sourcePath);
+    const sourcePreload = sourceMember
+      ? preloadFromBase(await ensureBatchBase({ member: sourceMember, targetPath: sourcePath, mutationTargetPath: sourceMember.target, cwd, signal }))
+      : await readNormFile(sourcePath, cwd, { signal, accessMode: constants.R_OK, maxLines: MAX_HASH_LINES });
+    prepared = await prepareCrossTransfer({
+      kind: "copy",
+      refs,
+      sourcePath,
+      destinationPath,
+      cwd,
+      signal,
+      noPersist: false,
+      sourcePreload,
+      sourceServed: sourceMember !== undefined ? batchServedFor(sourceMember) : undefined,
+      destinationServed: batchServedFor(member),
+      destinationPreload: preloadFromBase(destinationBase),
+    });
+  } catch (error) {
+    noteBatchFailure(member, error);
+    throw error;
+  }
+  const resWarnings: string[] = [];
+  let hedit: HEdit;
+  try {
+    hedit = resEdit(prepared.destinationEdit, resWarnings);
+  } catch (error) {
+    noteBatchFailure(member, error);
+    throw error;
+  }
+  return executeBatchMember({
+    kind: "copy",
+    member,
+    targetPath: destinationPath,
+    mutationTargetPath,
+    cwd,
+    signal,
+    hedit,
+    extraWarnings: [...warnings, ...resWarnings],
+    foldedLines: prepared.destinationFolded,
+    ...(prepared.destinationFolded === 1 ? { carryIndex: 0 } : {}),
+    contentSeparators: prepared.endingOverrides,
+  });
+}
+
 export async function transferPreview(kind: TransferKind, request: unknown, cwd: string, signal?: AbortSignal): Promise<RPreview> {
   try {
     const normalized = normReq(request);
@@ -749,47 +887,81 @@ export function buildTransferToolDef(kind: TransferKind, flags: EditToolFlags = 
         const canonical = normReq(params);
         assertTransferReq(canonical);
         const req = canonical;
-        const { refs, warnings } = parseTransferAnchors(req);
-        await throwIfStrictInput(warnings);
-        const { sourcePath, destinationPath } = await resolveTransferTargets(req, ctx.cwd);
-        if (sourcePath !== destinationPath) {
-          return executeCrossFile(kind, refs, warnings, sourcePath, destinationPath, ctx.cwd, signal);
+        let refs: TransferRefs;
+        let warnings: string[];
+        try {
+          ({ refs, warnings } = parseTransferAnchors(req));
+          await throwIfStrictInput(warnings);
+        } catch (error) {
+          const member = batchMemberFor(_toolCallId);
+          if (member) noteBatchFailure(member, error);
+          throw error;
         }
-        return queuedEdit(sourcePath, ctx.cwd, signal, async (absolutePath, mutationTargetPath) => {
-          const preload = await readNormFile(sourcePath, ctx.cwd, {
-            signal,
-            accessMode: constants.R_OK | constants.W_OK,
-            maxLines: MAX_HASH_LINES,
-          });
-          const displayPath = toDisplayPath(ctx.cwd, preload.absolutePath, sourcePath);
-          let plan: TransferPlan;
-          try {
-            plan = buildTransferEdit({ kind, refs, preload, displayPath, served: servedForPath(preload.absolutePath) });
-          } catch (error) {
-            await noteAnchorError(preload.absolutePath, error);
-            throw error;
+        let sourcePath: string;
+        let destinationPath: string;
+        try {
+          const member = batchMemberFor(_toolCallId);
+          if (member) {
+            await assertTransferPathOption(req, ctx.cwd, member);
+            sourcePath = member.sourceTarget ?? member.target;
+            destinationPath = member.target;
+          } else {
+            ({ sourcePath, destinationPath } = await resolveTransferTargets(req, ctx.cwd));
           }
-          const pipe = await execPipeline(sourcePath, plan.editParams, ctx.cwd, {
-            accessMode: constants.R_OK | constants.W_OK,
-            signal,
-            preloadedNorm: preload,
-            served: plan.servedOverride,
-            endingOverrides: plan.endingOverrides,
+        } catch (error) {
+          const member = batchMemberFor(_toolCallId);
+          if (member) noteBatchFailure(member, error);
+          throw error;
+        }
+        if (sourcePath === destinationPath) {
+          return queuedEdit(sourcePath, ctx.cwd, signal, async (absolutePath, mutationTargetPath) => {
+            const member = batchMemberFor(_toolCallId);
+            if (member) {
+              return executeBatchTransfer(kind, member, refs, warnings, sourcePath, mutationTargetPath, ctx.cwd, signal);
+            }
+            const preload = await readNormFile(sourcePath, ctx.cwd, {
+              signal,
+              accessMode: constants.R_OK | constants.W_OK,
+              maxLines: MAX_HASH_LINES,
+            });
+            const displayPath = toDisplayPath(ctx.cwd, preload.absolutePath, sourcePath);
+            let plan: TransferPlan;
+            try {
+              plan = buildTransferEdit({ kind, refs, preload, displayPath, served: servedForPath(preload.absolutePath) });
+            } catch (error) {
+              await noteAnchorError(preload.absolutePath, error);
+              throw error;
+            }
+            const pipe = await execPipeline(sourcePath, plan.editParams, ctx.cwd, {
+              accessMode: constants.R_OK | constants.W_OK,
+              signal,
+              preloadedNorm: preload,
+              served: plan.servedOverride,
+              endingOverrides: plan.endingOverrides,
+            });
+            return commitEdit(pipe, {
+              path: pipe.path,
+              absolutePath,
+              mutationTargetPath,
+              editAnchors: [plan.editParams.remove_from, plan.editParams.remove_to],
+              ...(plan.anchorCarry !== undefined ? { anchorCarry: plan.anchorCarry } : {}),
+              ...(plan.endingOverrides !== undefined ? { endingOverrides: plan.endingOverrides } : {}),
+              signal,
+              verb: kind === "copy" ? "copied" : "moved",
+              noopNoun: kind === "copy" ? "Copy" : "Move",
+              foldedAnchorLines: plan.foldedAnchorLines,
+              prefixWarnings: warnings,
+            });
           });
-          return commitEdit(pipe, {
-            path: pipe.path,
-            absolutePath,
-            mutationTargetPath,
-            editAnchors: [plan.editParams.remove_from, plan.editParams.remove_to],
-            ...(plan.anchorCarry !== undefined ? { anchorCarry: plan.anchorCarry } : {}),
-            ...(plan.endingOverrides !== undefined ? { endingOverrides: plan.endingOverrides } : {}),
-            signal,
-            verb: kind === "copy" ? "copied" : "moved",
-            noopNoun: kind === "copy" ? "Copy" : "Move",
-            foldedAnchorLines: plan.foldedAnchorLines,
-            prefixWarnings: warnings,
+        }
+        if (kind === "copy") {
+          const member = batchMemberFor(_toolCallId);
+          if (!member) return executeCrossFile(kind, refs, warnings, sourcePath, destinationPath, ctx.cwd, signal);
+          return queuedEdit(destinationPath, ctx.cwd, signal, async (_absolutePath, mutationTargetPath) => {
+            return executeBatchCrossCopy(member, refs, warnings, sourcePath, destinationPath, mutationTargetPath, ctx.cwd, signal);
           });
-        });
+        }
+        return executeCrossFile(kind, refs, warnings, sourcePath, destinationPath, ctx.cwd, signal);
       });
     },
   };

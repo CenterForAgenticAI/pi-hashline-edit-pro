@@ -3,3 +3,5 @@ Replace part of a line (or a range of lines) without retyping the rest. `replace
 Example: read served `Hasu│    {"name": "widget", "size": "small"},`. Call { "replace_from": "Hasu", "replace_to": "Hasu", "old_string": "small", "new_string": "large" }. The line becomes `    {"name": "widget", "size": "large"},` and the post-edit diff carries fresh anchors.
 
 JSON decoding happens once, before the tool; the tool writes the string it receives and never decodes — `\uXXXX` is the character, `\\uXXXX` the literal text. A missing match is refused with the current rows, a repeated match with the matching line numbers, so the retry needs no read.
+
+Same-file calls in one message batch: earlier calls reply `In batch N (queued)` and the last call shows the combined diff, with one undo for the whole batch. A missing or ambiguous `old_string` aborts the whole batch unwritten.

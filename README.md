@@ -221,7 +221,7 @@ After a successful edit, the diff is capped at 50KB. A row over 50KB is shown as
 
 `old_string` is matched against the range's text (LF line breaks, no final terminator) and must occur exactly once. A missing match is refused with `[E_SUBSTRING_NOT_FOUND]` and the current `anchor│content` rows; a repeated match is refused with `[E_SUBSTRING_AMBIGUOUS]` and the matching line numbers. Both refusals carry enough to retry without a `read`.
 
-A `replace_match` call is never grouped into a batch; it commits on its own like `copy` and `move`. The post-edit diff carries fresh anchors, and the edit is undoable with `undo_last_change`.
+In a same-message batch it joins the other calls on its file: the batch validates everything against the pre-batch state and commits once, with one undo. A missing or ambiguous `old_string` aborts the whole batch unwritten. The post-edit diff carries fresh anchors, and the edit is undoable with `undo_last_change`.
 
 ### insert
 
@@ -259,11 +259,11 @@ Example: read served `Hasu│old` in `a.ts` and `Qwer│top` in `b.ts`; to copy 
 { "source_from": "Hasu", "source_to": "Hasu", "insert_after": "Qwer" }
 ```
 
-The source lines stay in place and keep their anchors; the copied lines are minted fresh anchors in the destination's post-edit diff and keep their source line endings. A cross-file copy writes only the destination, so one `undo_last_change` on it reverts the copy.
+The source lines stay in place and keep their anchors; the copied lines are minted fresh anchors in the destination's post-edit diff and keep their source line endings. A cross-file copy writes only the destination, so one `undo_last_change` on it reverts the copy. In a same-message batch, a same-file copy and a cross-file copy join the destination file's batch; the copy still duplicates the content its source anchors were served from, not the result of a sibling edit.
 
 ### move
 
-`move` relocates a range of lines in one call: the range is removed from the source file and written after `insert_after`, which may live in a different file. It takes the same fields as `copy`, and an empty destination file is seeded with the moved lines. Within one file, `insert_after` must sit outside the source range, and moving a range to where it already sits reports `No changes made` and leaves the anchors alone. Lines between the source and the target keep their content but may be re-anchored; the moved lines keep their source line endings, and a cross-file move that removes every source line leaves the source file empty.
+`move` relocates a range of lines in one call: the range is removed from the source file and written after `insert_after`, which may live in a different file. It takes the same fields as `copy`, and an empty destination file is seeded with the moved lines. Within one file, `insert_after` must sit outside the source range, and moving a range to where it already sits reports `No changes made` and leaves the anchors alone. A same-file `move` joins the same-message batch of its file; a cross-file `move` always commits on its own. Lines between the source and the target keep their content but may be re-anchored; the moved lines keep their source line endings, and a cross-file move that removes every source line leaves the source file empty.
 
 The same safety machinery as `replace` applies to both tools: undo is saved before the write (a failed write restores the previous undo record), and line endings and BOMs survive. A cross-file `move` writes two files and records one undo entry per file; undo both sides to revert the whole move, because undoing one side alone leaves the moved lines duplicated or missing.
 
@@ -305,17 +305,17 @@ Output is capped at `limit` matched lines, 2000 rows, and 50KB of text, whicheve
 
 ## Batching
 
-Multiple `replace` and `insert` calls on the same file in one assistant message are grouped per file into one batch. The batch unit is the message, not the turn: calls from separate messages in the same turn run on their own, one after another.
+Multiple `replace`, `replace_match`, `insert`, `copy`, and `move` calls on the same file in one assistant message are grouped per file into one batch. A cross-file `copy` is grouped with the edits of its destination file; a cross-file `move` is never grouped because it writes two files. The batch unit is the message, not the turn: calls from separate messages in the same turn run on their own, one after another.
 
 - A call outside a batch commits before its result returns.
-- A `copy`, `move`, or `replace_match` call is never grouped into a batch: it commits on its own, and a pending same-file batch aborts safely with `[E_OP_ABORTED]` if the file changed under it.
-- A batch validates every call against the pre-batch state and commits once, during the batch's last call: earlier calls reply `In batch N (queued)`, and the batch's last call shows the combined diff, with one undo reverting the whole batch.
+- A cross-file `move` call is never grouped into a batch: it commits on its own, and a pending same-file batch aborts safely with `[E_OP_ABORTED]` if the file changed under it.
+- A batch validates every call against the pre-batch state and commits once, during the batch's last call: earlier calls reply `In batch N (queued)`, and the batch's last call shows the combined diff, with one undo reverting the whole batch. A `copy` always duplicates the content its source anchors were served from: when the source file is also edited in the message, the copy reads that file's pre-batch state, even if the source batch commits before the copy runs.
 - If a batch aborts, nothing is written: the failing call's error ends with `Aborts batch N.` and reports that the whole batch was discarded, and an earlier member's row renders the abort message instead of the queued placeholder. Nothing commits until the last call succeeds.
 - A batch member accepts the same request shapes and auto-fixes as a standalone call.
 
-Batched calls must target disjoint ranges; overlapping ranges, or any failing call, aborts the whole batch unwritten. One `insert` with `direction: "before"` and one with `direction: "after"` may target the same anchor line: the pair composes into a single insertion. A batch member that fails aborts its batch-mates with `[E_OP_ABORTED]`.
+Batched calls must target disjoint ranges; overlapping ranges, or any failing call, aborts the whole batch unwritten. A `copy`'s `insert_after` line is the copy's destination range, so replacing or moving that same line in the batch is an overlap. One `insert` with `direction: "before"` and one with `direction: "after"` may target the same anchor line: the pair composes into a single insertion. A batch member that fails aborts its batch-mates with `[E_OP_ABORTED]`.
 
-A call whose anchors resolve nowhere never joins a batch: it runs on its own and fails with its own error (`[E_STALE_ANCHOR]`, or `[E_BAD_SHAPE]` when its request cannot be parsed), while the same-file batch in the message still commits. Calls with one stale anchor and a valid co-anchor, or with a `requirePath` path hint, are grouped into their file's batch and abort it instead of applying partially. An error that aborts a batch ends with `Aborts batch N.`; an aborted call reads `[E_OP_ABORTED] Batch N aborted: [<kind>] Call Nr <X> errored [<code>]`, naming the failing call and its error code (or `[E_OP_ABORTED] Batch N aborted.` when the failing error carries no code). Anchor capacity is preflighted before writing; if anchor finalization fails after the write, the error states the file was written with one undo available. Verify each batch diff before the next turn's edits on that file.
+A call whose anchors resolve nowhere never joins a batch: it runs on its own and fails with its own error (`[E_STALE_ANCHOR]`, or `[E_BAD_SHAPE]` when its request cannot be parsed), while the same-file batch in the message still commits. Calls with one stale anchor and a valid co-anchor, or with a `requirePath` path hint, are grouped into their file's batch and abort it instead of applying partially. A `copy` or `move` whose source anchors no longer resolve cannot be grouped, because the source file cannot be identified; it runs on its own and fails with its own error. An error that aborts a batch ends with `Aborts batch N.`; an aborted call reads `[E_OP_ABORTED] Batch N aborted: [<kind>] Call Nr <X> errored [<code>]`, naming the failing call and its error code (or `[E_OP_ABORTED] Batch N aborted.` when the failing error carries no code). Anchor capacity is preflighted before writing; if anchor finalization fails after the write, the error states the file was written with one undo available. Verify each batch diff before the next turn's edits on that file.
 
 The hashline tools are sequential in pi, so a message that contains one runs all of its tool calls one at a time in the order given; a `read` or shell `cat` issued before the edit commits can still observe the pre-commit state, so verify in the next message with the post-edit diff or a fresh `read`.
 
@@ -460,7 +460,7 @@ Full reference:
 | `[E_STORE_UNAVAILABLE]` | No SQLite runtime could be loaded: the host exposes neither `node:sqlite` (Node 22.19+) nor `bun:sqlite`. The pi release binary's bundled Bun lacks `node:sqlite`; run pi under Node or a Bun build that ships SQLite. |
 | `[E_WRITE_HASH_ECHO]` | A `write` `content` line reproduces a served row for this file (a bare `anchor│` read row, a `+anchor│`, ` anchor│`, or `-anchor│` diff row, or a `lineNumber │ anchor│content` grep row). The write is refused, file byte-identical; retry with bare content (remove the copied anchors). |
 | `[E_PATH_CHANGED]` | A write target changed identity after it was read; the write was refused to avoid following a swapped symlink or overwriting a replacement file. |
-| `[E_BATCH_OVERLAP]` | Batched `replace`/`insert` calls target overlapping ranges; the whole batch was refused. One `before` plus one `after` insert on the same anchor line is not an overlap. Retry with disjoint ranges. |
+| `[E_BATCH_OVERLAP]` | Batched edit calls target overlapping ranges; the whole batch was refused. One `before` plus one `after` insert on the same anchor line is not an overlap. Retry with disjoint ranges. |
 | `[E_OP_ABORTED]` | An edit aborted (a same-message batch member failed, or the file changed or was deleted after the edit started). Nothing was written. Fix the sibling failure and retry the batch, otherwise call `read` for fresh anchors and retry. The abort names the failing call and its error code when one is known. |
 | `[E_UNSAFE_REGEX]` | A grep regex can trigger excessive backtracking; simplify it or search with `literal: true`. |
 | `[E_GREP_FAILED]` | `anchor_grep` could not start ripgrep or ripgrep exited with an error (for example a pattern valid in JavaScript but unsupported by ripgrep's regex engine); the message carries ripgrep's output. Retry with `literal: true` or simplify the pattern. |

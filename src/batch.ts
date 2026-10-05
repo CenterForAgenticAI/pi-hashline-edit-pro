@@ -21,7 +21,7 @@ import {
 import { adoptAnchors, servedForPath, formatAnchorReclaimNotice, takeReclaimedPaths } from "./anchor-registry";
 import { stripBOM, toLF, type LineEnding } from "./normalize";
 import { applySpanEndings, joinSeparators, separatorsForSpans } from "./line-endings";
-import { assertInsertReq, assertReq, normReq } from "./payload-contract";
+import { assertInsertReq, assertReplaceMatchReq, assertReq, assertTransferReq, normReq } from "./payload-contract";
 import { saveUndo } from "./replace-undo";
 import { buildChanged, buildNoop, type RMetrics, type TResult } from "./replace-response";
 import { serveRows, servedHashesFromDiff } from "./served";
@@ -33,6 +33,7 @@ export interface PlannedMember {
   display: number;
   total: number;
   target: string;
+  sourceTarget?: string;
   kind: BatchKind;
   args: unknown;
   order: number;
@@ -40,9 +41,9 @@ export interface PlannedMember {
   last: boolean;
 }
 
-export type BatchKind = "replace" | "insert";
+export type BatchKind = "replace" | "insert" | "replace_match" | "copy" | "move";
 
-interface BatchBase {
+export interface BatchBase {
   content: string;
   hashes: string[];
   bom: string;
@@ -84,6 +85,8 @@ export interface BatchMemberInput {
   foldedLines?: number;
   stripWarning?: StripWarningLocation;
   contentSeparators?: (LineEnding | undefined)[];
+  carryIndex?: number;
+  servedOverride?: ReadonlyMap<string, string>;
 }
 
 interface BatchFailure {
@@ -96,8 +99,7 @@ interface BatchState {
   display: number;
   target: string;
   memberIds: string[];
-  replaceCount: number;
-  insertCount: number;
+  stale: boolean;
   base?: BatchBase;
   paths?: { absolutePath: string; mutationTargetPath: string; displayPath: string };
   served?: ReadonlyMap<string, string>;
@@ -119,10 +121,13 @@ interface EditCall {
 
 type NormalizedEditArgs =
   | { kind: "replace"; removeFrom: string; removeTo?: string; path?: string }
-  | { kind: "insert"; anchor: string; path?: string };
+  | { kind: "insert"; anchor: string; path?: string }
+  | { kind: "replace_match"; replaceFrom: string; replaceTo?: string; path?: string }
+  | { kind: "copy" | "move"; sourceFrom: string; sourceTo?: string; insertAfter?: string; path?: string };
 
 const MAX_TRACKED_BATCHES = 256;
 const BATCH_DISCARDED_NOTE = "Nothing was written; the whole batch was discarded.";
+const BATCHABLE_CALLS = new Set(["replace", "insert", "replace_match", "copy", "move"]);
 
 const plan = new Map<string, PlannedMember>();
 const batches = new Map<number, BatchState>();
@@ -162,6 +167,21 @@ export function batchMemberFor(toolCallId: string): PlannedMember | undefined {
   return plan.get(toolCallId);
 }
 
+export function pendingBatchMemberFor(path: string): PlannedMember | undefined {
+  for (const runtime of batches.values()) {
+    if (runtime.target !== path || runtime.stale || runtime.failed) continue;
+    for (const id of runtime.memberIds) {
+      const member = plan.get(id);
+      if (member) return member;
+    }
+  }
+  return undefined;
+}
+
+export function batchServedFor(member: PlannedMember): ReadonlyMap<string, string> | undefined {
+  return batches.get(member.batchKey)?.served;
+}
+
 export function resetBatchStateForTests(): void {
   plan.clear();
   batches.clear();
@@ -170,11 +190,30 @@ export function resetBatchStateForTests(): void {
   nextBatchKey = 1;
 }
 
-function normalizeEditArgs(args: unknown): NormalizedEditArgs | undefined {
+function normalizeEditArgs(name: string, args: unknown): NormalizedEditArgs | undefined {
   if (!isRec(args)) return undefined;
   const normalized = normReq(args);
   if (!isRec(normalized)) return undefined;
   const path = typeof normalized.path === "string" ? normalized.path : undefined;
+  if (name === "copy" || name === "move") {
+    if (typeof normalized.source_from !== "string") return undefined;
+    return {
+      kind: name,
+      sourceFrom: normalized.source_from,
+      ...(typeof normalized.source_to === "string" ? { sourceTo: normalized.source_to } : {}),
+      ...(typeof normalized.insert_after === "string" ? { insertAfter: normalized.insert_after } : {}),
+      ...(path ? { path } : {}),
+    };
+  }
+  if (name === "replace_match") {
+    if (typeof normalized.replace_from !== "string") return undefined;
+    return {
+      kind: "replace_match",
+      replaceFrom: normalized.replace_from,
+      ...(typeof normalized.replace_to === "string" ? { replaceTo: normalized.replace_to } : {}),
+      ...(path ? { path } : {}),
+    };
+  }
   if (typeof normalized.remove_from === "string") {
     return {
       kind: "replace",
@@ -190,10 +229,10 @@ function normalizeEditArgs(args: unknown): NormalizedEditArgs | undefined {
 }
 
 async function verifyPaths(
-  group: Array<{ id: string; target: string; kind: BatchKind; args: unknown; path?: string }>,
+  group: Array<{ id: string; target: string; altTarget?: string; kind: BatchKind; args: unknown; path?: string }>,
   cwd: string,
-): Promise<Array<{ id: string; target: string; kind: BatchKind; args: unknown; path?: string }>> {
-  const verified: Array<{ id: string; target: string; kind: BatchKind; args: unknown; path?: string }> = [];
+): Promise<Array<{ id: string; target: string; altTarget?: string; kind: BatchKind; args: unknown; path?: string }>> {
+  const verified: Array<{ id: string; target: string; altTarget?: string; kind: BatchKind; args: unknown; path?: string }> = [];
   for (const item of group) {
     if (!item.path) continue;
     let resolved: string | undefined;
@@ -202,9 +241,49 @@ async function verifyPaths(
     } catch {
       resolved = undefined;
     }
-    if (resolved === item.target) verified.push(item);
+    if (resolved === item.target || (item.altTarget !== undefined && resolved === item.altTarget)) verified.push(item);
   }
   return verified;
+}
+
+async function resolveBatchCallTarget(
+  normalized: NormalizedEditArgs,
+  requirePath: boolean,
+  cwd: string,
+): Promise<{ target: string; altTarget?: string; sourceTarget?: string } | undefined> {
+  const transfer = normalized.kind === "copy" || normalized.kind === "move";
+  if (normalized.kind === "replace" || normalized.kind === "replace_match") {
+    const from = normalized.kind === "replace" ? normalized.removeFrom : normalized.replaceFrom;
+    const to = normalized.kind === "replace" ? normalized.removeTo : normalized.replaceTo;
+    const target = tryResolveEditTarget(from, to)
+      ?? tryResolveEditTarget(from)
+      ?? (to !== undefined ? tryResolveEditTarget(to) : undefined);
+    if (target !== undefined) return { target };
+  } else if (normalized.kind === "insert") {
+    const target = tryResolveEditTarget(normalized.anchor);
+    if (target !== undefined) return { target };
+  } else {
+    const sourceTarget = normalized.sourceTo !== undefined
+      ? tryResolveEditTarget(normalized.sourceFrom, normalized.sourceTo)
+      : tryResolveEditTarget(normalized.sourceFrom);
+    const destinationTarget = normalized.insertAfter !== undefined ? tryResolveEditTarget(normalized.insertAfter) : undefined;
+    if (sourceTarget === undefined) return undefined;
+    if (normalized.kind === "move") {
+      return sourceTarget === destinationTarget ? { target: sourceTarget, sourceTarget } : undefined;
+    }
+    if (sourceTarget === destinationTarget) return { target: sourceTarget, sourceTarget };
+    if (destinationTarget !== undefined) {
+      return { target: destinationTarget, altTarget: sourceTarget, sourceTarget };
+    }
+  }
+  if (requirePath && normalized.path !== undefined && !transfer) {
+    try {
+      return { target: (await resolveInCwd(normalized.path, cwd)).resolved };
+    } catch {
+      return undefined;
+    }
+  }
+  return undefined;
 }
 
 function enforceCap(): void {
@@ -227,31 +306,29 @@ export async function planAssistantMessage(message: unknown, cwd: string): Promi
   const calls: EditCall[] = [];
   for (const block of message.content) {
     if (!isRec(block) || block.type !== "toolCall") continue;
-    if (block.name !== "replace" && block.name !== "insert") continue;
+    if (typeof block.name !== "string" || !BATCHABLE_CALLS.has(block.name)) continue;
     if (typeof block.id !== "string") continue;
     calls.push({ id: block.id, name: block.name, args: block.arguments });
   }
   if (calls.length < 2) return;
   const earlyConfig = await readConfig();
   const requirePath = earlyConfig.requirePath === true;
-  interface ResolvedCall { id: string; target: string; kind: BatchKind; args: unknown; path?: string }
+  interface ResolvedCall { id: string; target: string; altTarget?: string; sourceTarget?: string; kind: BatchKind; args: unknown; path?: string }
   const resolved: ResolvedCall[] = [];
   for (const call of calls) {
-    const normalized = normalizeEditArgs(call.args);
+    const normalized = normalizeEditArgs(call.name, call.args);
     if (!normalized) continue;
-    let target = normalized.kind === "replace" ? tryResolveEditTarget(normalized.removeFrom, normalized.removeTo) : tryResolveEditTarget(normalized.anchor);
-    if (!target) {
-      if (requirePath && normalized.path) {
-        try {
-          target = (await resolveInCwd(normalized.path, cwd)).resolved;
-        } catch {
-          target = undefined;
-        }
-      } else if (normalized.kind === "replace") {
-        target = tryResolveEditTarget(normalized.removeFrom) ?? (normalized.removeTo ? tryResolveEditTarget(normalized.removeTo) : undefined);
-      }
-    }
-    if (target) resolved.push({ id: call.id, target, kind: call.name as BatchKind, args: call.args, ...(normalized.path ? { path: normalized.path } : {}) });
+    const resolvedTarget = await resolveBatchCallTarget(normalized, requirePath, cwd);
+    if (!resolvedTarget) continue;
+    resolved.push({
+      id: call.id,
+      target: resolvedTarget.target,
+      kind: normalized.kind,
+      args: call.args,
+      ...(resolvedTarget.altTarget !== undefined ? { altTarget: resolvedTarget.altTarget } : {}),
+      ...(resolvedTarget.sourceTarget !== undefined ? { sourceTarget: resolvedTarget.sourceTarget } : {}),
+      ...(normalized.path ? { path: normalized.path } : {}),
+    });
   }
   const groups = new Map<string, ResolvedCall[]>();
   for (const item of resolved) {
@@ -269,6 +346,7 @@ export async function planAssistantMessage(message: unknown, cwd: string): Promi
   } else {
     finalGroups.push(...multi);
   }
+  for (const runtime of batches.values()) runtime.stale = true;
   let display = 0;
   for (const group of finalGroups) {
     display += 1;
@@ -277,8 +355,7 @@ export async function planAssistantMessage(message: unknown, cwd: string): Promi
       display,
       target: group[0]!.target,
       memberIds: group.map((item) => item.id),
-      replaceCount: 0,
-      insertCount: 0,
+      stale: false,
       pieces: [],
       applied: 0,
       noops: 0,
@@ -293,6 +370,7 @@ export async function planAssistantMessage(message: unknown, cwd: string): Promi
         display,
         total: finalGroups.length,
         target: item.target,
+        ...(item.sourceTarget !== undefined ? { sourceTarget: item.sourceTarget } : {}),
         kind: item.kind,
         args: item.args,
         order: index + 1,
@@ -316,9 +394,15 @@ function dedupeWarnings(warnings: string[]): string[] {
 }
 
 function batchVerb(runtime: BatchState): string {
-  if (runtime.replaceCount > 0 && runtime.insertCount > 0) return "edited";
-  if (runtime.insertCount > 0) return "inserted";
-  return "replaced";
+  const kinds = new Set(runtime.pieces.map((piece) => piece.kind));
+  if (kinds.size === 1) {
+    const only = [...kinds][0];
+    if (only === "insert") return "inserted";
+    if (only === "copy") return "copied";
+    if (only === "move") return "moved";
+    return "replaced";
+  }
+  return "edited";
 }
 function batchHeader(member: PlannedMember): string {
   return `batch ${member.display}:`;
@@ -331,12 +415,14 @@ function formatBatchLines(start: number, end: number): string {
 function formatBatchPiece(piece: BatchPiece): string {
   const lines = formatBatchLines(piece.start, piece.end);
   if (piece.kind === "insert") return `edit #${piece.order} (insert at ${piece.fromHash}, ${lines})`;
+  if (piece.kind === "copy") return `edit #${piece.order} (copy at ${piece.fromHash}, ${lines})`;
+  if (piece.kind === "move") return `edit #${piece.order} (move ${piece.fromHash}→${piece.toHash}, ${lines})`;
   if (piece.fromHash === piece.toHash) return `edit #${piece.order} (replace ${piece.fromHash}, ${lines})`;
   return `edit #${piece.order} (replace ${piece.fromHash}→${piece.toHash}, ${lines})`;
 }
 
 function batchPlaceholder(member: PlannedMember, piece: BatchPiece, snapshotId: string | undefined): TResult {
-  const added = piece.kind === "insert" ? Math.max(0, piece.newLines.length - piece.foldedLines) : piece.newLines.length;
+  const added = Math.max(0, piece.newLines.length - piece.foldedLines);
   const metrics: RMetrics = {
     edits_attempted: 1,
     edits_noop: piece.noop ? 1 : 0,
@@ -455,7 +541,8 @@ export async function ensureBatchBase(input: {
     baseLines: splitLines(file.normalized),
   };
   runtime.base = base;
-  runtime.served = servedForPath(file.absolutePath);
+  const served = servedForPath(file.absolutePath);
+  runtime.served = served ? new Map(served) : undefined;
   runtime.paths = {
     absolutePath: file.absolutePath,
     mutationTargetPath: input.mutationTargetPath,
@@ -494,7 +581,7 @@ export async function executeBatchMember(input: BatchMemberInput): Promise<TResu
   try {
     planned = planEdit(base.content, effectiveHedit, base.hashes, {
       filePath: displayPath,
-      servedHashes: runtime.served,
+      servedHashes: input.servedOverride ?? runtime.served,
       signal: input.signal,
       baseFileLines: base.baseLines,
       stripWarning: input.stripWarning,
@@ -515,11 +602,13 @@ export async function executeBatchMember(input: BatchMemberInput): Promise<TResu
   const foldedLines = input.foldedLines ?? 0;
   const separators = input.contentSeparators ?? input.hedit.content_separators;
   const carryIndex =
-    input.kind === "insert" && foldedLines > 0
-      ? input.direction === "after"
-        ? 0
-        : newLines.length - 1
-      : undefined;
+    input.carryIndex !== undefined
+      ? input.carryIndex
+      : input.kind === "insert" && foldedLines > 0
+        ? input.direction === "after"
+          ? 0
+          : newLines.length - 1
+        : undefined;
   const piece: BatchPiece = {
     order: input.member.order,
     kind: input.kind,
@@ -536,8 +625,6 @@ export async function executeBatchMember(input: BatchMemberInput): Promise<TResu
     foldedLines,
   };
   runtime.pieces.push(piece);
-  if (input.kind === "replace") runtime.replaceCount += 1;
-  else runtime.insertCount += 1;
   if (noop) runtime.noops += 1;
   else runtime.applied += 1;
   runtime.warnings.push(...piece.warnings);
@@ -642,8 +729,10 @@ async function finishBatch(member: PlannedMember, signal?: AbortSignal): Promise
     if (executedOrders.has(planned.order)) continue;
     try {
       const normalized = normReq(planned.args);
-      if (planned.kind === "replace") assertReq(normalized);
-      else assertInsertReq(normalized);
+      if (planned.kind === "insert") assertInsertReq(normalized);
+      else if (planned.kind === "replace") assertReq(normalized);
+      else if (planned.kind === "replace_match") assertReplaceMatchReq(normalized);
+      else assertTransferReq(normalized);
     } catch (error) {
       noteBatchFailure(planned, error);
       throw batchAbortedError(runtime);
@@ -759,8 +848,9 @@ async function finishBatch(member: PlannedMember, signal?: AbortSignal): Promise
   let removed = 0;
   for (const piece of appliedPieces) {
     removed += piece.end - piece.start + 1;
-    added += piece.kind === "insert" ? Math.max(0, piece.newLines.length - piece.foldedLines) : piece.newLines.length;
+    added += Math.max(0, piece.newLines.length - piece.foldedLines);
   }
+  const verb = batchVerb(runtime);
   const header = batchHeader(member);
   const changed = buildChanged(
     {
@@ -781,8 +871,14 @@ async function finishBatch(member: PlannedMember, signal?: AbortSignal): Promise
       },
       spans,
     },
-    batchVerb(runtime),
+    verb,
     await getDiffContextLines(),
+    {
+      separatorMoved:
+        runtime.pieces.some((piece) => piece.kind === "insert") &&
+        !runtime.pieces.some((piece) => piece.kind === "copy" || piece.kind === "move"),
+      indentHints: !runtime.pieces.some((piece) => piece.kind === "copy" || piece.kind === "move"),
+    },
   );
   if (changed.details.diff.length > 0) {
     changed.details.diff = `${header}\n${changed.details.diff}`;

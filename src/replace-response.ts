@@ -134,13 +134,16 @@ export function buildNoop(input: NoopInput, noopNoun = "Replacement"): TResult {
 	};
 }
 
-export function buildChanged(input: SuccessInput, verb = "replaced", diffContextLines = 1): TResult {
+export function buildChanged(input: SuccessInput, verb = "replaced", diffContextLines = 1, fidelityOptions?: { separatorMoved?: boolean; indentHints?: boolean }): TResult {
   const { path, result, warnings, snapshotId, originalNormalized, originalHashes, editMeta, resultHashes, spans } = input;
   const resultLines = visLines(result);
   const diffResult = genDiff(originalNormalized, result, diffContextLines, resultHashes, originalHashes, undefined, spans);
   const addedLines = editMeta.addedLines;
   const removedLines = editMeta.removedLines;
-  const fidelity = fidelityHints(originalNormalized, result, spans, originalHashes, { separatorMoved: verb === "inserted" || verb === "edited", indentHints: verb !== "copied" && verb !== "moved" });
+  const fidelity = fidelityHints(originalNormalized, result, spans, originalHashes, {
+    separatorMoved: fidelityOptions?.separatorMoved ?? (verb === "inserted" || verb === "edited"),
+    indentHints: fidelityOptions?.indentHints ?? (verb !== "copied" && verb !== "moved"),
+  });
   const { warnings: noticeWarnings, hints } = splitNotices(fidelity.length > 0 ? [...(warnings ?? []), ...fidelity] : warnings);
   const annotatedHints = annotateLiteralEscapeHints(hints, result, spans, resultHashes);
   const noticesBlock = `${warnBlock(noticeWarnings)}${hintBlock(annotatedHints)}`;
