@@ -23,6 +23,7 @@ import { withAnchorSession, servedForPath, sessionKeyFor, formatAnchorReclaimNot
 import { serveRows } from "./served";
 import { getAutoReadAllSnapshot } from "./auto-read-all-state";
 import { Text } from "@earendil-works/pi-tui";
+import { anchoredLine, structuredFailure, readResultSchema, type AnchoredLine, type ReadResult } from "./structured";
 const R_DESC = loadP("../prompts/read.md");
 const R_SNIPPET = loadP("../prompts/read-snippet.md");
 function readGuide(): string[] {
@@ -61,7 +62,7 @@ export async function fmtReadPreview(
 	path?: string,
 	maxLineBytes = DEFAULT_MAX_BYTES,
 	maxTruncLines = DEFAULT_MAX_LINES,
-): Promise<{ text: string; truncation?: TruncationResult; nextOffset?: number; servedHashes: string[] }> {
+): Promise<{ text: string; truncation?: TruncationResult; nextOffset?: number; servedHashes: string[]; anchoredLines: AnchoredLine[]; totalLines: number; startLine: number; blockedByLongLine: boolean }> {
 	const allLines = visLines(text);
 	const totalLines = allLines.length;
 	const startLine = normPosInt(options.offset, "offset") ?? 1;
@@ -72,17 +73,29 @@ export async function fmtReadPreview(
       return {
 				text: `${emptyLineHash}${HASH_SEP}\n[File is empty. Use replace to insert content.]`,
 				servedHashes: emptyLineHash ? [emptyLineHash] : [],
+				anchoredLines: emptyLineHash ? [anchoredLine(1, "", emptyLineHash)] : [],
+				totalLines: 0,
+				startLine,
+				blockedByLongLine: false,
 			};
 		}
 		return {
 			text: `Offset ${startLine} is beyond end of file (0 lines). Use replace to insert content.`,
 			servedHashes: [],
+			anchoredLines: [],
+			totalLines: 0,
+			startLine,
+			blockedByLongLine: false,
 		};
 	}
 	if (startLine > totalLines) {
 		return {
 			text: `Offset ${startLine} is beyond end of file (${totalLines} lines total). Use offset=1 to read from the start, or offset=${totalLines} to read the last line.`,
 			servedHashes: [],
+			anchoredLines: [],
+			totalLines,
+			startLine,
+			blockedByLongLine: false,
 		};
 	}
 
@@ -113,6 +126,12 @@ export async function fmtReadPreview(
 		for (let index = 0; index < Math.min(shownRowCount, rows.length); index++) {
 			servedHashes.push(selectedHashes[index]!);
 		}
+		const completeRowCount = skippedTruncation.lastLinePartial ? Math.max(0, shownRowCount - 1) : shownRowCount;
+		const anchoredLines: AnchoredLine[] = [];
+		for (let index = 0; index < Math.min(completeRowCount, rows.length); index++) {
+			const anchor = selectedHashes[index]!;
+			anchoredLines.push(anchoredLine(startLine + index, rows[index]!.slice(anchor.length + HASH_SEP.length), anchor));
+		}
 		const listed = oversized.slice(0, MAX_OVERSIZED_WARNING_LINES);
 		const hiddenCount = oversized.length - listed.length;
 		const lineLabel = oversized.length === 1
@@ -137,6 +156,10 @@ export async function fmtReadPreview(
 			truncation: skippedTruncation.truncated ? skippedTruncation : undefined,
 			...(nextOffset !== undefined ? { nextOffset } : {}),
 			servedHashes,
+			anchoredLines,
+			totalLines,
+			startLine,
+			blockedByLongLine: oversized.some((row) => row.lineNumber <= lastShownLine),
 		};
 	}
 
@@ -146,6 +169,8 @@ export async function fmtReadPreview(
 	let nextOffset: number | undefined;
 	const shownCount = truncation.content === "" ? 0 : truncation.content.split("\n").length;
 	const servedHashes = selectedHashes.slice(0, shownCount);
+	const completeRowCount = truncation.lastLinePartial ? Math.max(0, shownCount - 1) : shownCount;
+	const anchoredLines = selected.slice(0, completeRowCount).map((line, index) => anchoredLine(startLine + index, line, selectedHashes[index]!));
 	if (truncation.truncated) {
 		const endLineDisplay = startLine + truncation.outputLines - 1;
 		nextOffset = endLineDisplay + 1;
@@ -164,6 +189,10 @@ export async function fmtReadPreview(
 		truncation: truncation.truncated ? truncation : undefined,
 		...(nextOffset !== undefined ? { nextOffset } : {}),
 		servedHashes,
+		anchoredLines,
+		totalLines,
+		startLine,
+		blockedByLongLine: false,
 	};
 }
 
@@ -193,6 +222,7 @@ export function regRead(pi: ExtensionAPI, flags: EditToolFlags = DEFAULT_EDIT_FL
 				}),
 			),
 		}),
+		outputSchema: readResultSchema,
 		executionMode: "sequential",
 		renderResult(result, { isPartial, expanded }, theme, context) {
 			if (isPartial) return new Text((theme as unknown as { fg: (a:string,b:string)=>string }).fg("warning", "Reading..."), 0, 0);
@@ -207,7 +237,8 @@ export function regRead(pi: ExtensionAPI, flags: EditToolFlags = DEFAULT_EDIT_FL
 		},
 
 		async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-			return withAnchorSession(ctx, async () => {
+			try {
+				return await withAnchorSession(ctx, async () => {
 				const rawPath = params.path;
 				const absolutePath = toCwd(rawPath, ctx.cwd);
 
@@ -241,7 +272,9 @@ export function regRead(pi: ExtensionAPI, flags: EditToolFlags = DEFAULT_EDIT_FL
 						onUpdate: typeof _onUpdate,
 						context: typeof ctx,
 					) => ReturnType<typeof builtinRead.execute>;
-					return executeBuiltinRead(_toolCallId, params, signal, _onUpdate, ctx);
+					const imageResult = await executeBuiltinRead(_toolCallId, params, signal, _onUpdate, ctx);
+					const imageStructured: ReadResult = { ok: true, kind: "image", path: rawPath, mimeType: file.mimeType };
+					return { ...imageResult, structuredContent: imageStructured };
 				}
 	      const { normalized, fileHashes, hadUtf8DecodeErrors, absolutePath: resolvedPath } = await readNormFile(
 	        rawPath, ctx.cwd, { signal, preloadedFile: file, maxLines: MAX_HASH_LINES },
@@ -265,6 +298,19 @@ export function regRead(pi: ExtensionAPI, flags: EditToolFlags = DEFAULT_EDIT_FL
 					reclaimNotice,
 				].filter((part): part is string => part !== undefined).join("\n\n");
 
+				const structuredContent: ReadResult = {
+					ok: true,
+					kind: "read",
+					path: rawPath,
+					text: previewText,
+					lines: preview.anchoredLines,
+					totalLines: preview.totalLines,
+					startLine: preview.startLine,
+					nextOffset: preview.nextOffset ?? null,
+					truncated: preview.truncation !== undefined,
+					blockedByLongLine: preview.blockedByLongLine,
+					hadUtf8DecodeErrors,
+				};
 				return {
 					content: [{ type: "text", text: previewText }],
 					details: {
@@ -281,8 +327,13 @@ export function regRead(pi: ExtensionAPI, flags: EditToolFlags = DEFAULT_EDIT_FL
 								: {}),
 						},
 					},
+					structuredContent,
 				};
-			});
+				});
+			} catch (error) {
+				if (signal?.aborted) throw error;
+				return structuredFailure(error, {});
+			}
 		},
 	});
 }

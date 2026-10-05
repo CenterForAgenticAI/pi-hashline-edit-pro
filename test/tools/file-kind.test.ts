@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { lineHashes } from "../../src/hashline";
 import { MAX_BYTES } from "../../src/constants";
 import { join } from "path";
-import { withTempFile, withTempBytes, setupIntegrationTest, useTestHome } from "../support/fixtures";
+import { withTempFile, withTempBytes, setupIntegrationTest, useTestHome, toolError } from "../support/fixtures";
 
 useTestHome();
 
@@ -41,17 +41,15 @@ describe("file kind guards in tools", () => {
       const { ctx, editTool } = setupIntegrationTest(cwd);
       const hashes = await lineHashes("placeholder\n", join(cwd, "image.png"));
 
-      await expect(
-        editTool.execute(
-          "e1",
-          {
-            remove_from: hashes[0]!, remove_to: hashes[0]!, text: ["x"],
-          },
-          undefined,
-          undefined,
-          ctx,
-        ),
-      ).rejects.toThrow(/image/i);
+      expect(await toolError(() => editTool.execute(
+        "e1",
+        {
+          remove_from: hashes[0]!, remove_to: hashes[0]!, text: ["x"],
+        },
+        undefined,
+        undefined,
+        ctx,
+      ))).toMatch(/image/i);
     });
   });
 
@@ -61,17 +59,15 @@ describe("file kind guards in tools", () => {
       const { ctx, editTool } = setupIntegrationTest(cwd);
       const hashes = await lineHashes("placeholder\n", join(cwd, "utf16.txt"));
 
-      await expect(
-        editTool.execute(
-          "e1",
-          {
-            remove_from: hashes[0]!, remove_to: hashes[0]!, text: ["x"],
-          },
-          undefined,
-          undefined,
-          ctx,
-        ),
-      ).rejects.toThrow(/UTF-16LE/);
+      expect(await toolError(() => editTool.execute(
+        "e1",
+        {
+          remove_from: hashes[0]!, remove_to: hashes[0]!, text: ["x"],
+        },
+        undefined,
+        undefined,
+        ctx,
+      ))).toMatch(/UTF-16LE/);
     });
   });
 
@@ -81,17 +77,15 @@ describe("file kind guards in tools", () => {
       const { ctx, editTool } = setupIntegrationTest(cwd);
       const hashes = await lineHashes("placeholder\n", join(cwd, "mydir"));
 
-      await expect(
-        editTool.execute(
-          "e1",
-          {
-            remove_from: hashes[0]!, remove_to: hashes[0]!, text: ["x"],
-          },
-          undefined,
-          undefined,
-          ctx,
-        ),
-      ).rejects.toThrow(/directory/i);
+      expect(await toolError(() => editTool.execute(
+        "e1",
+        {
+          remove_from: hashes[0]!, remove_to: hashes[0]!, text: ["x"],
+        },
+        undefined,
+        undefined,
+        ctx,
+      ))).toMatch(/directory/i);
     });
   });
 
@@ -117,9 +111,7 @@ describe("file kind guards in tools", () => {
       const { truncate } = await import("fs/promises");
       await truncate(path, MAX_BYTES + 1);
       const { ctx, readTool } = setupIntegrationTest(cwd);
-      await expect(
-        readTool.execute("r1", { path: "huge.txt" }, undefined, undefined, ctx),
-      ).rejects.toThrow(/E_FILE_TOO_LARGE/);
+      expect(await toolError(() => readTool.execute("r1", { path: "huge.txt" }, undefined, undefined, ctx))).toMatch(/E_FILE_TOO_LARGE/);
     });
   });
 });

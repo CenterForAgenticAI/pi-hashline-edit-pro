@@ -10,6 +10,7 @@ import {
   anchorFor,
   assistantMessage,
   toolCall,
+  toolError,
 } from "../support/fixtures";
 
 function liveAnchor(diff: string, needle: string): string | undefined {
@@ -133,15 +134,13 @@ describe("multiple insert anchors", () => {
         ctx,
       );
       expect(okE.content[0].text).toContain("Successfully replaced");
-      await expect(
-        getTool("replace").execute(
-          "e-d",
-          { remove_from: dHash, remove_to: dHash, text: ["DDD2"] },
-          undefined,
-          undefined,
-          ctx,
-        ),
-      ).rejects.toThrow(/E_STALE_ANCHOR/);
+      expect(await toolError(() => getTool("replace").execute(
+        "e-d",
+        { remove_from: dHash, remove_to: dHash, text: ["DDD2"] },
+        undefined,
+        undefined,
+        ctx,
+      ))).toMatch(/E_STALE_ANCHOR/);
     });
   });
 

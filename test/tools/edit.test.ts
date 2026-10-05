@@ -2,7 +2,7 @@ import { join } from "path";
 import { describe, expect, it, vi } from "vitest";
 import { readFile } from "fs/promises";
 import { lineHashes } from "../../src/hashline";
-import { withTempFile, setupIntegrationTest, useTestHome, getText, extractHash } from "../support/fixtures";
+import { withTempFile, setupIntegrationTest, useTestHome, getText, extractHash, toolError } from "../support/fixtures";
 
 useTestHome();
 
@@ -12,17 +12,15 @@ describe("regReplace", () => {
       const { ctx, editTool } = setupIntegrationTest(cwd);
       const hashes = await lineHashes("aaa\nbbb\n", join(cwd, "sample.ts"));
 
-      await expect(
-        editTool.execute(
-          "e1",
-          {
-            remove_from: hashes[0]!, remove_to: hashes[0]!, text: null,
-          },
-          undefined,
-          undefined,
-          ctx,
-        ),
-      ).rejects.toThrow();
+      expect(await toolError(() => editTool.execute(
+        "e1",
+        {
+          remove_from: hashes[0]!, remove_to: hashes[0]!, text: null,
+        },
+        undefined,
+        undefined,
+        ctx,
+      ))).toBeTruthy();
     });
   });
 
@@ -257,18 +255,16 @@ describe("regReplace - robustness", () => {
           throw new Error("store down");
         });
       try {
-        await expect(
-          editTool.execute(
-            "e1",
-            {
-              remove_from: hashes[1]!, remove_to: hashes[1]!,
-              text: ["BBB"],
-            },
-            undefined,
-            undefined,
-            ctx,
-          ),
-        ).rejects.toThrow(/E_UNDO_UNAVAILABLE/);
+        expect(await toolError(() => editTool.execute(
+          "e1",
+          {
+            remove_from: hashes[1]!, remove_to: hashes[1]!,
+            text: ["BBB"],
+          },
+          undefined,
+          undefined,
+          ctx,
+        ))).toMatch(/E_UNDO_UNAVAILABLE/);
       } finally {
         spy.mockRestore();
       }

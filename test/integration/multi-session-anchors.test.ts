@@ -3,7 +3,7 @@ import { readFile, writeFile } from "fs/promises";
 import { join } from "path";
 import register from "../../index";
 import { initRegistry } from "../../src/anchor-registry";
-import { makeFakePiRegistry, withTempDir, getText, anchorFor } from "../support/fixtures";
+import { makeFakePiRegistry, withTempDir, getText, anchorFor, toolError } from "../support/fixtures";
 
 function sessionContext(cwd: string, sessionFile: string) {
   return {
@@ -48,15 +48,13 @@ describe("multi-session anchor isolation", () => {
       expect(await readFile(join(dir, "fileA.txt"), "utf-8")).toBe("alpha\nBETA\ngamma\n");
       expect(await readFile(join(dir, "fileB.txt"), "utf-8")).toBe("one\ntwo\nthree\n");
 
-      await expect(
-        replaceTool.execute(
-          "eA2",
-          { remove_from: anchorB, remove_to: anchorB, text: ["HACKED"] },
-          undefined,
-          undefined,
-          ctxA,
-        ),
-      ).rejects.toThrow(/E_STALE_ANCHOR/);
+      expect(await toolError(() => replaceTool.execute(
+        "eA2",
+        { remove_from: anchorB, remove_to: anchorB, text: ["HACKED"] },
+        undefined,
+        undefined,
+        ctxA,
+      ))).toMatch(/E_STALE_ANCHOR/);
       expect(await readFile(join(dir, "fileB.txt"), "utf-8")).toBe("one\ntwo\nthree\n");
     });
   });

@@ -3,11 +3,13 @@ import type { ReplaceDetails } from "./replace";
 import { genDiff, genPatch, type DiffSpan } from "./replace-diff";
 import { visLines, clipLine } from "./utils";
 import { annotateLiteralEscapeHints, fidelityHints } from "./edit-fidelity";
+import { anchoredLine, anchoredLinesFromDiff, diffAnchorsOmitted, toEditVerb, type EditStructured, type EditVerb, type Json } from "./structured";
 
 export type TResult = {
 	content: Array<{ type: "text"; text: string }>;
 	isError?: boolean;
 	details: ReplaceDetails;
+	structuredContent?: Json;
 };
 
 export type RMetrics = {
@@ -35,6 +37,7 @@ export interface NoopInput {
 	snapshotId?: string;
 	editMeta: RMeta;
 	warnings: string[] | undefined;
+	verb?: EditVerb;
 }
 
 export interface SuccessInput {
@@ -111,13 +114,26 @@ export function buildNoop(input: NoopInput, noopNoun = "Replacement"): TResult {
 		: "The edit produced identical content.";
 	const { warnings: noticeWarnings, hints } = splitNotices(warnings);
 	const text = `No changes made to ${path}\nClassification: noop\n${noopDetailsText}${warnBlock(noticeWarnings)}${hintBlock(hints)}`;
-
 	const metrics = buildMetrics({
 		classification: "noop",
 		editsAttempted: editMeta.editsAttempted,
 		noopEditsCount: editMeta.noopEditsCount,
 		warningsCount: noticeWarnings.length,
 	});
+	const structuredContent: EditStructured = {
+		ok: true,
+		kind: "edit",
+		verb: input.verb ?? "replaced",
+		classification: "noop",
+		path,
+		text,
+		diff: "",
+		warnings: [...noticeWarnings],
+		hints: [...hints],
+		firstChangedLine: null,
+		anchors: [],
+		anchorsOmitted: false,
+	};
 
 	return {
 		content: [{ type: "text", text }],
@@ -131,6 +147,7 @@ export function buildNoop(input: NoopInput, noopNoun = "Replacement"): TResult {
       ...(noticeWarnings.length ? { warnings: [...noticeWarnings] } : {}),
       ...(hints.length ? { hints: [...hints] } : {}),
 		},
+		structuredContent,
 	};
 }
 
@@ -172,6 +189,24 @@ export function buildChanged(input: SuccessInput, verb = "replaced", diffContext
   });
 
   const patchResult = genPatch(path, originalNormalized, result);
+	const anchors = resultLines.length === 0
+		? (emptyAnchor !== undefined ? [anchoredLine(1, "", emptyAnchor)] : [])
+		: anchoredLinesFromDiff(diffResult.diff, diffResult.lineNumbers);
+	const anchorsOmitted = resultLines.length > 0 && (diffAnchorsOmitted(diffResult.diff) || (anchors.length === 0 && diffResult.diff.length === 0));
+	const structuredContent: EditStructured = {
+		ok: true,
+		kind: "edit",
+		verb: toEditVerb(verb),
+		classification: "applied",
+		path,
+		text,
+		diff: diffResult.diff,
+		warnings: [...noticeWarnings],
+		hints: [...annotatedHints],
+		firstChangedLine: editMeta.firstChangedLine ?? diffResult.firstChangedLine ?? null,
+		anchors,
+		anchorsOmitted,
+	};
   return {
     content: [{ type: "text", text }],
     details: {
@@ -186,5 +221,6 @@ export function buildChanged(input: SuccessInput, verb = "replaced", diffContext
       ...(noticeWarnings.length ? { warnings: [...noticeWarnings] } : {}),
       ...(annotatedHints.length ? { hints: [...annotatedHints] } : {}),
     },
+    structuredContent,
   };
 }

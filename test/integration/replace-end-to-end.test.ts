@@ -4,7 +4,7 @@ import { lineHashes } from "../../src/hashline";
 import { ownersForPath, initRegistry, resetRegistryForTests } from "../../src/anchor-registry";
 import { resolveTarget } from "../../src/fs-write";
 import { toCwd } from "../../src/paths";
-import { withTempFile, withTempBytes, setupIntegrationTest, useTestHome, getText, extractHash } from "../support/fixtures";
+import { withTempFile, withTempBytes, setupIntegrationTest, useTestHome, getText, extractHash, toolError } from "../support/fixtures";
 
 useTestHome();
 
@@ -122,18 +122,16 @@ describe("replace tool - end-to-end", () => {
         ctx,
       );
 
-      await expect(
-        editTool.execute(
-          "e2",
-          {
-            remove_from: betaRef, remove_to: betaRef,
-            text: ["BBB-AGAIN"],
-          },
-          undefined,
-          undefined,
-          ctx,
-        ),
-      ).rejects.toThrow(/E_STALE_ANCHOR.*not owned in this session/);
+      expect(await toolError(() => editTool.execute(
+        "e2",
+        {
+          remove_from: betaRef, remove_to: betaRef,
+          text: ["BBB-AGAIN"],
+        },
+        undefined,
+        undefined,
+        ctx,
+      ))).toMatch(/E_STALE_ANCHOR.*not owned in this session/);
     });
   });
 

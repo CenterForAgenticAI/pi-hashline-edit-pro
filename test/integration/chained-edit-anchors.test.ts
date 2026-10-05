@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { withTempFile, setupIntegrationTest } from "../support/fixtures";
+import { withTempFile, setupIntegrationTest, toolError } from "../support/fixtures";
 
 describe("chained edit anchors", () => {
   it("returns updated anchors in edit result for a single-line replace", async () => {
@@ -116,15 +116,13 @@ describe("chained edit anchors", () => {
         undefined,
         ctx,
       );
-      await expect(
-        editTool.execute(
-          "e2-stale",
-          { remove_from: betaRef, remove_to: betaRef, text: ["BETA-AGAIN"] },
-          undefined,
-          undefined,
-          ctx,
-        ),
-      ).rejects.toThrow(/E_STALE_ANCHOR.*not owned in this session/);
+      expect(await toolError(() => editTool.execute(
+        "e2-stale",
+        { remove_from: betaRef, remove_to: betaRef, text: ["BETA-AGAIN"] },
+        undefined,
+        undefined,
+        ctx,
+      ))).toMatch(/E_STALE_ANCHOR.*not owned in this session/);
 
       const alphaEdit = await editTool.execute(
         "e3",

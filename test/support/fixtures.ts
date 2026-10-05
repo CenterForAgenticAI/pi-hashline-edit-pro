@@ -221,6 +221,19 @@ export function setupReadTest(cwd: string) {
 export function getText(result: { content: Array<{ text?: string }> }): string {
   return result.content[0]?.text ?? "";
 }
+export async function toolError(run: () => Promise<{ content: readonly unknown[]; isError?: boolean }>): Promise<string> {
+  let result: { content: readonly unknown[]; isError?: boolean };
+  try {
+    result = await run();
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error);
+  }
+  const first = result.content[0] as { text?: string } | undefined;
+  const text = typeof first?.text === "string" ? first.text : "";
+  if (result.isError !== true) throw new Error(`Expected a tool error, got: ${text}`);
+  return text;
+}
+
 export function extractHash(line: string): string {
   const m = line.match(/([A-Za-z]{4})│/);
   return m ? m[1]! : line.split("│")[0]!;

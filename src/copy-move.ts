@@ -43,6 +43,7 @@ import {
   type EditToolFlags,
 } from "./edit-common";
 import { makeRenderCall, type RPreview, type RRState } from "./replace-render";
+import { anchoredLinesFromDiff, diffAnchorsOmitted, editResultSchema, structuredFailure, type EditStructured } from "./structured";
 
 export type TransferKind = "copy" | "move";
 
@@ -471,6 +472,20 @@ async function commitMovePair(input: {
     ? `${patchTruncation.content}\n... [cross-file move patch truncated at ${DEFAULT_MAX_LINES} lines or ${formatSize(DEFAULT_MAX_BYTES)}; the patch cannot be applied as-is. Use read to see the full files.]`
     : rawPatch;
   const patchTruncated = patchTruncation.truncated || sourceChanged.details.patchTruncated === true || destinationChanged.details.patchTruncated === true;
+  const structuredContent: EditStructured = {
+    ok: true,
+    kind: "edit",
+    verb: "moved",
+    classification: "applied",
+    path: input.destination.displayPath,
+    text: `Successfully moved ${movedLines} line(s) from ${input.source.displayPath} to ${input.destination.displayPath}.${warningBlock}`,
+    diff,
+    warnings: [...warnings],
+    hints: [],
+    firstChangedLine: input.destination.pipe.firstChangedLine ?? null,
+    anchors: anchoredLinesFromDiff(destinationChanged.details.diff, destinationChanged.details.diffLineNumbers),
+    anchorsOmitted: diffTruncation.truncated || patchTruncated || diffAnchorsOmitted(destinationChanged.details.diff),
+  };
   return {
     content: [
       {
@@ -494,6 +509,7 @@ async function commitMovePair(input: {
       }),
       ...(warnings.length > 0 ? { warnings: [...warnings] } : {}),
     },
+    structuredContent,
   };
 }
 
@@ -901,6 +917,7 @@ export function buildTransferToolDef(kind: TransferKind, flags: EditToolFlags = 
     promptGuidelines: prompted.guidelines,
     ...editToolBase,
     parameters: buildTransferToolSchema(flags.requirePath),
+    outputSchema: editResultSchema,
     renderCall: makeRenderCall(
       (request, cwd, signal) => transferPreview(kind, request, cwd, signal),
       {
@@ -911,7 +928,8 @@ export function buildTransferToolDef(kind: TransferKind, flags: EditToolFlags = 
     ),
     renderResult: editRenderResultWrapper,
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-      return withAnchorSession(ctx, async () => {
+      try {
+        return await withAnchorSession(ctx, async () => {
         const canonical = normReq(params);
         assertTransferReq(canonical);
         const req = canonical;
@@ -992,6 +1010,10 @@ export function buildTransferToolDef(kind: TransferKind, flags: EditToolFlags = 
         }
         return executeCrossFile(kind, refs, warnings, sourcePath, destinationPath, ctx.cwd, signal);
       });
+      } catch (error) {
+        if (signal?.aborted) throw error;
+        return structuredFailure(error, { diff: "" });
+      }
     },
   };
 }

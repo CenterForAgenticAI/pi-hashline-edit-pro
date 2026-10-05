@@ -15,6 +15,7 @@ import {
   useTestHome,
   withTempDir,
   withTempFile,
+  toolError,
 } from "../support/fixtures";
 
 useTestHome();
@@ -120,9 +121,7 @@ describe("copy", () => {
       const text = getText(await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx));
       const beta = anchorFor(text, "beta");
       const gamma = anchorFor(text, "gamma");
-      await expect(
-        getTool("copy").execute("c1", { source_from: beta, source_to: gamma, insert_after: beta }, undefined, undefined, ctx),
-      ).rejects.toThrow("[E_BAD_SHAPE]");
+      expect(await toolError(() => getTool("copy").execute("c1", { source_from: beta, source_to: gamma, insert_after: beta }, undefined, undefined, ctx))).toContain("[E_BAD_SHAPE]");
     });
   });
 
@@ -220,10 +219,8 @@ describe("copy and move validation", () => {
   it("requires all three anchors", async () => {
     await withTempFile("sample.txt", "alpha\nbeta\n", async ({ cwd }) => {
       const { ctx, getTool } = setupIntegrationTest(cwd);
-      await expect(getTool("copy").execute("c1", { source_from: "Hasu" }, undefined, undefined, ctx)).rejects.toThrow("[E_BAD_SHAPE]");
-      await expect(
-        getTool("move").execute("m1", { source_from: "Hasu", source_to: "Hasu", insert_after: "Hasu", extra: true }, undefined, undefined, ctx),
-      ).rejects.toThrow(/unknown or unsupported fields/);
+      expect(await toolError(() => getTool("copy").execute("c1", { source_from: "Hasu" }, undefined, undefined, ctx))).toContain("[E_BAD_SHAPE]");
+      expect(await toolError(() => getTool("move").execute("m1", { source_from: "Hasu", source_to: "Hasu", insert_after: "Hasu", extra: true }, undefined, undefined, ctx))).toMatch(/unknown or unsupported fields/);
     });
   });
 
@@ -232,12 +229,8 @@ describe("copy and move validation", () => {
       const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
       const text = getText(await readTool.execute("r1", { path: "empty.txt" }, undefined, undefined, ctx));
       const anchor = text.split("\n")[0]!.split("│")[0]!;
-      await expect(
-        getTool("copy").execute("c1", { source_from: anchor, source_to: anchor, insert_after: anchor }, undefined, undefined, ctx),
-      ).rejects.toThrow("[E_BAD_SHAPE] The file is empty");
-      await expect(
-        getTool("move").execute("m1", { source_from: anchor, source_to: anchor, insert_after: anchor }, undefined, undefined, ctx),
-      ).rejects.toThrow("[E_BAD_SHAPE] The file is empty");
+      expect(await toolError(() => getTool("copy").execute("c1", { source_from: anchor, source_to: anchor, insert_after: anchor }, undefined, undefined, ctx))).toContain("[E_BAD_SHAPE] The file is empty");
+      expect(await toolError(() => getTool("move").execute("m1", { source_from: anchor, source_to: anchor, insert_after: anchor }, undefined, undefined, ctx))).toContain("[E_BAD_SHAPE] The file is empty");
     });
   });
 
@@ -321,18 +314,14 @@ describe("copy and move validation", () => {
       const bText = getText(await readTool.execute("r2", { path: "b.ts" }, undefined, undefined, ctx));
       const alpha = anchorFor(aText, "alpha");
       const one = anchorFor(bText, "one");
-      await expect(
-        getTool("copy").execute("c1", { source_from: alpha, source_to: "PyBY", insert_after: one }, undefined, undefined, ctx),
-      ).rejects.toThrow("[E_STALE_ANCHOR]");
+      expect(await toolError(() => getTool("copy").execute("c1", { source_from: alpha, source_to: "PyBY", insert_after: one }, undefined, undefined, ctx))).toContain("[E_STALE_ANCHOR]");
     });
   });
 
   it("rejects a stale anchor", async () => {
     await withTempFile("sample.txt", "alpha\nbeta\n", async ({ cwd }) => {
       const { ctx, getTool } = setupIntegrationTest(cwd);
-      await expect(
-        getTool("move").execute("m1", { source_from: "PyBY", source_to: "PyBY", insert_after: "PyBY" }, undefined, undefined, ctx),
-      ).rejects.toThrow("[E_STALE_ANCHOR]");
+      expect(await toolError(() => getTool("move").execute("m1", { source_from: "PyBY", source_to: "PyBY", insert_after: "PyBY" }, undefined, undefined, ctx))).toContain("[E_STALE_ANCHOR]");
     });
   });
 
@@ -366,9 +355,7 @@ describe("copy and move validation", () => {
       const text = getText(await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx));
       const beta = anchorFor(text, "beta");
       const gamma = anchorFor(text, "gamma");
-      await expect(
-        getTool("copy").execute("c1", { source_from: `${beta}│beta`, source_to: beta, insert_after: gamma }, undefined, undefined, ctx),
-      ).rejects.toThrow("[E_BAD_SHAPE] Strict-input mode");
+      expect(await toolError(() => getTool("copy").execute("c1", { source_from: `${beta}│beta`, source_to: beta, insert_after: gamma }, undefined, undefined, ctx))).toContain("[E_BAD_SHAPE] Strict-input mode");
       expect(await readFile(path, "utf-8")).toBe("alpha\nbeta\ngamma\n");
     });
   });
@@ -379,9 +366,7 @@ describe("copy and move validation", () => {
       const text = getText(await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx));
       const beta = anchorFor(text, "beta");
       const gamma = anchorFor(text, "gamma");
-      await expect(
-        getTool("copy").execute("c1", { path: "sample.txt", source_from: beta, source_to: beta, insert_after: gamma }, undefined, undefined, ctx),
-      ).rejects.toThrow(/unsupported fields: path/);
+      expect(await toolError(() => getTool("copy").execute("c1", { path: "sample.txt", source_from: beta, source_to: beta, insert_after: gamma }, undefined, undefined, ctx))).toMatch(/unsupported fields: path/);
 
       await mkdir(join(cwd, ".config", "pi-hashline-edit-pro"), { recursive: true });
       await writeFile(
@@ -389,9 +374,7 @@ describe("copy and move validation", () => {
         JSON.stringify({ autoRead: true, requirePath: true }),
         "utf-8",
       );
-      await expect(
-        getTool("copy").execute("c2", { source_from: beta, source_to: beta, insert_after: gamma }, undefined, undefined, ctx),
-      ).rejects.toThrow(/requires a non-empty "path"/);
+      expect(await toolError(() => getTool("copy").execute("c2", { source_from: beta, source_to: beta, insert_after: gamma }, undefined, undefined, ctx))).toMatch(/requires a non-empty "path"/);
       await getTool("copy").execute(
         "c3",
         { path: "sample.txt", source_from: beta, source_to: beta, insert_after: gamma },
@@ -411,9 +394,7 @@ describe("served-range verification", () => {
       await readTool.execute("r1", { path: "sample.txt", limit: 2 }, undefined, undefined, ctx);
       const abs = await resolveTarget(join(cwd, "sample.txt"));
       const hashes = await lineHashes("a\nb\nc\nd\n", abs);
-      await expect(
-        getTool("copy").execute("c1", { source_from: hashes[2]!, source_to: hashes[3]!, insert_after: hashes[0]! }, undefined, undefined, ctx),
-      ).rejects.toThrow("[E_RANGE_STALE]");
+      expect(await toolError(() => getTool("copy").execute("c1", { source_from: hashes[2]!, source_to: hashes[3]!, insert_after: hashes[0]! }, undefined, undefined, ctx))).toContain("[E_RANGE_STALE]");
     });
   });
 
@@ -423,9 +404,7 @@ describe("served-range verification", () => {
       await readTool.execute("r1", { path: "sample.txt", limit: 2 }, undefined, undefined, ctx);
       const abs = await resolveTarget(join(cwd, "sample.txt"));
       const hashes = await lineHashes("a\nb\nc\nd\n", abs);
-      await expect(
-        getTool("copy").execute("c1", { source_from: hashes[0]!, source_to: hashes[0]!, insert_after: hashes[3]! }, undefined, undefined, ctx),
-      ).rejects.toThrow("[E_RANGE_STALE]");
+      expect(await toolError(() => getTool("copy").execute("c1", { source_from: hashes[0]!, source_to: hashes[0]!, insert_after: hashes[3]! }, undefined, undefined, ctx))).toContain("[E_RANGE_STALE]");
     });
   });
 
@@ -627,9 +606,7 @@ describe("cross-file previews and require-path", () => {
       const bText = getText(await readTool.execute("r2", { path: "b.ts" }, undefined, undefined, ctx));
       const alpha = anchorFor(aText, "alpha");
       const one = anchorFor(bText, "one");
-      await expect(
-        getTool("copy").execute("c1", { path: "missing.ts", source_from: alpha, source_to: alpha, insert_after: one }, undefined, undefined, ctx),
-      ).rejects.toThrow(/does not match the source file/);
+      expect(await toolError(() => getTool("copy").execute("c1", { path: "missing.ts", source_from: alpha, source_to: alpha, insert_after: one }, undefined, undefined, ctx))).toMatch(/does not match the source file/);
       await getTool("copy").execute("c2", { path: "a.ts", source_from: alpha, source_to: alpha, insert_after: one }, undefined, undefined, ctx);
       expect(await readFile(join(dir, "b.ts"), "utf-8")).toBe("one\nalpha\ntwo\n");
     });

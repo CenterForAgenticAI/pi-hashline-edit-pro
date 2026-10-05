@@ -11,6 +11,7 @@ import {
 import { readNormFile, type NormFile } from "./file-reader";
 import { editToolSchema, buildEditToolSchema, type ReqParams, type RawReqParams, assertReq, normReq } from "./payload-contract";
 import { literalEscapeHints, splitLines } from "./utils";
+import { editResultSchema, structuredFailure } from "./structured";
 import { loadP, loadGuide } from "./prompts";
 import { type FileIdentity } from "./fs-write";
 import { applyEdit,
@@ -278,13 +279,15 @@ export function buildToolDef(flags: EditToolFlags = DEFAULT_EDIT_FLAGS): ToolDef
     label: "Replace",
     description: prompted.description,
     parameters,
+    outputSchema: editResultSchema,
     promptSnippet: prompted.snippet,
     promptGuidelines: prompted.guidelines,
     ...editToolBase,
     renderCall: editRenderCallWrapper(compPreview),
     renderResult: editRenderResultWrapper,
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-      return withAnchorSession(ctx, async () => {
+      try {
+        return await withAnchorSession(ctx, async () => {
         const canonical = normReq(params);
         assertReq(canonical);
         const normalizedParams = canonical;
@@ -335,7 +338,11 @@ export function buildToolDef(flags: EditToolFlags = DEFAULT_EDIT_FLAGS): ToolDef
             extraWarnings: [...literalEscapes, ...built.warnings],
           });
         });
-      });
+        });
+      } catch (error) {
+        if (signal?.aborted) throw error;
+        return structuredFailure(error, { diff: "" });
+      }
     },
   };
 }

@@ -25,6 +25,7 @@ import type { PipelineResult } from "./replace";
 import { genPatch } from "./replace-diff";
 import { saveUndo } from "./replace-undo";
 import { buildChanged, buildNoop, type RMetrics, type TResult } from "./replace-response";
+import { toEditVerb, withStructuredText, type EditStructured } from "./structured";
 import { serveRows, servedHashesFromDiff } from "./served";
 import { abortIf, assertByteLimit, assertLineLimit, errCode, isRec, splitLines } from "./utils";
 
@@ -472,6 +473,20 @@ function batchPlaceholder(member: PlannedMember, piece: BatchPiece, snapshotId: 
     classification: piece.noop ? "noop" : "applied",
     ...(piece.noop ? {} : { added_lines: added, removed_lines: piece.end - piece.start + 1 }),
   };
+  const structuredContent: EditStructured = {
+    ok: true,
+    kind: "edit",
+    verb: toEditVerb(piece.kind),
+    classification: piece.noop ? "noop" : "applied",
+    path: member.target,
+    text: `In batch ${member.display} (queued)`,
+    diff: "",
+    warnings: [],
+    hints: [],
+    firstChangedLine: piece.noop ? null : piece.start,
+    anchors: [],
+    anchorsOmitted: false,
+  };
   return {
     content: [
       {
@@ -488,6 +503,7 @@ function batchPlaceholder(member: PlannedMember, piece: BatchPiece, snapshotId: 
       metrics,
       batch: { id: member.display, size: member.size, last: false, total: member.total },
     },
+    structuredContent,
   };
 }
 
@@ -1044,6 +1060,7 @@ async function finishBatch(member: PlannedMember, signal?: AbortSignal): Promise
     : "";
   const undoNote = sourceFiles.length > 0 ? "one undo reverts the destination edits" : "one undo reverts them";
   changed.content[0]!.text = `${header}\n${changed.content[0]!.text}\nBatch ${member.display}: ${executed} edit${executed === 1 ? "" : "s"} applied as one commit; ${undoNote}.${sourceNote}`;
+  changed.structuredContent = withStructuredText(changed.structuredContent, changed.content[0]!.text);
   changed.details.batch = { id: member.display, size: member.size, last: true, total: member.total };
   return changed;
 }
@@ -1065,10 +1082,12 @@ async function combinedNoop(path: string, member: PlannedMember, runtime: BatchS
         removedLines: 0,
       },
       warnings: dedupeWarnings(warnings),
+      verb: "edited",
     },
     "Batch",
   );
   noop.content[0]!.text += `\nBatch ${member.display}: ${executed} edits produced no net change; undo history preserved.`;
+  noop.structuredContent = withStructuredText(noop.structuredContent, noop.content[0]!.text);
   noop.details.batch = { id: member.display, size: member.size, last: true, total: member.total };
   return noop;
 }

@@ -44,7 +44,7 @@
     "xxhash-wasm": "^1.1.0"
   },
   "peerDependencies": {
-    "@earendil-works/pi-coding-agent": ">=0.84.0",
+    "@earendil-works/pi-coding-agent": ">=0.99.0",
     "@earendil-works/pi-tui": "*",
     "typebox": "*"
   },
@@ -60,7 +60,7 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "@earendil-works/pi-coding-agent": "^0.87.0",
+    "@earendil-works/pi-coding-agent": "^1.0.3",
     "@eslint/js": "^10.0.1",
     "@types/node": "^24",
     "@vitest/coverage-v8": "^4.1.11",

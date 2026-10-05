@@ -5,7 +5,7 @@ import { Value } from "typebox/value";
 import register from "../../index";
 import { initRegistry, resetRegistryForTests } from "../../src/anchor-registry";
 import { resetBatchStateForTests } from "../../src/batch";
-import { makeFakePiRegistry, withTempDir, withTempFile, toolCall, assistantMessage, anchorFor, extractHash } from "../support/fixtures";
+import { makeFakePiRegistry, withTempDir, withTempFile, toolCall, assistantMessage, anchorFor, extractHash, toolError } from "../support/fixtures";
 function withHostCoercion(schema: unknown, args: Record<string, unknown>): Record<string, unknown> {
   const coerced = structuredClone(args);
   Value.Convert(schema as never, coerced);
@@ -245,12 +245,7 @@ describe("same-turn edit batches", () => {
 
       const first = await insertTool.execute("t1", firstArgs, undefined, undefined, ctx);
       expect(first.content[0].text).toBe("In batch 1 (queued)");
-      let failure = "";
-      try {
-        await insertTool.execute("t2", secondArgs, undefined, undefined, ctx);
-      } catch (error) {
-        failure = error instanceof Error ? error.message : String(error);
-      }
+      const failure = await toolError(() => insertTool.execute("t2", secondArgs, undefined, undefined, ctx));
       expect(failure).toContain("[E_BATCH_OVERLAP]");
       expect(await readFile(path, "utf-8")).toBe("one\ntwo\nthree\n");
     });
@@ -274,12 +269,7 @@ describe("same-turn edit batches", () => {
 
       const first = await insertTool.execute("e1", beforeArgs, undefined, undefined, ctx);
       expect(first.content[0].text).toBe("In batch 1 (queued)");
-      let failure = "";
-      try {
-        await insertTool.execute("e2", afterArgs, undefined, undefined, ctx);
-      } catch (error) {
-        failure = error instanceof Error ? error.message : String(error);
-      }
+      const failure = await toolError(() => insertTool.execute("e2", afterArgs, undefined, undefined, ctx));
       expect(failure).toContain("[E_BATCH_OVERLAP]");
       expect(await readFile(path, "utf-8")).toBe("");
     });
@@ -517,18 +507,13 @@ describe("same-turn edit batches", () => {
       );
       expect(first.content[0].text).toBe("In batch 1 (queued)");
 
-      let failure = "";
-      try {
-        await editTool.execute(
-          "f2",
-          { remove_from: bRef, remove_to: bRef, text: ["B2"] },
-          undefined,
-          undefined,
-          ctx,
-        );
-      } catch (error) {
-        failure = error instanceof Error ? error.message : String(error);
-      }
+      const failure = await toolError(() => editTool.execute(
+        "f2",
+        { remove_from: bRef, remove_to: bRef, text: ["B2"] },
+        undefined,
+        undefined,
+        ctx,
+      ));
       expect(failure).toContain("[E_BATCH_OVERLAP]");
       expect(await readFile(path, "utf-8")).toBe("a\nb\nc\n");
 
@@ -618,32 +603,22 @@ describe("same-turn edit batches", () => {
       ]);
       await (handlers.get("message_end")!({ type: "message_end", message }, ctx) as Promise<unknown>);
 
-      let firstFailure = "";
-      try {
-        await editTool.execute(
-          "g1",
-          { remove_from: aRef, remove_to: aRef, text: null },
-          undefined,
-          undefined,
-          ctx,
-        );
-      } catch (error) {
-        firstFailure = error instanceof Error ? error.message : String(error);
-      }
+      const firstFailure = await toolError(() => editTool.execute(
+        "g1",
+        { remove_from: aRef, remove_to: aRef, text: null },
+        undefined,
+        undefined,
+        ctx,
+      ));
       expect(firstFailure).toContain("[E_BAD_SHAPE]");
 
-      let secondFailure = "";
-      try {
-        await editTool.execute(
-          "g2",
-          { remove_from: bRef, remove_to: bRef, text: ["B"] },
-          undefined,
-          undefined,
-          ctx,
-        );
-      } catch (error) {
-        secondFailure = error instanceof Error ? error.message : String(error);
-      }
+      const secondFailure = await toolError(() => editTool.execute(
+        "g2",
+        { remove_from: bRef, remove_to: bRef, text: ["B"] },
+        undefined,
+        undefined,
+        ctx,
+      ));
       expect(secondFailure).toContain("[E_OP_ABORTED]");
       expect(secondFailure).toContain("[E_BAD_SHAPE]");
       expect(await readFile(path, "utf-8")).toBe("a\nb\nc\n");
@@ -683,18 +658,13 @@ describe("same-turn edit batches", () => {
 
       await writeFile(path, "a\nb\nEXTERNAL\n", "utf-8");
 
-      let failure = "";
-      try {
-        await editTool.execute(
-          "h2",
-          { remove_from: cRef, remove_to: cRef, text: ["C"] },
-          undefined,
-          undefined,
-          ctx,
-        );
-      } catch (error) {
-        failure = error instanceof Error ? error.message : String(error);
-      }
+      const failure = await toolError(() => editTool.execute(
+        "h2",
+        { remove_from: cRef, remove_to: cRef, text: ["C"] },
+        undefined,
+        undefined,
+        ctx,
+      ));
       expect(failure).toContain("[E_OP_ABORTED]");
       expect(await readFile(path, "utf-8")).toBe("a\nb\nEXTERNAL\n");
 
@@ -737,18 +707,13 @@ describe("same-turn edit batches", () => {
       );
       expect(first.content[0].text).toBe("In batch 1 (queued)");
 
-      let failure = "";
-      try {
-        await editTool.execute(
-          "s2",
-          { remove_from: bbbRef, remove_to: bbbRef, text: ["BBB"] },
-          undefined,
-          undefined,
-          ctx,
-        );
-      } catch (error) {
-        failure = error instanceof Error ? error.message : String(error);
-      }
+      const failure = await toolError(() => editTool.execute(
+        "s2",
+        { remove_from: bbbRef, remove_to: bbbRef, text: ["BBB"] },
+        undefined,
+        undefined,
+        ctx,
+      ));
       expect(failure).toContain("Strict-input mode");
       expect(await readFile(path, "utf-8")).toBe("aaa\nbbb\n");
 
@@ -820,18 +785,14 @@ describe("same-turn edit batches", () => {
       await (handlers.get("message_end")!({ type: "message_end", message }, ctx) as Promise<unknown>);
 
       const runCall = async (id: string, ref: string, line: string): Promise<string> => {
-        try {
-          await editTool.execute(
-            id,
-            { remove_from: ref, remove_to: ref, text: [line] },
-            undefined,
-            undefined,
-            ctx,
-          );
-          return "";
-        } catch (error) {
-          return error instanceof Error ? error.message : String(error);
-        }
+        const result = await editTool.execute(
+          id,
+          { remove_from: ref, remove_to: ref, text: [line] },
+          undefined,
+          undefined,
+          ctx,
+        );
+        return result.isError ? (result.content[0]?.text ?? "") : "";
       };
       expect(await runCall("t1", aRef, "A")).toContain("[E_STALE_ANCHOR]");
       expect(await runCall("t2", cRef, "C")).toContain("[E_OP_ABORTED]");
@@ -949,12 +910,7 @@ describe("same-turn edit batches", () => {
       const first = await editTool.execute("x1", firstArgs, undefined, undefined, ctx);
       expect(first.content[0].text).toBe("In batch 1 (queued)");
 
-      let failure = "";
-      try {
-        await editTool.execute("x3", lastArgs, undefined, undefined, ctx);
-      } catch (error) {
-        failure = error instanceof Error ? error.message : String(error);
-      }
+      const failure = await toolError(() => editTool.execute("x3", lastArgs, undefined, undefined, ctx));
       expect(failure).toBe("[E_OP_ABORTED] Batch 1 aborted: [insert] Call Nr 2 errored [E_BAD_SHAPE]. Nothing was written; the whole batch was discarded.");
       expect(first.details.batch).toMatchObject({ aborted: true, abortMessage: failure });
       expect(await readFile(path, "utf-8")).toBe("a\nb\nc\n");
@@ -980,22 +936,12 @@ describe("same-turn edit batches", () => {
       ]);
       await (handlers.get("message_end")!({ type: "message_end", message }, ctx) as Promise<unknown>);
 
-      let firstFailure = "";
-      try {
-        await editTool.execute("g1", firstArgs, undefined, undefined, ctx);
-      } catch (error) {
-        firstFailure = error instanceof Error ? error.message : String(error);
-      }
+      const firstFailure = await toolError(() => editTool.execute("g1", firstArgs, undefined, undefined, ctx));
       expect(firstFailure).toMatch(/^\[E_STALE_ANCHOR\]/);
       expect(firstFailure).toContain("Aborts batch 1.");
       expect(firstFailure).toContain("Nothing was written");
 
-      let secondFailure = "";
-      try {
-        await editTool.execute("g2", secondArgs, undefined, undefined, ctx);
-      } catch (error) {
-        secondFailure = error instanceof Error ? error.message : String(error);
-      }
+      const secondFailure = await toolError(() => editTool.execute("g2", secondArgs, undefined, undefined, ctx));
       expect(secondFailure).toBe("[E_OP_ABORTED] Batch 1 aborted: [replace] Call Nr 1 errored [E_STALE_ANCHOR]. Nothing was written; the whole batch was discarded.");
       expect(await readFile(path, "utf-8")).toBe("alpha\nBETA\ngamma\n");
     });
@@ -1025,12 +971,7 @@ describe("same-turn edit batches", () => {
       const pending = (editTool.renderResult!(first, { isPartial: false }, theme, context) as any);
       expect(pending.text).toBe("In batch 1 (queued)");
 
-      let failure = "";
-      try {
-        await editTool.execute("v1b", secondArgs, undefined, undefined, ctx);
-      } catch (error) {
-        failure = error instanceof Error ? error.message : String(error);
-      }
+      const failure = await toolError(() => editTool.execute("v1b", secondArgs, undefined, undefined, ctx));
       expect(failure).toContain("[E_BATCH_OVERLAP]");
 
       const aborted = (editTool.renderResult!(first, { isPartial: false }, theme, context) as any);
@@ -1065,21 +1006,11 @@ describe("same-turn edit batches", () => {
       ]);
       await (handlers.get("message_end")!({ type: "message_end", message }, ctx) as Promise<unknown>);
 
-      let firstFailure = "";
-      try {
-        await editTool.execute("s1", firstArgs, undefined, undefined, ctx);
-      } catch (error) {
-        firstFailure = error instanceof Error ? error.message : String(error);
-      }
+      const firstFailure = await toolError(() => editTool.execute("s1", firstArgs, undefined, undefined, ctx));
       expect(firstFailure).toContain("Current range with fresh anchors");
       expect(firstFailure).toContain("Nothing was written");
 
-      let secondFailure = "";
-      try {
-        await editTool.execute("s2", lastArgs, undefined, undefined, ctx);
-      } catch (error) {
-        secondFailure = error instanceof Error ? error.message : String(error);
-      }
+      const secondFailure = await toolError(() => editTool.execute("s2", lastArgs, undefined, undefined, ctx));
       expect(secondFailure).toBe("[E_OP_ABORTED] Batch 1 aborted: [replace] Call Nr 1 errored [E_RANGE_STALE]. Nothing was written; the whole batch was discarded.");
       expect(secondFailure).not.toContain("Current range with fresh anchors");
       expect(await readFile(path, "utf-8")).toBe("a\nB\nc\n");

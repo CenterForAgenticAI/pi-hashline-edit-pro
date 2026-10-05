@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { makeTempDir, rmRetry, setupIntegrationTest } from "../support/fixtures";
+import { makeTempDir, rmRetry, setupIntegrationTest, toolError } from "../support/fixtures";
 function initGitRepo(cwd: string): void {
   execFileSync("git", ["init", "-q"], { cwd });
 }
@@ -36,7 +36,7 @@ describe("auto-read-all read rejection", () => {
       await handlers.get("session_start")!({}, ctx);
       const injected = await handlers.get("before_agent_start")!({}, ctx) as { message?: { content?: string } } | undefined;
       expect(injected?.message?.content).toContain("=== sample.txt ===");
-      await expect(getTool("read").execute("r1", { path: "sample.txt" }, undefined, undefined, ctx)).rejects.toThrow("[E_AUTO_READ_ALL]");
+      expect(await toolError(() => getTool("read").execute("r1", { path: "sample.txt" }, undefined, undefined, ctx))).toContain("[E_AUTO_READ_ALL]");
     } finally {
       await rmRetry(cwd);
     }
@@ -82,7 +82,7 @@ describe("auto-read-all read rejection", () => {
       await handlers.get("session_start")!({}, sessionA);
       const injected = await handlers.get("before_agent_start")!({}, sessionA) as { message?: { content?: string } } | undefined;
       expect(injected?.message?.content).toContain("=== sample.txt ===");
-      await expect(getTool("read").execute("rA", { path: "sample.txt" }, undefined, undefined, sessionA)).rejects.toThrow("[E_AUTO_READ_ALL]");
+      expect(await toolError(() => getTool("read").execute("rA", { path: "sample.txt" }, undefined, undefined, sessionA))).toContain("[E_AUTO_READ_ALL]");
 
       const sessionB = sessionContext(cwd, join(cwd, "session-b.jsonl")) as never;
       const first = await getTool("read").execute("r1", { path: "sample.txt" }, undefined, undefined, sessionB);

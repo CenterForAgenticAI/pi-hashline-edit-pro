@@ -3,7 +3,7 @@ import { chmodSync, mkdirSync } from "fs";
 import { mkdtempSync, rmSync, writeFileSync } from "fs";
 import { join } from "path";
 import register from "../../index";
-import { makeFakePiRegistry, withHome } from "../support/fixtures";
+import { makeFakePiRegistry, withHome, toolError } from "../support/fixtures";
 import { shutdownHashStore } from "../../src/hash-store";
 
 const isRoot = typeof process.getuid === "function" && process.getuid() === 0;
@@ -38,15 +38,13 @@ describe.skipIf(isRoot || isWindows)("permission errors", () => {
         register(pi);
         const readTool = getTool("read");
 
-        await expect(
-          readTool.execute(
-            "r1",
-            { path: filePath },
-            undefined,
-            undefined,
-            { cwd: tempDir } as any,
-          ),
-        ).rejects.toThrow("File is not readable");
+        expect(await toolError(() => readTool.execute(
+          "r1",
+          { path: filePath },
+          undefined,
+          undefined,
+          { cwd: tempDir } as any,
+        ))).toContain("File is not readable");
       } finally {
         chmodSync(filePath, 0o644);
       }
@@ -77,17 +75,15 @@ describe.skipIf(isRoot || isWindows)("permission errors", () => {
 
         chmodSync(filePath, 0o000);
 
-        await expect(
-          editTool.execute(
-            "e1",
-            {
-              remove_from: anchor, remove_to: anchor, text: ["new content"],
-            },
-            undefined,
-            undefined,
-            { cwd: tempDir } as any,
-          ),
-        ).rejects.toThrow("File is not writable");
+        expect(await toolError(() => editTool.execute(
+          "e1",
+          {
+            remove_from: anchor, remove_to: anchor, text: ["new content"],
+          },
+          undefined,
+          undefined,
+          { cwd: tempDir } as any,
+        ))).toContain("File is not writable");
       } finally {
         chmodSync(filePath, 0o644);
       }

@@ -17,6 +17,7 @@ import { loadP, loadGuide } from "./prompts";
 import { withUndoPrompts, DEFAULT_EDIT_FLAGS, type EditToolFlags } from "./edit-common";
 import { buildMetrics } from "./replace-response";
 import { renderEditResult, fmtCall } from "./replace-render";
+import { anchoredLinesFromDiff, diffAnchorsOmitted, editResultSchema, structuredFailure, type EditStructured } from "./structured";
 import { Text } from "@earendil-works/pi-tui";
 import { changedRange, lineHashes } from "./hashline";
 export interface UndoEntry {
@@ -128,6 +129,7 @@ export function regUndo(pi: ExtensionAPI, flags: EditToolFlags = DEFAULT_EDIT_FL
         description: "Path to the file to undo",
       }),
     }),
+    outputSchema: editResultSchema,
     executionMode: "sequential",
     renderCall(args: any, theme: any, context: any) {
       const text = (context.lastComponent as Text | undefined) ?? new Text("", 0, 0);
@@ -137,8 +139,9 @@ export function regUndo(pi: ExtensionAPI, flags: EditToolFlags = DEFAULT_EDIT_FL
     renderResult(result, opts, theme, context) {
       return renderEditResult(result as never, opts as { isPartial: boolean; expanded?: boolean }, theme as never, context as never);
     },
-    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-      return withAnchorSession(ctx, async () => {
+    async execute(_toolCallId, params, signal, _onUpdate, ctx) {
+      try {
+        return await withAnchorSession(ctx, async () => {
         const path = params.path;
         if (typeof path !== "string" || path.length === 0) {
           throw new Error('[E_BAD_SHAPE] Undo request requires a non-empty "path" string.');
@@ -147,16 +150,7 @@ export function regUndo(pi: ExtensionAPI, flags: EditToolFlags = DEFAULT_EDIT_FL
 
         const undo = await getUndo(mutationTargetPath);
         if (!undo) {
-          return {
-            content: [
-              {
-                type: "text",
-                text: `No undo history for ${path}.`,
-              },
-            ],
-            isError: true,
-            details: {},
-          };
+          return structuredFailure(new Error(`No undo history for ${path}.`), {});
         }
 
         return withFileMutationQueue(mutationTargetPath, async () => {
@@ -180,16 +174,7 @@ export function regUndo(pi: ExtensionAPI, flags: EditToolFlags = DEFAULT_EDIT_FL
             currentRaw !== undefined &&
             currentRaw !== undo.bom + (undo.resultSeparators !== undefined ? joinSeparators(undo.resultContent, undo.resultSeparators) : restoreEndings(undo.resultContent, undo.originalEnding))
           ) {
-            return {
-              content: [
-                {
-                  type: "text",
-                  text: `[E_UNDO_STALE] Cannot undo last change on ${path}: the file was modified after the edit, so nothing was reverted and the file was left untouched. The undo record is kept. Do not edit the file to force the undo. Call read() to inspect the current state.`
-                },
-              ],
-              isError: true,
-              details: {},
-            };
+            return structuredFailure(new Error(`[E_UNDO_STALE] Cannot undo last change on ${path}: the file was modified after the edit, so nothing was reverted and the file was left untouched. The undo record is kept. Do not edit the file to force the undo. Call read() to inspect the current state.`), {});
           }
 
           await writeAtomic(
@@ -248,6 +233,20 @@ export function regUndo(pi: ExtensionAPI, flags: EditToolFlags = DEFAULT_EDIT_FL
           if (reclaimNotice !== undefined) parts.push(reclaimNotice);
 
           const patchResult = genPatch(path, currentNormalized, undo.content);
+          const structuredContent: EditStructured = {
+            ok: true,
+            kind: "edit",
+            verb: "undone",
+            classification: "applied",
+            path,
+            text: parts.join("\n"),
+            diff: undoDiff,
+            warnings: reclaimNotice !== undefined ? [reclaimNotice] : [],
+            hints: [],
+            firstChangedLine: restoredRange?.firstChangedLine ?? null,
+            anchors: anchoredLinesFromDiff(undoDiff, undoDiffResult.lineNumbers),
+            anchorsOmitted: diffAnchorsOmitted(undoDiff),
+          };
           return {
             content: [
               {
@@ -271,9 +270,14 @@ export function regUndo(pi: ExtensionAPI, flags: EditToolFlags = DEFAULT_EDIT_FL
                 removedLines: linesAddedByReplace,
               }),
             },
+            structuredContent,
           };
         });
       });
+      } catch (error) {
+        if (signal?.aborted) throw error;
+        return structuredFailure(error, {});
+      }
     },
   });
 }

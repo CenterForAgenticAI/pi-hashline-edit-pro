@@ -15,6 +15,7 @@ import type { RMetrics } from "./src/replace-response";
 import type { ReplaceDetails } from "./src/replace";
 import { extractHints, extractWarnings } from "./src/replace-render";
 import { MAX_HASH_LINES } from "./src/hashline";
+import { withStructuredText } from "./src/structured";
 import type { AutoReadAllMode } from "./src/config";
 import {
   readConfig,
@@ -346,6 +347,7 @@ export default function (pi: ExtensionAPI): void {
     const notices = [warnings, hints].filter((part): part is string => part !== undefined).join("\n\n");
     const emptyDiffNotice = "[post-edit] applied successfully; the diff is empty (no content change: whitespace or line endings only).";
     const noticeText = hasDiff ? (notices ? `${diff}\n\n${notices}` : diff) : notices ? `${emptyDiffNotice}\n\n${notices}` : emptyDiffNotice;
+    const structured = (event as { structuredContent?: unknown }).structuredContent;
     return {
       content: [
         {
@@ -353,6 +355,7 @@ export default function (pi: ExtensionAPI): void {
           text: noticeText,
         },
       ],
+      ...(structured !== undefined ? { structuredContent: withStructuredText(structured, noticeText) } : {}),
     };
   }));
 }

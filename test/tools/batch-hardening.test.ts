@@ -8,7 +8,7 @@ import { resetBatchStateForTests, batchMemberFor } from "../../src/batch";
 import { planEdit } from "../../src/hashline";
 import { resEdit } from "../../src/hashline";
 import { lineHashes } from "../../src/hashline";
-import { makeFakePiRegistry, withTempFile, getText, toolCall, assistantMessage, anchorFor } from "../support/fixtures";
+import { makeFakePiRegistry, withTempFile, getText, toolCall, assistantMessage, anchorFor, toolError } from "../support/fixtures";
 async function setupTools(cwd: string) {
   resetRegistryForTests();
   resetBatchStateForTests();
@@ -41,9 +41,7 @@ describe("batch hardening", () => {
       });
       try {
         await editTool.execute("b1", { remove_from: betaRef, remove_to: betaRef, text: ["BETA"] }, undefined, undefined, ctx);
-        await expect(
-          editTool.execute("b2", { remove_from: gammaRef, remove_to: gammaRef, text: ["GAMMA"] }, undefined, undefined, ctx)
-        ).rejects.toThrow(/simulated preflight/);
+        expect(await toolError(() => editTool.execute("b2", { remove_from: gammaRef, remove_to: gammaRef, text: ["GAMMA"] }, undefined, undefined, ctx))).toMatch(/simulated preflight/);
       } finally {
         spy.mockRestore();
       }
@@ -73,9 +71,7 @@ describe("batch hardening", () => {
       });
       try {
         await editTool.execute("b1", { remove_from: betaRef, remove_to: betaRef, text: ["BETA"] }, undefined, undefined, ctx);
-        await expect(
-          editTool.execute("b2", { remove_from: gammaRef, remove_to: gammaRef, text: ["GAMMA"] }, undefined, undefined, ctx)
-        ).rejects.toThrow(/File was written; anchor finalization failed/);
+        expect(await toolError(() => editTool.execute("b2", { remove_from: gammaRef, remove_to: gammaRef, text: ["GAMMA"] }, undefined, undefined, ctx))).toMatch(/File was written; anchor finalization failed/);
       } finally {
         spy.mockRestore();
       }
@@ -102,9 +98,7 @@ describe("batch hardening", () => {
         return (original as any)(...args);
       });
       try {
-        await expect(
-          editTool.execute("e1", { remove_from: alphaRef, remove_to: alphaRef, text: ["ALPHA"] }, undefined, undefined, ctx)
-        ).rejects.toThrow(/File was written; anchor finalization failed/);
+        expect(await toolError(() => editTool.execute("e1", { remove_from: alphaRef, remove_to: alphaRef, text: ["ALPHA"] }, undefined, undefined, ctx))).toMatch(/File was written; anchor finalization failed/);
       } finally {
         spy.mockRestore();
       }
@@ -131,9 +125,7 @@ describe("batch hardening", () => {
       expect(batchMemberFor("s1")).toBeDefined();
       expect(batchMemberFor("v1")?.batchKey).toBe(batchMemberFor("s1")?.batchKey);
       await editTool.execute("v1", { path: "sample.txt", remove_from: betaRef, remove_to: betaRef, text: ["BETA"] }, undefined, undefined, ctx);
-      await expect(
-        editTool.execute("s1", { path: "sample.txt", remove_from: "ZZZZ", remove_to: "ZZZZ", text: ["STALE"] }, undefined, undefined, ctx)
-      ).rejects.toThrow(/E_OP_ABORTED|E_STALE_ANCHOR/);
+      expect(await toolError(() => editTool.execute("s1", { path: "sample.txt", remove_from: "ZZZZ", remove_to: "ZZZZ", text: ["STALE"] }, undefined, undefined, ctx))).toMatch(/E_OP_ABORTED|E_STALE_ANCHOR/);
       expect(await readFile(path, "utf-8")).toBe("alpha\nbeta\ngamma\n");
     });
   });
@@ -154,9 +146,7 @@ describe("batch hardening", () => {
       expect(batchMemberFor("m1")).toBeDefined();
       expect(batchMemberFor("v1")?.batchKey).toBe(batchMemberFor("m1")?.batchKey);
       await editTool.execute("v1", { remove_from: gammaRef, remove_to: gammaRef, text: ["GAMMA"] }, undefined, undefined, ctx);
-      await expect(
-        editTool.execute("m1", { remove_from: betaRef, remove_to: "ZZZZ", text: ["MIXED"] }, undefined, undefined, ctx)
-      ).rejects.toThrow(/Aborts batch 1\./);
+      expect(await toolError(() => editTool.execute("m1", { remove_from: betaRef, remove_to: "ZZZZ", text: ["MIXED"] }, undefined, undefined, ctx))).toMatch(/Aborts batch 1\./);
       expect(await readFile(path, "utf-8")).toBe("alpha\nbeta\ngamma\n");
     });
   });
@@ -225,9 +215,7 @@ describe("batch hardening", () => {
       expect(batchMemberFor("v3")?.last).toBe(true);
       const first = getText(await editTool.execute("v1", { remove_from: aaaRef, remove_to: aaaRef, text: ["AAA"] }, undefined, undefined, ctx));
       expect(first).toBe("In batch 1 (queued)");
-      await expect(
-        editTool.execute("s1", { remove_from: "ZZZZ", remove_to: "ZZZZ", text: ["XXX"] }, undefined, undefined, ctx)
-      ).rejects.toThrow(/\[E_STALE_ANCHOR\]/);
+      expect(await toolError(() => editTool.execute("s1", { remove_from: "ZZZZ", remove_to: "ZZZZ", text: ["XXX"] }, undefined, undefined, ctx))).toMatch(/\[E_STALE_ANCHOR\]/);
       await editTool.execute("v2", { remove_from: bbbRef, remove_to: bbbRef, text: ["BBB"] }, undefined, undefined, ctx);
       const last = await editTool.execute("v3", { remove_from: cccRef, remove_to: cccRef, text: ["CCC"] }, undefined, undefined, ctx);
       expect(getText(last)).toContain("Batch 1: 3 edits applied as one commit");
@@ -247,12 +235,9 @@ describe("batch hardening", () => {
         toolCall("v1", "replace", { remove_from: aaaRef, remove_to: aaaRef, text: ["AAA"] }),
         toolCall("v2", "replace", { remove_from: bbbRef, remove_to: bbbRef, text: ["BBB"] }),
       ]) }, ctx) as Promise<unknown>);
-      let failure = "";
-      try {
-        await editTool.execute("s1", { remove_from: "ZZZZ", remove_to: "ZZZZ", text: ["XXX"] }, undefined, undefined, ctx);
-      } catch (error) {
-        failure = error instanceof Error ? error.message : String(error);
-      }
+      const failure = await toolError(() => editTool.execute("s1", { remove_from: "ZZZZ", remove_to: "ZZZZ", text: ["XXX"] }, undefined, undefined, ctx));
+      expect(failure).toMatch(/^\[E_STALE_ANCHOR\]/);
+      expect(failure).not.toContain("Aborts batch");
       expect(failure).toMatch(/^\[E_STALE_ANCHOR\]/);
       expect(failure).not.toContain("Aborts batch");
       const first = getText(await editTool.execute("v1", { remove_from: aaaRef, remove_to: aaaRef, text: ["AAA"] }, undefined, undefined, ctx));
@@ -276,9 +261,7 @@ describe("batch hardening", () => {
       expect(batchMemberFor("p1")).toBeUndefined();
       expect(batchMemberFor("p2")).toBeUndefined();
       await editTool.execute("p1", { remove_from: aaaRef, remove_to: aaaRef, text: ["AAA"] }, undefined, undefined, ctx);
-      await expect(
-        editTool.execute("p2", { text: ["BBB"] }, undefined, undefined, ctx)
-      ).rejects.toThrow(/\[E_BAD_SHAPE\]/);
+      expect(await toolError(() => editTool.execute("p2", { text: ["BBB"] }, undefined, undefined, ctx))).toMatch(/\[E_BAD_SHAPE\]/);
       expect(await readFile(path, "utf-8")).toBe("AAA\nbbb\n");
     });
   });
@@ -298,12 +281,8 @@ describe("batch hardening", () => {
         toolCall("s1", "replace", { remove_from: valid, remove_to: "ZZZZ", text: ["XXX"] }),
         toolCall("v1", "replace", { remove_from: valid, remove_to: valid, text: ["AAA"] }),
       ]) }, ctx) as Promise<unknown>);
-      await expect(
-        editTool.execute("s1", { remove_from: valid, remove_to: "ZZZZ", text: ["XXX"] }, undefined, undefined, ctx)
-      ).rejects.toThrow(/Aborts batch 1\./);
-      await expect(
-        editTool.execute("v1", { remove_from: valid, remove_to: valid, text: ["AAA"] }, undefined, undefined, ctx)
-      ).rejects.toThrow(/\[E_OP_ABORTED\]/);
+      expect(await toolError(() => editTool.execute("s1", { remove_from: valid, remove_to: "ZZZZ", text: ["XXX"] }, undefined, undefined, ctx))).toMatch(/Aborts batch 1\./);
+      expect(await toolError(() => editTool.execute("v1", { remove_from: valid, remove_to: valid, text: ["AAA"] }, undefined, undefined, ctx))).toMatch(/\[E_OP_ABORTED\]/);
       expect(await readFile(path, "utf-8")).toBe("aaa\nBBB\nccc\n");
       await undoTool.execute("u1", { path: "sample.txt" }, undefined, undefined, ctx);
       expect(await readFile(path, "utf-8")).toBe("aaa\nbbb\nccc\n");

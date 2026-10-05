@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { readFile, writeFile } from "node:fs/promises";
-import { withTempFile, setupIntegrationTest, extractHash } from "../support/fixtures";
+import { withTempFile, setupIntegrationTest, extractHash, toolError } from "../support/fixtures";
 
 function minusAnchors(diff: string): string[] {
   const out: string[] = [];
@@ -47,7 +47,7 @@ describe("diff anchor attribution on duplicate lines", () => {
       expect(removed).toContain(D2);
       expect(removed).toContain(G);
       expect(diff.split("\n").find((line) => line.startsWith("-") && line.includes(D3))).toBeUndefined();
-      await expect(editTool.execute("e-dead", { remove_from: D2, remove_to: D2, text: ["VIA_DEAD"] }, undefined, undefined, ctx)).rejects.toThrow(/E_STALE_ANCHOR/);
+      expect(await toolError(() => editTool.execute("e-dead", { remove_from: D2, remove_to: D2, text: ["VIA_DEAD"] }, undefined, undefined, ctx))).toMatch(/E_STALE_ANCHOR/);
       const survivorEdit: any = await editTool.execute("e-live", { remove_from: D3, remove_to: D3, text: ["VIA_SURVIVOR"] }, undefined, undefined, ctx);
       expect(survivorEdit.content[0].text).toContain("Successfully replaced");
       const finalContent = await readFile(path, "utf-8");

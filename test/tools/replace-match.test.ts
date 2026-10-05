@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { lineHashes } from "../../src/hashline";
 import { replaceMatchPreview } from "../../src/replace-match";
-import { anchorFor, extractHash, getText, setupIntegrationTest, useTestHome, withTempFile } from "../support/fixtures";
+import { anchorFor, extractHash, getText, setupIntegrationTest, useTestHome, withTempFile, toolError } from "../support/fixtures";
 
 useTestHome();
 
@@ -65,19 +65,13 @@ describe("replace_match", () => {
       const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
       const text = getText(await readTool.execute("r1", { path: "routes.json" }, undefined, undefined, ctx));
       const anchor = anchorOf(text, '"checkout-5"');
-      let caught: Error | undefined;
-      try {
-        await getTool("replace_match").execute(
-          "w1",
-          { replace_from: anchor, replace_to: anchor, old_string: "legacyCheckouX", new_string: "stableCheckout" },
-          undefined, undefined, ctx,
-        );
-      } catch (error) {
-        caught = error as Error;
-      }
-      expect(caught).toBeDefined();
-      expect(caught!.message).toMatch(/\[E_SUBSTRING_NOT_FOUND\]/);
-      expect(caught!.message).toContain(`${anchor}│    {"id": "checkout-5"`);
+      const message = await toolError(() => getTool("replace_match").execute(
+        "w1",
+        { replace_from: anchor, replace_to: anchor, old_string: "legacyCheckouX", new_string: "stableCheckout" },
+        undefined, undefined, ctx,
+      ));
+      expect(message).toMatch(/\[E_SUBSTRING_NOT_FOUND\]/);
+      expect(message).toContain(`${anchor}│    {"id": "checkout-5"`);
     });
   });
 
@@ -137,9 +131,7 @@ describe("replace_match", () => {
       const text = getText(await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx));
       const anchor = anchorFor(text, "beta");
       await getTool("replace").execute("e1", { remove_from: anchor, remove_to: anchor, text: "BETA" }, undefined, undefined, ctx);
-      await expect(
-        getTool("replace_match").execute("w1", { replace_from: anchor, replace_to: anchor, old_string: "BETA", new_string: "beta" }, undefined, undefined, ctx),
-      ).rejects.toThrow(/\[E_STALE_ANCHOR\]/);
+      expect(await toolError(() => getTool("replace_match").execute("w1", { replace_from: anchor, replace_to: anchor, old_string: "BETA", new_string: "beta" }, undefined, undefined, ctx))).toMatch(/\[E_STALE_ANCHOR\]/);
     });
   });
 
@@ -163,9 +155,7 @@ describe("replace_match", () => {
       const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
       await readTool.execute("r1", { path: "sample.txt", limit: 1 }, undefined, undefined, ctx);
       const hashes = await lineHashes(content, join(cwd, "sample.txt"));
-      await expect(
-        getTool("replace_match").execute("w1", { replace_from: hashes[0]!, replace_to: hashes[3]!, old_string: "a", new_string: "A" }, undefined, undefined, ctx),
-      ).rejects.toThrow(/\[E_RANGE_STALE\]/);
+      expect(await toolError(() => getTool("replace_match").execute("w1", { replace_from: hashes[0]!, replace_to: hashes[3]!, old_string: "a", new_string: "A" }, undefined, undefined, ctx))).toMatch(/\[E_RANGE_STALE\]/);
     });
   });
 
@@ -287,12 +277,8 @@ describe("replace_match requirePath", () => {
       const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
       const text = getText(await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx));
       const anchor = anchorFor(text, "beta");
-      await expect(
-        getTool("replace_match").execute("w1", { replace_from: anchor, replace_to: anchor, old_string: "beta", new_string: "gamma" }, undefined, undefined, ctx),
-      ).rejects.toThrow(/requires a non-empty "path"/);
-      await expect(
-        getTool("replace_match").execute("w2", { path: "other.txt", replace_from: anchor, replace_to: anchor, old_string: "beta", new_string: "gamma" }, undefined, undefined, ctx),
-      ).rejects.toThrow(/does not match anchor ownership/);
+      expect(await toolError(() => getTool("replace_match").execute("w1", { replace_from: anchor, replace_to: anchor, old_string: "beta", new_string: "gamma" }, undefined, undefined, ctx))).toMatch(/requires a non-empty "path"/);
+      expect(await toolError(() => getTool("replace_match").execute("w2", { path: "other.txt", replace_from: anchor, replace_to: anchor, old_string: "beta", new_string: "gamma" }, undefined, undefined, ctx))).toMatch(/does not match anchor ownership/);
       await getTool("replace_match").execute("w3", { path: "sample.txt", replace_from: anchor, replace_to: anchor, old_string: "beta", new_string: "gamma" }, undefined, undefined, ctx);
       expect(await readFile(path, "utf-8")).toBe("alpha\ngamma\n");
     });

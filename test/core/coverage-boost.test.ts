@@ -5,7 +5,7 @@ import { initHasher, getH, xxh32, contentChecksum } from "../../src/hashline/has
 import { isValidHashList, parseHashList, parseStoredHashes, isValidSnapshot, isCorruptionError, isBusyError } from "../../src/hash-store/validation";
 import { canon, hashSource } from "../../src/hashline/hash";
 import { toCwd } from "../../src/paths";
-import { withTempDir, withTempFile, setupIntegrationTest } from "../support/fixtures";
+import { withTempDir, withTempFile, setupIntegrationTest, toolError } from "../support/fixtures";
 import { mkdir, writeFile } from "fs/promises";
 import { join } from "path";
 
@@ -191,10 +191,10 @@ describe("coverage boost grep", () => {
     await withTempFile("a.txt", "hello\n", async ({ cwd }) => {
       const { ctx, getTool } = setupIntegrationTest(cwd);
       const grep = getTool("anchor_grep");
-      await expect(grep.execute("g1", { pattern: "a".repeat(5000), path: "a.txt" }, undefined, undefined, ctx)).rejects.toThrow("[E_UNSAFE_REGEX]");
-      await expect(grep.execute("g1", { pattern: "(a+)+", path: "a.txt" }, undefined, undefined, ctx)).rejects.toThrow("[E_UNSAFE_REGEX]");
-      await expect(grep.execute("g1", { pattern: "a{1001}", path: "a.txt" }, undefined, undefined, ctx)).rejects.toThrow("[E_UNSAFE_REGEX]");
-      await expect(grep.execute("g1", { pattern: "z{2000}", path: "a.txt" }, undefined, undefined, ctx)).rejects.toThrow("[E_UNSAFE_REGEX]");
+      expect(await toolError(() => grep.execute("g1", { pattern: "a".repeat(5000), path: "a.txt" }, undefined, undefined, ctx))).toContain("[E_UNSAFE_REGEX]");
+      expect(await toolError(() => grep.execute("g1", { pattern: "(a+)+", path: "a.txt" }, undefined, undefined, ctx))).toContain("[E_UNSAFE_REGEX]");
+      expect(await toolError(() => grep.execute("g1", { pattern: "a{1001}", path: "a.txt" }, undefined, undefined, ctx))).toContain("[E_UNSAFE_REGEX]");
+      expect(await toolError(() => grep.execute("g1", { pattern: "z{2000}", path: "a.txt" }, undefined, undefined, ctx))).toContain("[E_UNSAFE_REGEX]");
     });
   });
   it("handles glob and literal and ignoreCase", async () => {

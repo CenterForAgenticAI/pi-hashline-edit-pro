@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFile } from "fs/promises";
 import { lineHashes } from "../../src/hashline";
-import { withTempFile, makeFakePiRegistry, setupIntegrationTest, getText, extractHash } from "../support/fixtures";
+import { withTempFile, makeFakePiRegistry, setupIntegrationTest, getText, extractHash, toolError } from "../support/fixtures";
 import { resolveTarget } from "../../src/fs-write";
 import { toCwd } from "../../src/paths";
 import register from "../../index";
@@ -150,13 +150,7 @@ describe("insert tool", () => {
     await withTempFile("sample.ts", "alpha\nbeta\n", async ({ cwd }) => {
       const { ctx, getTool } = setupIntegrationTest(cwd);
       const insertTool = getTool("insert");
-      await expect(
-        insertTool.execute(
-          "i1",
-          { anchor: "PyBY", direction: "after", text: ["x"] },
-          undefined, undefined, ctx,
-        ),
-      ).rejects.toThrow(/E_STALE_ANCHOR/);
+      expect(await toolError(() => insertTool.execute("i1", { anchor: "PyBY", direction: "after", text: ["x"] }, undefined, undefined, ctx))).toMatch(/E_STALE_ANCHOR/);
     });
   });
 
@@ -167,13 +161,7 @@ describe("insert tool", () => {
       await readTool.execute("r1", { path: "sample.ts", limit: 2 }, undefined, undefined, ctx);
       const hashes = await lineHashes("a\nb\nc\nd\n", await resolveTarget(toCwd("sample.ts", cwd)));
 
-      await expect(
-        insertTool.execute(
-          "i",
-          { anchor: hashes[2]!, direction: "after", text: ["x"] },
-          undefined, undefined, ctx,
-        ),
-      ).rejects.toThrow(/E_RANGE_STALE/);
+      expect(await toolError(() => insertTool.execute("i", { anchor: hashes[2]!, direction: "after", text: ["x"] }, undefined, undefined, ctx))).toMatch(/E_RANGE_STALE/);
     });
   });
 
@@ -224,13 +212,7 @@ describe("insert tool", () => {
       const betaHash = extractHash(getText(readResult).split("\n").find((l) => l.includes("│beta"))!);
       const nul = String.fromCharCode(0);
 
-      await expect(
-        insertTool.execute(
-          "i1",
-          { anchor: betaHash, direction: "after", text: `a${nul}b` },
-          undefined, undefined, ctx,
-        ),
-      ).rejects.toThrow(/NUL byte/);
+      expect(await toolError(() => insertTool.execute("i1", { anchor: betaHash, direction: "after", text: `a${nul}b` }, undefined, undefined, ctx))).toMatch(/NUL byte/);
       expect(await readFile(path, "utf-8")).toBe("alpha\nbeta\n");
     });
   });
@@ -242,13 +224,7 @@ describe("insert tool", () => {
       const readResult = await readTool.execute("r1", { path: "sample.ts" }, undefined, undefined, ctx);
       const alphaHash = extractHash(getText(readResult).split("\n").find((l) => l.includes("│alpha"))!);
 
-      await expect(
-        insertTool.execute(
-          "i1",
-          { anchor: alphaHash, direction: "after", text: ["x"], path: "sample.ts" } as any,
-          undefined, undefined, ctx,
-        ),
-      ).rejects.toThrow(/unknown or unsupported fields: path/);
+      expect(await toolError(() => insertTool.execute("i1", { anchor: alphaHash, direction: "after", text: ["x"], path: "sample.ts" } as any, undefined, undefined, ctx))).toMatch(/unknown or unsupported fields: path/);
     });
   });
 

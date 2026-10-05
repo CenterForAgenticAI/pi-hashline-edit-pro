@@ -13,6 +13,7 @@ import {
   getText,
   extractHash,
   makePiStub,
+  toolError,
 } from "../support/fixtures";
 import register from "../../index";
 
@@ -346,18 +347,16 @@ describe("undo_last_change", () => {
           throw new Error("store down");
         });
       try {
-        await expect(
-          editTool.execute(
-            "e1",
-            {
-              remove_from: hashes[1]!, remove_to: hashes[1]!,
-              text: ["BBB"],
-            },
-            undefined,
-            undefined,
-            ctx,
-          ),
-        ).rejects.toThrow(/E_UNDO_UNAVAILABLE/);
+        expect(await toolError(() => editTool.execute(
+          "e1",
+          {
+            remove_from: hashes[1]!, remove_to: hashes[1]!,
+            text: ["BBB"],
+          },
+          undefined,
+          undefined,
+          ctx,
+        ))).toMatch(/E_UNDO_UNAVAILABLE/);
       } finally {
         spy.mockRestore();
       }
@@ -401,18 +400,16 @@ describe("undo_last_change", () => {
         .spyOn(fsWriteModule, "writeAtomic")
         .mockRejectedValueOnce(new Error("disk full"));
       try {
-        await expect(
-          editTool.execute(
-            "e2",
-            {
-              remove_from: hashes[2]!, remove_to: hashes[2]!,
-              text: ["CCC"],
-            },
-            undefined,
-            undefined,
-            ctx,
-          ),
-        ).rejects.toThrow("disk full");
+        expect(await toolError(() => editTool.execute(
+          "e2",
+          {
+            remove_from: hashes[2]!, remove_to: hashes[2]!,
+            text: ["CCC"],
+          },
+          undefined,
+          undefined,
+          ctx,
+        ))).toContain("disk full");
       } finally {
         spy.mockRestore();
       }
@@ -436,18 +433,16 @@ describe("undo_last_change", () => {
         .spyOn(fsWriteModule, "writeAtomic")
         .mockRejectedValueOnce(new Error("disk full"));
       try {
-        await expect(
-          editTool.execute(
-            "e1",
-            {
-              remove_from: hashes[1]!, remove_to: hashes[1]!,
-              text: ["BBB"],
-            },
-            undefined,
-            undefined,
-            ctx,
-          ),
-        ).rejects.toThrow("disk full");
+        expect(await toolError(() => editTool.execute(
+          "e1",
+          {
+            remove_from: hashes[1]!, remove_to: hashes[1]!,
+            text: ["BBB"],
+          },
+          undefined,
+          undefined,
+          ctx,
+        ))).toContain("disk full");
       } finally {
         spy.mockRestore();
       }

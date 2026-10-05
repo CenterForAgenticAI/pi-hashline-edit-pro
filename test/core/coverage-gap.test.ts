@@ -10,7 +10,7 @@ import { parseHashList } from "../../src/hash-store/validation";
 import { tryReadNormFile } from "../../src/file-reader";
 import { commitEdit } from "../../src/commit";
 import { insertPreview } from "../../src/insert";
-import { withTempDir, makeFakePiRegistry } from "../support/fixtures";
+import { withTempDir, makeFakePiRegistry, toolError } from "../support/fixtures";
 import { writeFile, mkdir } from "fs/promises";
 import { join } from "path";
 
@@ -159,7 +159,7 @@ describe("gap undo tool rendering", () => {
     expect(res).toBeDefined();
     await withTempDir("undo-gap-", async (dir) => {
       const ctx = { cwd: dir } as never;
-      await expect(tool.execute("u1", { path: "" }, undefined, undefined, ctx)).rejects.toThrow("[E_BAD_SHAPE]");
+      expect(await toolError(() => tool.execute("u1", { path: "" }, undefined, undefined, ctx))).toContain("[E_BAD_SHAPE]");
     });
   });
 });

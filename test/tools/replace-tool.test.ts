@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { mkdir, readFile, writeFile } from "fs/promises";
 import { lineHashes } from "../../src/hashline";
 import { compPreview, editToolSchema, regReplace } from "../../src/replace";
-import { makeFakePiRegistry, withTempFile, useTestHome } from "../support/fixtures";
+import { makeFakePiRegistry, withTempFile, useTestHome, toolError } from "../support/fixtures";
 useTestHome();
 
 describe("editToolSchema", () => {
@@ -188,18 +188,16 @@ describe("regReplace", () => {
       regReplace(pi);
       const tool = getTool("replace");
 
-      await expect(
-        tool.execute(
-          "e1",
-          {
-            remove_from: "PyBY", remove_to: "PyBY",
-            text: ["x"],
-          },
-          undefined,
-          undefined,
-          { cwd } as any,
-        ),
-      ).rejects.toThrow(/E_STALE_ANCHOR/);
+      expect(await toolError(() => tool.execute(
+        "e1",
+        {
+          remove_from: "PyBY", remove_to: "PyBY",
+          text: ["x"],
+        },
+        undefined,
+        undefined,
+        { cwd } as any,
+      ))).toMatch(/E_STALE_ANCHOR/);
     });
   });
 
@@ -231,19 +229,17 @@ describe("regReplace", () => {
       const tool = getTool("replace");
       const hashes = await lineHashes("aaa\nbbb\nccc\n", join(cwd, "sample.txt"));
 
-      await expect(
-        tool.execute(
-          "e1",
-          {
-            remove_from: hashes[1]!, remove_to: hashes[1]!,
-            text: ["BeSR"],
-            unknown_field: "bad",
-          } as any,
-          undefined,
-          undefined,
-          { cwd } as any,
-        ),
-      ).rejects.toThrow(/unknown_field/);
+      expect(await toolError(() => tool.execute(
+        "e1",
+        {
+          remove_from: hashes[1]!, remove_to: hashes[1]!,
+          text: ["BeSR"],
+          unknown_field: "bad",
+        } as any,
+        undefined,
+        undefined,
+        { cwd } as any,
+      ))).toMatch(/unknown_field/);
     });
   });
 
@@ -347,7 +343,7 @@ describe("regReplace", () => {
       const hashes = await lineHashes("aaa\nbbb\nccc\n", path);
       const nul = String.fromCharCode(0);
 
-      await expect(tool.execute(
+      expect(await toolError(() => tool.execute(
         "e1",
         {
           remove_from: hashes[1]!, remove_to: hashes[1]!,
@@ -356,7 +352,7 @@ describe("regReplace", () => {
         undefined,
         undefined,
         { cwd } as any,
-      )).rejects.toThrow(/NUL byte/);
+      ))).toMatch(/NUL byte/);
 
       expect(await readFile(path, "utf-8")).toBe("aaa\nbbb\nccc\n");
     });
@@ -370,7 +366,7 @@ describe("regReplace", () => {
       const hashes = await lineHashes("aaa\nbbb\nccc\n", path);
       const backslash = String.fromCharCode(92);
 
-      await expect(tool.execute(
+      expect(await toolError(() => tool.execute(
         "e1",
         {
           remove_from: hashes[1]!, remove_to: hashes[1]!,
@@ -379,7 +375,7 @@ describe("regReplace", () => {
         undefined,
         undefined,
         { cwd } as any,
-      )).rejects.toThrow(/NUL byte/);
+      ))).toMatch(/NUL byte/);
 
       expect(await readFile(path, "utf-8")).toBe("aaa\nbbb\nccc\n");
     });
@@ -440,22 +436,22 @@ describe("regReplace", () => {
     const { pi, getTool } = makeFakePiRegistry();
     regReplace(pi);
     const tool = getTool("replace");
-    await expect(tool.execute(
+    expect(await toolError(() => tool.execute(
       "e1",
       { remove_from: "!!!!", remove_to: "!!!!", text: ["x"] },
       undefined, undefined, { cwd: "/tmp" } as any,
-    )).rejects.toThrow(/\[E_BAD_REF\]/);
+    ))).toMatch(/\[E_BAD_REF\]/);
   });
 
   it("rejects a passed path", async () => {
     const { pi, getTool } = makeFakePiRegistry();
     regReplace(pi);
     const tool = getTool("replace");
-    await expect(tool.execute(
+    expect(await toolError(() => tool.execute(
       "e1",
       { path: "sample.ts", remove_from: "PyBY", remove_to: "PyBY", text: ["x"] } as any,
       undefined, undefined, { cwd: "/tmp" } as any,
-    )).rejects.toThrow(/E_BAD_SHAPE/);
+    ))).toMatch(/E_BAD_SHAPE/);
   });
 
   it("rethrows aborts from preview computation", async () => {

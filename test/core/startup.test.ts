@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { withTempDir, makePiStub } from "../support/fixtures";
+import { withTempDir, makePiStub, toolError } from "../support/fixtures";
 import { mkdir } from "fs/promises";
 import { join } from "path";
 import { isValidHashList } from "../../src/hash-store/validation";
@@ -99,7 +99,7 @@ describe("grep huge quantifier guard", () => {
       const { default: register } = await import("../../index");
       register(pi);
       const grepTool = getTool("anchor_grep");
-      await expect(grepTool.execute("g1", { pattern: "z{1000000}", path: dir }, undefined, undefined, { cwd: dir, signal: undefined } as unknown as never)).rejects.toThrow("[E_UNSAFE_REGEX]");
+      expect(await toolError(() => grepTool.execute("g1", { pattern: "z{1000000}", path: dir }, undefined, undefined, { cwd: dir, signal: undefined } as unknown as never))).toContain("[E_UNSAFE_REGEX]");
     });
   });
 });

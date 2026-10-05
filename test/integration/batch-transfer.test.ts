@@ -9,6 +9,7 @@ import {
   toolCall,
   withTempDir,
   withTempFile,
+  toolError,
 } from "../support/fixtures";
 
 describe("batched replace_match", () => {
@@ -63,7 +64,7 @@ describe("batched replace_match", () => {
       const first = await replace.execute("m1", replaceArgs, undefined, undefined, ctx);
       expect(getText(first)).toBe("In batch 1 (queued)");
 
-      await expect(match.execute("m2", matchArgs, undefined, undefined, ctx)).rejects.toThrow("[E_SUBSTRING_NOT_FOUND]");
+      expect(await toolError(() => match.execute("m2", matchArgs, undefined, undefined, ctx))).toContain("[E_SUBSTRING_NOT_FOUND]");
       expect(await readFile(path, "utf-8")).toBe("alpha\nbeta\ngamma\n");
     });
   });
@@ -168,7 +169,7 @@ describe("batched same-file copy and move", () => {
       const first = await replace.execute("o1", replaceArgs, undefined, undefined, ctx);
       expect(getText(first)).toBe("In batch 1 (queued)");
 
-      await expect(copy.execute("o2", copyArgs, undefined, undefined, ctx)).rejects.toThrow("[E_BATCH_OVERLAP]");
+      expect(await toolError(() => copy.execute("o2", copyArgs, undefined, undefined, ctx))).toContain("[E_BATCH_OVERLAP]");
       expect(await readFile(path, "utf-8")).toBe("alpha\nbeta\ngamma\n");
     });
   });
@@ -194,7 +195,7 @@ describe("batched same-file copy and move", () => {
       const first = await replace.execute("s1", replaceArgs, undefined, undefined, ctx);
       expect(getText(first)).toBe("In batch 1 (queued)");
 
-      await expect(copy.execute("s2", copyArgs, undefined, undefined, ctx)).rejects.toThrow("[E_STALE_ANCHOR]");
+      expect(await toolError(() => copy.execute("s2", copyArgs, undefined, undefined, ctx))).toContain("[E_STALE_ANCHOR]");
       expect(await readFile(path, "utf-8")).toBe("alpha\nbeta\nGAMMA\ndelta\n");
     });
   });
@@ -333,7 +334,7 @@ describe("batched cross-file copy", () => {
       const applied = await replace.execute("q1", replaceArgs, undefined, undefined, ctx);
       expect(getText(applied)).toContain("Successfully replaced in b.ts");
 
-      await expect(copy.execute("q2", copyArgs, undefined, undefined, ctx)).rejects.toThrow("[E_STALE_ANCHOR]");
+      expect(await toolError(() => copy.execute("q2", copyArgs, undefined, undefined, ctx))).toContain("[E_STALE_ANCHOR]");
       expect(await readFile(join(dir, "b.ts"), "utf-8")).toBe("one\nTWO\n");
     });
   });
@@ -405,7 +406,7 @@ describe("batched cross-file move", () => {
       expect(getText(first)).toBe("In batch 1 (queued)");
 
       await writeFile(join(dir, "b.ts"), "one\nCHANGED\n", "utf-8");
-      await expect(move.execute("m2", moveArgs, undefined, undefined, ctx)).rejects.toThrow("[E_OP_ABORTED]");
+      expect(await toolError(() => move.execute("m2", moveArgs, undefined, undefined, ctx))).toContain("[E_OP_ABORTED]");
       expect(await readFile(join(dir, "a.ts"), "utf-8")).toBe("alpha\nbeta\ngamma\n");
       expect(await readFile(join(dir, "b.ts"), "utf-8")).toBe("one\nCHANGED\n");
     });
@@ -435,7 +436,7 @@ describe("batched cross-file move", () => {
       expect(getText(first)).toBe("In batch 1 (queued)");
 
       await writeFile(join(dir, "a.ts"), "alpha\nBETA\ngamma\n", "utf-8");
-      await expect(replace.execute("m2", replaceArgs, undefined, undefined, ctx)).rejects.toThrow("[E_OP_ABORTED]");
+      expect(await toolError(() => replace.execute("m2", replaceArgs, undefined, undefined, ctx))).toContain("[E_OP_ABORTED]");
       expect(await readFile(join(dir, "a.ts"), "utf-8")).toBe("alpha\nBETA\ngamma\n");
       expect(await readFile(join(dir, "b.ts"), "utf-8")).toBe("one\ntwo\n");
 
@@ -547,7 +548,7 @@ describe("batched cross-file move", () => {
       expect(getText(moved)).toContain("Successfully moved 1 line(s)");
       expect(await readFile(join(dir, "a.ts"), "utf-8")).toBe("ALPHA\nBETA\n");
 
-      await expect(replace.execute("f3", lastArgs, undefined, undefined, ctx)).rejects.toThrow("[E_OP_ABORTED]");
+      expect(await toolError(() => replace.execute("f3", lastArgs, undefined, undefined, ctx))).toContain("[E_OP_ABORTED]");
       expect(await readFile(join(dir, "b.ts"), "utf-8")).toBe("one\ntwo\ngamma\n");
     });
   });

@@ -3,7 +3,7 @@ import { readFile, writeFile } from "fs/promises";
 import { join } from "path";
 import register from "../../index";
 import { initRegistry } from "../../src/anchor-registry";
-import { makeFakePiRegistry, withTempDir, getText, extractHash } from "../support/fixtures";
+import { makeFakePiRegistry, withTempDir, getText, extractHash, toolError } from "../support/fixtures";
 
 describe("cross-session anchor isolation", () => {
   it("rejects an anchor served in a previous session instead of editing the wrong file", async () => {
@@ -25,15 +25,13 @@ describe("cross-session anchor isolation", () => {
       const anchorB = extractHash(getText(readB).split("\n").find((l: string) => l.includes("│two"))!);
       expect(anchorB).not.toBe(anchorA);
 
-      await expect(
-        editTool.execute(
-          "e1",
-          { remove_from: anchorA, remove_to: anchorA, text: ["HACKED"] },
-          undefined,
-          undefined,
-          ctx,
-        ),
-      ).rejects.toThrow(/E_STALE_ANCHOR/);
+      expect(await toolError(() => editTool.execute(
+        "e1",
+        { remove_from: anchorA, remove_to: anchorA, text: ["HACKED"] },
+        undefined,
+        undefined,
+        ctx,
+      ))).toMatch(/E_STALE_ANCHOR/);
 
       expect(await readFile(join(dir, "fileA.txt"), "utf-8")).toBe("alpha\nbeta\ngamma\n");
       expect(await readFile(join(dir, "fileB.txt"), "utf-8")).toBe("one\ntwo\nthree\n");

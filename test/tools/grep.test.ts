@@ -6,7 +6,7 @@ import { loadHashStore, getSnapshot } from "../../src/hash-store";
 import { resolveTarget } from "../../src/fs-write";
 import { ownersForPath, initRegistry, resetRegistryForTests } from "../../src/anchor-registry";
 import { toCwd } from "../../src/paths";
-import { closeHashStore, withTempFile, withTempDir, withHome, makeFakePiRegistry, setupIntegrationTest, getText, extractHash, rmRetry } from "../support/fixtures";
+import { closeHashStore, withTempFile, withTempDir, withHome, makeFakePiRegistry, setupIntegrationTest, getText, extractHash, rmRetry, toolError } from "../support/fixtures";
 import register from "../../index";
 
 beforeEach(async () => {
@@ -179,13 +179,7 @@ describe("grep tool", () => {
       const { ctx, getTool } = setupIntegrationTest(cwd);
       const grepTool = getTool("anchor_grep");
 
-      await expect(
-        grepTool.execute(
-          "g1",
-          { pattern: "(a+)+$", path: "sample.ts" },
-          undefined, undefined, ctx,
-        ),
-      ).rejects.toThrow("[E_UNSAFE_REGEX]");
+      expect(await toolError(() => grepTool.execute("g1", { pattern: "(a+)+$", path: "sample.ts" }, undefined, undefined, ctx))).toContain("[E_UNSAFE_REGEX]");
     });
   });
 
@@ -194,13 +188,7 @@ describe("grep tool", () => {
       const { ctx, getTool } = setupIntegrationTest(cwd);
       const grepTool = getTool("anchor_grep");
 
-      await expect(
-        grepTool.execute(
-          "g1",
-          { pattern: "(a+)\\1", path: "sample.ts" },
-          undefined, undefined, ctx,
-        ),
-      ).rejects.toThrow("[E_UNSAFE_REGEX]");
+      expect(await toolError(() => grepTool.execute("g1", { pattern: "(a+)\\1", path: "sample.ts" }, undefined, undefined, ctx))).toContain("[E_UNSAFE_REGEX]");
 
       const literalResult = await grepTool.execute(
         "g2",
@@ -216,13 +204,7 @@ describe("grep tool", () => {
       const { ctx, getTool } = setupIntegrationTest(cwd);
       const grepTool = getTool("anchor_grep");
 
-      await expect(
-        grepTool.execute(
-          "g1",
-          { pattern: "a*a*a*b", path: "sample.ts" },
-          undefined, undefined, ctx,
-        ),
-      ).rejects.toThrow("[E_UNSAFE_REGEX]");
+      expect(await toolError(() => grepTool.execute("g1", { pattern: "a*a*a*b", path: "sample.ts" }, undefined, undefined, ctx))).toContain("[E_UNSAFE_REGEX]");
     });
   });
 
@@ -573,13 +555,7 @@ async function withSystemTempDir(prefix: string, run: (dir: string) => Promise<v
     await withTempFile("sample.ts", "alpha\n", async ({ cwd }) => {
       const { ctx, getTool } = setupIntegrationTest(cwd);
       const grepTool = getTool("anchor_grep");
-      await expect(
-        grepTool.execute(
-          "g1",
-          { pattern: "(", path: "sample.ts" },
-          undefined, undefined, ctx,
-        ),
-      ).rejects.toThrow(/E_BAD_SHAPE/);
+      expect(await toolError(() => grepTool.execute("g1", { pattern: "(", path: "sample.ts" }, undefined, undefined, ctx))).toMatch(/E_BAD_SHAPE/);
     });
   });
 
@@ -587,13 +563,7 @@ async function withSystemTempDir(prefix: string, run: (dir: string) => Promise<v
     await withTempFile("sample.ts", "alpha\n", async ({ cwd }) => {
       const { ctx, getTool } = setupIntegrationTest(cwd);
       const grepTool = getTool("anchor_grep");
-      await expect(
-        grepTool.execute(
-          "g1",
-          { pattern: "alpha", path: "sample.ts", glob: "[z-a].ts" },
-          undefined, undefined, ctx,
-        ),
-      ).rejects.toThrow(/\[E_BAD_SHAPE\] Invalid glob pattern/);
+      expect(await toolError(() => grepTool.execute("g1", { pattern: "alpha", path: "sample.ts", glob: "[z-a].ts" }, undefined, undefined, ctx))).toMatch(/\[E_BAD_SHAPE\] Invalid glob pattern/);
     });
   });
 
@@ -601,13 +571,7 @@ async function withSystemTempDir(prefix: string, run: (dir: string) => Promise<v
     await withTempFile("sample.ts", "alpha\n", async ({ cwd }) => {
       const { ctx, getTool } = setupIntegrationTest(cwd);
       const grepTool = getTool("anchor_grep");
-      await expect(
-        grepTool.execute(
-          "g1",
-          { pattern: "(?=a)a", path: "sample.ts" },
-          undefined, undefined, ctx,
-        ),
-      ).rejects.toThrow(/\[E_GREP_FAILED\] ripgrep exited with code 2/);
+      expect(await toolError(() => grepTool.execute("g1", { pattern: "(?=a)a", path: "sample.ts" }, undefined, undefined, ctx))).toMatch(/\[E_GREP_FAILED\] ripgrep exited with code 2/);
     });
   });
 
@@ -615,13 +579,7 @@ async function withSystemTempDir(prefix: string, run: (dir: string) => Promise<v
     await withTempFile("sample.ts", "alpha\n", async ({ cwd }) => {
       const { ctx, getTool } = setupIntegrationTest(cwd);
       const grepTool = getTool("anchor_grep");
-      await expect(
-        grepTool.execute(
-          "g1",
-          { pattern: "alpha", path: "missing.ts" },
-          undefined, undefined, ctx,
-        ),
-      ).rejects.toThrow(/E_NOT_FOUND/);
+      expect(await toolError(() => grepTool.execute("g1", { pattern: "alpha", path: "missing.ts" }, undefined, undefined, ctx))).toMatch(/E_NOT_FOUND/);
     });
   });
 
@@ -629,26 +587,14 @@ async function withSystemTempDir(prefix: string, run: (dir: string) => Promise<v
     await withTempFile("sample.ts", "alpha\n", async ({ cwd }) => {
       const { ctx, getTool } = setupIntegrationTest(cwd);
       const grepTool = getTool("anchor_grep");
-      await expect(
-        grepTool.execute(
-          "g1",
-          { file_path: "sample.ts", pattern: "alpha" },
-          undefined, undefined, ctx,
-        ),
-      ).rejects.toThrow("[E_BAD_SHAPE]");
+      expect(await toolError(() => grepTool.execute("g1", { file_path: "sample.ts", pattern: "alpha" }, undefined, undefined, ctx))).toContain("[E_BAD_SHAPE]");
     });
   });
   it("names unknown fields instead of a generic schema error", async () => {
     await withTempFile("sample.ts", "alpha\n", async ({ cwd }) => {
       const { ctx, getTool } = setupIntegrationTest(cwd);
       const grepTool = getTool("anchor_grep");
-      await expect(
-        grepTool.execute(
-          "g1",
-          { pattern: "alpha", path: "sample.ts", unknown_field: "x" } as any,
-          undefined, undefined, ctx,
-        ),
-      ).rejects.toThrow(/unknown or unsupported fields: unknown_field/);
+      expect(await toolError(() => grepTool.execute("g1", { pattern: "alpha", path: "sample.ts", unknown_field: "x" } as any, undefined, undefined, ctx))).toMatch(/unknown or unsupported fields: unknown_field/);
     });
   });
 
@@ -745,7 +691,7 @@ async function withSystemTempDir(prefix: string, run: (dir: string) => Promise<v
     await withTempFile("huge2.txt", "z\n", async ({ cwd }) => {
       const { ctx, getTool } = setupIntegrationTest(cwd);
       const grepTool = getTool("anchor_grep");
-      await expect(grepTool.execute("g1", { pattern: "z{1000000}", path: "huge2.txt" }, undefined, undefined, ctx)).rejects.toThrow("[E_UNSAFE_REGEX]");
+      expect(await toolError(() => grepTool.execute("g1", { pattern: "z{1000000}", path: "huge2.txt" }, undefined, undefined, ctx))).toContain("[E_UNSAFE_REGEX]");
     });
   });
 

@@ -68,7 +68,7 @@ What "pro" adds over upstream `pi-hashline-edit`: the anchor table is built from
 
 Prerequisites:
 
-- [pi-coding-agent](https://github.com/earendil-works/pi) `>= 0.84.0` (`@earendil-works/pi-coding-agent`).
+- [pi-coding-agent](https://github.com/earendil-works/pi) `>= 0.99.0` (`@earendil-works/pi-coding-agent`).
 - Node.js 22.19 or newer, or a Bun build that ships `bun:sqlite`.
 - An SQLite runtime. The extension uses `node:sqlite` on Node 22.19+ and falls back to `bun:sqlite`. The pi release binary's bundled Bun lacks `node:sqlite`, so run pi under Node or a Bun build that ships SQLite. Without a runtime, every tool fails with `[E_STORE_UNAVAILABLE]`.
 
@@ -406,6 +406,14 @@ When `PI_HASHLINE_DIR` is unset or empty, non-Windows platforms honor `XDG_CONFI
 ## Tool result details
 
 All eight tools return machine-readable metadata in `details` alongside the model-visible text.
+
+All eight tools also declare an `outputSchema` and return `structuredContent`, so codemode scripts receive anchors, line numbers, diffs, and errors as data instead of parsing the rendered text. The model still receives `content`. Every structured result is either `{ ok: true, kind, ... }` or `{ ok: false, kind: "error", error: { code, message } }`; a failed call is still a tool error (`isError: true`) and also carries `structuredContent`, so a script can branch on the code without matching the message.
+
+`read` returns `{ kind: "read", path, text, lines, totalLines, startLine, nextOffset, truncated, blockedByLongLine, hadUtf8DecodeErrors }`, where each entry of `lines` is `{ line, text, anchor, rendered }` for a row that was served (`text` is what was shown, so an oversized line appears as its marker while keeping its anchor). An image read returns `{ kind: "image", path, mimeType }`.
+
+`replace`, `replace_match`, `insert`, `copy`, `move`, and `undo_last_change` return `{ kind: "edit", verb, classification, path, text, diff, warnings, hints, firstChangedLine, anchors, anchorsOmitted }`, where `verb` is `"replaced"`, `"inserted"`, `"copied"`, `"moved"`, or `"undone"`, `anchors` are the live rows of the post-edit diff, and `anchorsOmitted` is true when the diff was truncated or carried no rows, meaning a fresh read is needed. A cross-file move reports the destination file and its anchors.
+
+`anchor_grep` returns `{ kind: "grep", text, matches, files, truncated, results }`, where each entry of `results` is `{ path, matchLines, lines, hadUtf8DecodeErrors }` and `lines` uses the same `{ line, text, anchor, rendered }` shape as `read`.
 
 | Tool | `details` |
 | --- | --- |

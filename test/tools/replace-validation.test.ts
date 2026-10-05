@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { assertReq, buildToolDef } from "../../src/replace";
-import { useTestHome } from "../support/fixtures";
+import { useTestHome, toolError } from "../support/fixtures";
 
 useTestHome();
 
@@ -62,18 +62,16 @@ describe("assertReq", () => {
 describe("anchor validation order", () => {
 	it("rejects malformed anchors before any file I/O", async () => {
 		const tool = buildToolDef();
-		await expect(
-			tool.execute(
-				"e1",
-				{
-					remove_from: "abc", remove_to: "abc",
-					text: ["x"],
-				},
-				undefined,
-				undefined,
-				{ cwd: "/tmp" } as any,
-			),
-		).rejects.toThrow(/^\[E_BAD_REF\]/);
+		expect(await toolError(() => tool.execute(
+			"e1",
+			{
+				remove_from: "abc", remove_to: "abc",
+				text: ["x"],
+			},
+			undefined,
+			undefined,
+			{ cwd: "/tmp" } as any,
+		))).toMatch(/^\[E_BAD_REF\]/);
 	});
 });
 
