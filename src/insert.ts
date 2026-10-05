@@ -18,7 +18,7 @@ export { assertInsertReq, type InsertReq };
 
 const insertAnchorSchema = Type.String({
   description:
-    "4-char anchor of the line to insert next to (never the row content). A pasted diff row is stripped with a warning; the anchor line is preserved.",
+    "4-char anchor of the line to insert next to (never the row content).",
 });
 
 const insertDirectionSchema = Type.Union(
