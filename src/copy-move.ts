@@ -725,6 +725,76 @@ async function executeBatchCrossCopy(
   });
 }
 
+async function executeBatchCrossMove(
+  member: PlannedMember,
+  refs: TransferRefs,
+  warnings: string[],
+  sourcePath: string,
+  destinationPath: string,
+  mutationTargetPath: string,
+  cwd: string,
+  signal?: AbortSignal,
+): Promise<TResult> {
+  const destinationBase = await ensureBatchBase({ member, targetPath: destinationPath, mutationTargetPath, cwd, signal });
+  let prepared: CrossTransferPreparation;
+  let sourcePipe: PipelineResult;
+  try {
+    const sourcePreload = await readNormFile(sourcePath, cwd, { signal, accessMode: constants.R_OK | constants.W_OK, maxLines: MAX_HASH_LINES });
+    prepared = await prepareCrossTransfer({
+      kind: "move",
+      refs,
+      sourcePath,
+      destinationPath,
+      cwd,
+      signal,
+      noPersist: false,
+      sourcePreload,
+      destinationPreload: preloadFromBase(destinationBase),
+      destinationServed: batchServedFor(member),
+    });
+    sourcePipe = await execPipeline(sourcePath, prepared.sourceEdit!, cwd, {
+      accessMode: constants.R_OK | constants.W_OK,
+      signal,
+      preloadedNorm: prepared.sourcePreload,
+      allowEmpty: true,
+      preserveDeletionSeparators: false,
+    });
+  } catch (error) {
+    noteBatchFailure(member, error);
+    throw error;
+  }
+  const resWarnings: string[] = [];
+  let hedit: HEdit;
+  try {
+    hedit = resEdit(prepared.destinationEdit, resWarnings);
+  } catch (error) {
+    noteBatchFailure(member, error);
+    throw error;
+  }
+  const sourceWarnings = [
+    ...sourcePipe.warnings,
+    ...(sourcePipe.hadUtf8DecodeErrors ? ["Non-UTF-8 bytes were shown as U+FFFD; this edit rewrote the file as UTF-8."] : []),
+  ];
+  return executeBatchMember({
+    kind: "move",
+    member,
+    targetPath: destinationPath,
+    mutationTargetPath,
+    cwd,
+    signal,
+    hedit,
+    extraWarnings: [...warnings, ...resWarnings, ...sourceWarnings],
+    foldedLines: prepared.destinationFolded,
+    ...(prepared.destinationFolded === 1 ? { carryIndex: 0 } : {}),
+    contentSeparators: prepared.endingOverrides,
+    sourceMove: {
+      displayPath: prepared.sourceDisplay,
+      mutationTargetPath: prepared.sourcePreload.absolutePath,
+      pipe: sourcePipe,
+    },
+  });
+}
+
 export async function transferPreview(kind: TransferKind, request: unknown, cwd: string, signal?: AbortSignal): Promise<RPreview> {
   try {
     const normalized = normReq(request);
@@ -954,11 +1024,12 @@ export function buildTransferToolDef(kind: TransferKind, flags: EditToolFlags = 
             });
           });
         }
-        if (kind === "copy") {
-          const member = batchMemberFor(_toolCallId);
-          if (!member) return executeCrossFile(kind, refs, warnings, sourcePath, destinationPath, ctx.cwd, signal);
+        const member = batchMemberFor(_toolCallId);
+        if (member) {
           return queuedEdit(destinationPath, ctx.cwd, signal, async (_absolutePath, mutationTargetPath) => {
-            return executeBatchCrossCopy(member, refs, warnings, sourcePath, destinationPath, mutationTargetPath, ctx.cwd, signal);
+            return kind === "copy"
+              ? executeBatchCrossCopy(member, refs, warnings, sourcePath, destinationPath, mutationTargetPath, ctx.cwd, signal)
+              : executeBatchCrossMove(member, refs, warnings, sourcePath, destinationPath, mutationTargetPath, ctx.cwd, signal);
           });
         }
         return executeCrossFile(kind, refs, warnings, sourcePath, destinationPath, ctx.cwd, signal);

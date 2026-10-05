@@ -2,4 +2,4 @@ Move a range of lines to another position, targeted by 4-character anchors from 
 
 Example: read served `Hasu│a` in `lib.ts` and `Qwer│top` in `app.ts`. Call { "source_from": "Hasu", "source_to": "Hasu", "insert_after": "Qwer" } moves `a` from `lib.ts` into `app.ts` below `top`.
 
-A same-file `move` joins the same-message batch of its file; a cross-file `move` writes both files and always commits on its own.
+A same-file `move` and a cross-file `move` join the same-message batch of the destination file; a cross-file `move` whose source file also has batched edits in the message commits on its own. A batched cross-file `move` commits its source removal with the batch but shows only the destination diff; read the source file for fresh anchors.

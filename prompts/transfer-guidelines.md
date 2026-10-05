@@ -1,1 +1,2 @@
 - `copy`/`move`: for a block transfer, only the source's two boundary rows and the destination line need serving; the interior transfers verbatim and the block lands in one commit. To append at the end, use the destination's last served line as `insert_after`.
+- `move`: a batched cross-file move does not display the source file's diff; its removal commits with the batch, and the source file needs a read for fresh anchors.

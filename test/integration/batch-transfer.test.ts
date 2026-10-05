@@ -308,41 +308,6 @@ describe("batched cross-file copy", () => {
     });
   });
 
-  it("lets a cross-file move commit alone and abort a pending destination batch", async () => {
-    await withTempDir("batch-cross-move-barrier-", async (dir) => {
-      await writeFile(join(dir, "a.ts"), "alpha\nbeta\n", "utf-8");
-      await writeFile(join(dir, "b.ts"), "one\ntwo\n", "utf-8");
-      const { handlers, getTool, ctx } = setupIntegrationTest(dir);
-      const read = getTool("read");
-      const replace = getTool("replace");
-      const move = getTool("move");
-
-      const aText = getText(await read.execute("ra", { path: "a.ts" }, undefined, undefined, ctx));
-      const bText = getText(await read.execute("rb", { path: "b.ts" }, undefined, undefined, ctx));
-      const beta = anchorFor(aText, "beta");
-      const one = anchorFor(bText, "one");
-      const two = anchorFor(bText, "two");
-      const firstArgs = { remove_from: one, remove_to: one, text: ["ONE"] };
-      const lastArgs = { remove_from: two, remove_to: two, text: ["TWO"] };
-      const moveArgs = { source_from: beta, source_to: beta, insert_after: two };
-      const message = assistantMessage([
-        toolCall("f1", "replace", firstArgs),
-        toolCall("f2", "move", moveArgs),
-        toolCall("f3", "replace", lastArgs),
-      ]);
-      await handlers.get("message_end")!({ type: "message_end", message }, ctx);
-
-      const first = await replace.execute("f1", firstArgs, undefined, undefined, ctx);
-      expect(getText(first)).toBe("In batch 1 (queued)");
-
-      const moved = await move.execute("f2", moveArgs, undefined, undefined, ctx);
-      expect(getText(moved)).toContain("Successfully moved 1 line(s)");
-      expect(await readFile(join(dir, "a.ts"), "utf-8")).toBe("alpha\n");
-
-      await expect(replace.execute("f3", lastArgs, undefined, undefined, ctx)).rejects.toThrow("[E_OP_ABORTED]");
-      expect(await readFile(join(dir, "b.ts"), "utf-8")).toBe("one\ntwo\nbeta\n");
-    });
-  });
 
   it("keeps a cross-file copy solo when its source anchors are stale", async () => {
     await withTempDir("batch-cross-copy-stale-", async (dir) => {
@@ -370,6 +335,220 @@ describe("batched cross-file copy", () => {
 
       await expect(copy.execute("q2", copyArgs, undefined, undefined, ctx)).rejects.toThrow("[E_STALE_ANCHOR]");
       expect(await readFile(join(dir, "b.ts"), "utf-8")).toBe("one\nTWO\n");
+    });
+  });
+});
+
+describe("batched cross-file move", () => {
+  it("batches a cross-file move with destination edits and undoes each side", async () => {
+    await withTempDir("batch-cross-move-", async (dir) => {
+      await writeFile(join(dir, "a.ts"), "alpha\nbeta\ngamma\n", "utf-8");
+      await writeFile(join(dir, "b.ts"), "one\ntwo\n", "utf-8");
+      const { handlers, getTool, ctx } = setupIntegrationTest(dir);
+      const read = getTool("read");
+      const replace = getTool("replace");
+      const move = getTool("move");
+      const undo = getTool("undo_last_change");
+
+      const aText = getText(await read.execute("ra", { path: "a.ts" }, undefined, undefined, ctx));
+      const bText = getText(await read.execute("rb", { path: "b.ts" }, undefined, undefined, ctx));
+      const beta = anchorFor(aText, "beta");
+      const one = anchorFor(bText, "one");
+      const two = anchorFor(bText, "two");
+      const replaceArgs = { remove_from: two, remove_to: two, text: ["TWO"] };
+      const moveArgs = { source_from: beta, source_to: beta, insert_after: one };
+      const message = assistantMessage([toolCall("m1", "replace", replaceArgs), toolCall("m2", "move", moveArgs)]);
+      await handlers.get("message_end")!({ type: "message_end", message }, ctx);
+
+      const first = await replace.execute("m1", replaceArgs, undefined, undefined, ctx);
+      expect(getText(first)).toBe("In batch 1 (queued)");
+
+      const last = await move.execute("m2", moveArgs, undefined, undefined, ctx);
+      expect(getText(last)).toContain("Batch 1: 2 edits applied as one commit");
+      expect(getText(last)).toContain("one undo reverts the destination edits");
+      expect(getText(last)).toContain("Moved 1 line(s) out of a.ts");
+      expect(last.details.patch).toContain("--- a.ts");
+      expect(last.details.patch).toContain("-beta");
+      expect(await readFile(join(dir, "a.ts"), "utf-8")).toBe("alpha\ngamma\n");
+      expect(await readFile(join(dir, "b.ts"), "utf-8")).toBe("one\nbeta\nTWO\n");
+
+      await handlers.get("turn_end")!({ type: "turn_end", turnIndex: 0, message, toolResults: [{ toolCallId: "m1" }, { toolCallId: "m2" }] }, ctx);
+
+      await undo.execute("u1", { path: "b.ts" }, undefined, undefined, ctx);
+      expect(await readFile(join(dir, "b.ts"), "utf-8")).toBe("one\ntwo\n");
+      expect(await readFile(join(dir, "a.ts"), "utf-8")).toBe("alpha\ngamma\n");
+      await undo.execute("u2", { path: "a.ts" }, undefined, undefined, ctx);
+      expect(await readFile(join(dir, "a.ts"), "utf-8")).toBe("alpha\nbeta\ngamma\n");
+    });
+  });
+
+  it("leaves the move source untouched when the destination batch aborts", async () => {
+    await withTempDir("batch-cross-move-abort-", async (dir) => {
+      await writeFile(join(dir, "a.ts"), "alpha\nbeta\ngamma\n", "utf-8");
+      await writeFile(join(dir, "b.ts"), "one\ntwo\n", "utf-8");
+      const { handlers, getTool, ctx } = setupIntegrationTest(dir);
+      const read = getTool("read");
+      const replace = getTool("replace");
+      const move = getTool("move");
+
+      const aText = getText(await read.execute("ra", { path: "a.ts" }, undefined, undefined, ctx));
+      const bText = getText(await read.execute("rb", { path: "b.ts" }, undefined, undefined, ctx));
+      const beta = anchorFor(aText, "beta");
+      const one = anchorFor(bText, "one");
+      const two = anchorFor(bText, "two");
+      const replaceArgs = { remove_from: two, remove_to: two, text: ["TWO"] };
+      const moveArgs = { source_from: beta, source_to: beta, insert_after: one };
+      const message = assistantMessage([toolCall("m1", "replace", replaceArgs), toolCall("m2", "move", moveArgs)]);
+      await handlers.get("message_end")!({ type: "message_end", message }, ctx);
+
+      const first = await replace.execute("m1", replaceArgs, undefined, undefined, ctx);
+      expect(getText(first)).toBe("In batch 1 (queued)");
+
+      await writeFile(join(dir, "b.ts"), "one\nCHANGED\n", "utf-8");
+      await expect(move.execute("m2", moveArgs, undefined, undefined, ctx)).rejects.toThrow("[E_OP_ABORTED]");
+      expect(await readFile(join(dir, "a.ts"), "utf-8")).toBe("alpha\nbeta\ngamma\n");
+      expect(await readFile(join(dir, "b.ts"), "utf-8")).toBe("one\nCHANGED\n");
+    });
+  });
+
+  it("aborts when the move source changes before the batch commits", async () => {
+    await withTempDir("batch-cross-move-source-", async (dir) => {
+      await writeFile(join(dir, "a.ts"), "alpha\nbeta\ngamma\n", "utf-8");
+      await writeFile(join(dir, "b.ts"), "one\ntwo\n", "utf-8");
+      const { handlers, getTool, ctx } = setupIntegrationTest(dir);
+      const read = getTool("read");
+      const replace = getTool("replace");
+      const move = getTool("move");
+      const undo = getTool("undo_last_change");
+
+      const aText = getText(await read.execute("ra", { path: "a.ts" }, undefined, undefined, ctx));
+      const bText = getText(await read.execute("rb", { path: "b.ts" }, undefined, undefined, ctx));
+      const beta = anchorFor(aText, "beta");
+      const one = anchorFor(bText, "one");
+      const two = anchorFor(bText, "two");
+      const replaceArgs = { remove_from: two, remove_to: two, text: ["TWO"] };
+      const moveArgs = { source_from: beta, source_to: beta, insert_after: one };
+      const message = assistantMessage([toolCall("m1", "move", moveArgs), toolCall("m2", "replace", replaceArgs)]);
+      await handlers.get("message_end")!({ type: "message_end", message }, ctx);
+
+      const first = await move.execute("m1", moveArgs, undefined, undefined, ctx);
+      expect(getText(first)).toBe("In batch 1 (queued)");
+
+      await writeFile(join(dir, "a.ts"), "alpha\nBETA\ngamma\n", "utf-8");
+      await expect(replace.execute("m2", replaceArgs, undefined, undefined, ctx)).rejects.toThrow("[E_OP_ABORTED]");
+      expect(await readFile(join(dir, "a.ts"), "utf-8")).toBe("alpha\nBETA\ngamma\n");
+      expect(await readFile(join(dir, "b.ts"), "utf-8")).toBe("one\ntwo\n");
+
+      const noHistory = await undo.execute("u3", { path: "a.ts" }, undefined, undefined, ctx);
+      expect(noHistory.isError).toBe(true);
+    });
+  });
+
+  it("commits removals from several source files in one batch", async () => {
+    await withTempDir("batch-cross-move-multi-", async (dir) => {
+      await writeFile(join(dir, "a.ts"), "alpha\nbeta\n", "utf-8");
+      await writeFile(join(dir, "c.ts"), "x\ny\n", "utf-8");
+      await writeFile(join(dir, "b.ts"), "one\ntwo\nthree\n", "utf-8");
+      const { handlers, getTool, ctx } = setupIntegrationTest(dir);
+      const read = getTool("read");
+      const move = getTool("move");
+
+      const aText = getText(await read.execute("ra", { path: "a.ts" }, undefined, undefined, ctx));
+      const cText = getText(await read.execute("rc", { path: "c.ts" }, undefined, undefined, ctx));
+      const bText = getText(await read.execute("rb", { path: "b.ts" }, undefined, undefined, ctx));
+      const beta = anchorFor(aText, "beta");
+      const y = anchorFor(cText, "y");
+      const one = anchorFor(bText, "one");
+      const three = anchorFor(bText, "three");
+      const firstArgs = { source_from: beta, source_to: beta, insert_after: one };
+      const secondArgs = { source_from: y, source_to: y, insert_after: three };
+      const message = assistantMessage([toolCall("n1", "move", firstArgs), toolCall("n2", "move", secondArgs)]);
+      await handlers.get("message_end")!({ type: "message_end", message }, ctx);
+
+      const first = await move.execute("n1", firstArgs, undefined, undefined, ctx);
+      expect(getText(first)).toBe("In batch 1 (queued)");
+      const last = await move.execute("n2", secondArgs, undefined, undefined, ctx);
+      expect(getText(last)).toContain("Batch 1: 2 edits applied as one commit");
+      expect(await readFile(join(dir, "a.ts"), "utf-8")).toBe("alpha\n");
+      expect(await readFile(join(dir, "c.ts"), "utf-8")).toBe("x\n");
+      expect(await readFile(join(dir, "b.ts"), "utf-8")).toBe("one\nbeta\ntwo\nthree\ny\n");
+    });
+  });
+
+  it("accepts a require-path hint naming the move source", async () => {
+    await withTempDir("batch-cross-move-path-", async (dir) => {
+      await writeFile(join(dir, "a.ts"), "alpha\nbeta\n", "utf-8");
+      await writeFile(join(dir, "b.ts"), "one\ntwo\n", "utf-8");
+      await mkdir(join(dir, ".config", "pi-hashline-edit-pro"), { recursive: true });
+      await writeFile(join(dir, ".config", "pi-hashline-edit-pro", "config.json"), JSON.stringify({ autoRead: true, requirePath: true }), "utf-8");
+      const { handlers, getTool, ctx } = setupIntegrationTest(dir);
+      const read = getTool("read");
+      const replace = getTool("replace");
+      const move = getTool("move");
+
+      const aText = getText(await read.execute("ra", { path: "a.ts" }, undefined, undefined, ctx));
+      const bText = getText(await read.execute("rb", { path: "b.ts" }, undefined, undefined, ctx));
+      const beta = anchorFor(aText, "beta");
+      const one = anchorFor(bText, "one");
+      const two = anchorFor(bText, "two");
+      const replaceArgs = { path: "b.ts", remove_from: two, remove_to: two, text: ["TWO"] };
+      const moveArgs = { path: "a.ts", source_from: beta, source_to: beta, insert_after: one };
+      const message = assistantMessage([toolCall("p1", "replace", replaceArgs), toolCall("p2", "move", moveArgs)]);
+      await handlers.get("message_end")!({ type: "message_end", message }, ctx);
+
+      const first = await replace.execute("p1", replaceArgs, undefined, undefined, ctx);
+      expect(getText(first)).toBe("In batch 1 (queued)");
+      const last = await move.execute("p2", moveArgs, undefined, undefined, ctx);
+      expect(getText(last)).toContain("Batch 1: 2 edits applied as one commit");
+      expect(await readFile(join(dir, "a.ts"), "utf-8")).toBe("alpha\n");
+      expect(await readFile(join(dir, "b.ts"), "utf-8")).toBe("one\nbeta\nTWO\n");
+    });
+  });
+
+  it("keeps a cross-file move solo when its source file has a same-message batch", async () => {
+    await withTempDir("batch-cross-move-source-batch-", async (dir) => {
+      await writeFile(join(dir, "a.ts"), "alpha\nbeta\ngamma\n", "utf-8");
+      await writeFile(join(dir, "b.ts"), "one\ntwo\n", "utf-8");
+      const { handlers, getTool, ctx } = setupIntegrationTest(dir);
+      const read = getTool("read");
+      const replace = getTool("replace");
+      const move = getTool("move");
+
+      const aText = getText(await read.execute("ra", { path: "a.ts" }, undefined, undefined, ctx));
+      const bText = getText(await read.execute("rb", { path: "b.ts" }, undefined, undefined, ctx));
+      const alpha = anchorFor(aText, "alpha");
+      const beta = anchorFor(aText, "beta");
+      const gamma = anchorFor(aText, "gamma");
+      const one = anchorFor(bText, "one");
+      const two = anchorFor(bText, "two");
+      const alphaArgs = { remove_from: alpha, remove_to: alpha, text: ["ALPHA"] };
+      const betaArgs = { remove_from: beta, remove_to: beta, text: ["BETA"] };
+      const firstArgs = { remove_from: one, remove_to: one, text: ["ONE"] };
+      const lastArgs = { remove_from: two, remove_to: two, text: ["TWO"] };
+      const moveArgs = { source_from: gamma, source_to: gamma, insert_after: two };
+      const message = assistantMessage([
+        toolCall("a1", "replace", alphaArgs),
+        toolCall("a2", "replace", betaArgs),
+        toolCall("f1", "replace", firstArgs),
+        toolCall("f2", "move", moveArgs),
+        toolCall("f3", "replace", lastArgs),
+      ]);
+      await handlers.get("message_end")!({ type: "message_end", message }, ctx);
+
+      const alphaResult = await replace.execute("a1", alphaArgs, undefined, undefined, ctx);
+      expect(getText(alphaResult)).toBe("In batch 1 (queued)");
+      const betaResult = await replace.execute("a2", betaArgs, undefined, undefined, ctx);
+      expect(getText(betaResult)).toContain("Batch 1: 2 edits applied as one commit");
+
+      const first = await replace.execute("f1", firstArgs, undefined, undefined, ctx);
+      expect(getText(first)).toBe("In batch 2 (queued)");
+
+      const moved = await move.execute("f2", moveArgs, undefined, undefined, ctx);
+      expect(getText(moved)).toContain("Successfully moved 1 line(s)");
+      expect(await readFile(join(dir, "a.ts"), "utf-8")).toBe("ALPHA\nBETA\n");
+
+      await expect(replace.execute("f3", lastArgs, undefined, undefined, ctx)).rejects.toThrow("[E_OP_ABORTED]");
+      expect(await readFile(join(dir, "b.ts"), "utf-8")).toBe("one\ntwo\ngamma\n");
     });
   });
 });

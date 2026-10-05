@@ -19,9 +19,11 @@ import {
   type StripWarningLocation,
 } from "./hashline";
 import { adoptAnchors, servedForPath, formatAnchorReclaimNotice, takeReclaimedPaths } from "./anchor-registry";
-import { stripBOM, toLF, type LineEnding } from "./normalize";
+import { restoreEndings, stripBOM, toLF, type LineEnding } from "./normalize";
 import { applySpanEndings, joinSeparators, separatorsForSpans } from "./line-endings";
 import { assertInsertReq, assertReplaceMatchReq, assertReq, assertTransferReq, normReq } from "./payload-contract";
+import type { PipelineResult } from "./replace";
+import { genPatch } from "./replace-diff";
 import { saveUndo } from "./replace-undo";
 import { buildChanged, buildNoop, type RMetrics, type TResult } from "./replace-response";
 import { serveRows, servedHashesFromDiff } from "./served";
@@ -56,6 +58,19 @@ export interface BatchBase {
   baseLines: string[];
 }
 
+export interface BatchSourceMove {
+  displayPath: string;
+  mutationTargetPath: string;
+  pipe: PipelineResult;
+}
+
+interface SourcePreparation {
+  move: BatchSourceMove;
+  separators?: LineEnding[];
+  bytes: string;
+  originalBytes: string;
+}
+
 export interface BatchPiece {
   order: number;
   kind: BatchKind;
@@ -87,6 +102,7 @@ export interface BatchMemberInput {
   contentSeparators?: (LineEnding | undefined)[];
   carryIndex?: number;
   servedOverride?: ReadonlyMap<string, string>;
+  sourceMove?: BatchSourceMove;
 }
 
 interface BatchFailure {
@@ -104,6 +120,7 @@ interface BatchState {
   paths?: { absolutePath: string; mutationTargetPath: string; displayPath: string };
   served?: ReadonlyMap<string, string>;
   pieces: BatchPiece[];
+  sources: BatchSourceMove[];
   applied: number;
   noops: number;
   failures: number;
@@ -117,6 +134,30 @@ interface EditCall {
   id: string;
   name: string;
   args: unknown;
+}
+
+interface ResolvedCall {
+  id: string;
+  target: string;
+  altTarget?: string;
+  sourceTarget?: string;
+  kind: BatchKind;
+  args: unknown;
+  path?: string;
+}
+
+function demoteBlockedMoveCalls(resolved: ResolvedCall[]): ResolvedCall[] {
+  const targets = new Set(resolved.map((item) => item.target));
+  const sourceCounts = new Map<string, number>();
+  for (const item of resolved) {
+    if (item.kind !== "move" || item.sourceTarget === undefined || item.sourceTarget === item.target) continue;
+    sourceCounts.set(item.sourceTarget, (sourceCounts.get(item.sourceTarget) ?? 0) + 1);
+  }
+  return resolved.filter((item) => {
+    if (item.kind !== "move" || item.sourceTarget === undefined || item.sourceTarget === item.target) return true;
+    if (targets.has(item.sourceTarget)) return false;
+    return (sourceCounts.get(item.sourceTarget) ?? 0) === 1;
+  });
 }
 
 type NormalizedEditArgs =
@@ -269,7 +310,8 @@ async function resolveBatchCallTarget(
     const destinationTarget = normalized.insertAfter !== undefined ? tryResolveEditTarget(normalized.insertAfter) : undefined;
     if (sourceTarget === undefined) return undefined;
     if (normalized.kind === "move") {
-      return sourceTarget === destinationTarget ? { target: sourceTarget, sourceTarget } : undefined;
+      if (sourceTarget === destinationTarget) return { target: sourceTarget, sourceTarget };
+      if (destinationTarget !== undefined) return { target: destinationTarget, altTarget: sourceTarget, sourceTarget };
     }
     if (sourceTarget === destinationTarget) return { target: sourceTarget, sourceTarget };
     if (destinationTarget !== undefined) {
@@ -313,7 +355,6 @@ export async function planAssistantMessage(message: unknown, cwd: string): Promi
   if (calls.length < 2) return;
   const earlyConfig = await readConfig();
   const requirePath = earlyConfig.requirePath === true;
-  interface ResolvedCall { id: string; target: string; altTarget?: string; sourceTarget?: string; kind: BatchKind; args: unknown; path?: string }
   const resolved: ResolvedCall[] = [];
   for (const call of calls) {
     const normalized = normalizeEditArgs(call.name, call.args);
@@ -330,8 +371,9 @@ export async function planAssistantMessage(message: unknown, cwd: string): Promi
       ...(normalized.path ? { path: normalized.path } : {}),
     });
   }
+  const allowed = demoteBlockedMoveCalls(resolved);
   const groups = new Map<string, ResolvedCall[]>();
-  for (const item of resolved) {
+  for (const item of allowed) {
     const group = groups.get(item.target) ?? [];
     group.push(item);
     groups.set(item.target, group);
@@ -357,6 +399,7 @@ export async function planAssistantMessage(message: unknown, cwd: string): Promi
       memberIds: group.map((item) => item.id),
       stale: false,
       pieces: [],
+      sources: [],
       applied: 0,
       noops: 0,
       failures: 0,
@@ -628,6 +671,7 @@ export async function executeBatchMember(input: BatchMemberInput): Promise<TResu
   if (noop) runtime.noops += 1;
   else runtime.applied += 1;
   runtime.warnings.push(...piece.warnings);
+  if (input.sourceMove !== undefined) runtime.sources.push(input.sourceMove);
   if (!input.member.last) {
     const placeholder = batchPlaceholder(input.member, piece, base.snapshotId);
     placeholderResults.set(input.member.id, placeholder);
@@ -740,7 +784,7 @@ async function finishBatch(member: PlannedMember, signal?: AbortSignal): Promise
   }
   const appliedPieces = runtime.pieces.filter((piece) => !piece.noop);
   const candidatePieces = runtime.pieces.filter((piece) => !piece.noop || changesEnding(piece, base.separators));
-  if (candidatePieces.length === 0) {
+  if (candidatePieces.length === 0 && runtime.sources.length === 0) {
     const snapshotId = await safeSnapId(paths.absolutePath, "noop edit");
     return combinedNoop(paths.displayPath, member, runtime, snapshotId);
   }
@@ -779,7 +823,7 @@ async function finishBatch(member: PlannedMember, signal?: AbortSignal): Promise
   }
   const reclaimNotice = formatAnchorReclaimNotice(takeReclaimedPaths());
   if (reclaimNotice !== undefined) warnings.push(reclaimNotice);
-  if (finalBytes === originalBytes) {
+  if (finalBytes === originalBytes && runtime.sources.length === 0) {
     const snapshotId = await safeSnapId(paths.absolutePath, "noop edit");
     return combinedNoop(paths.displayPath, member, runtime, snapshotId);
   }
@@ -807,6 +851,47 @@ async function finishBatch(member: PlannedMember, signal?: AbortSignal): Promise
     if (error instanceof Error) error.message = withAbortSuffix(error.message, runtime.display);
     throw error;
   }
+
+  const sourcePreparations: SourcePreparation[] = [];
+  for (const source of runtime.sources) {
+    let sourceRaw: string | undefined;
+    try {
+      sourceRaw = await readFile(source.mutationTargetPath, "utf-8");
+    } catch (error) {
+      if (errCode(error) !== "ENOENT") throw error;
+      sourceRaw = undefined;
+    }
+    if (sourceRaw === undefined || toLF(stripBOM(sourceRaw).text) !== source.pipe.originalNormalized) {
+      discardBatchState(runtime);
+      throw new Error(withAbortSuffix(`[E_OP_ABORTED] Batch ${runtime.display} aborted: the move source ${source.displayPath} changed after the move started. Call read for fresh anchors and retry.`, runtime.display));
+    }
+    const sourceSpan = source.pipe.spans?.[0];
+    const sourceSeparators = sourceSpan
+      ? separatorsForSpans(source.pipe.originalSeparators, source.pipe.originalHashes.length, [sourceSpan], source.pipe.result, source.pipe.originalEnding)
+      : undefined;
+    const sourceBytes = source.pipe.bom + (sourceSeparators !== undefined
+      ? joinSeparators(source.pipe.result, sourceSeparators)
+      : restoreEndings(source.pipe.result, source.pipe.originalEnding));
+    const sourceOriginalBytes = source.pipe.bom + joinSeparators(source.pipe.originalNormalized, source.pipe.originalSeparators);
+    try {
+      assertByteLimit(sourceBytes, source.displayPath);
+      await lineHashes(source.pipe.result, source.mutationTargetPath, {
+        content: source.pipe.originalNormalized,
+        hashes: source.pipe.originalHashes,
+        ...(source.pipe.spans !== undefined ? { spans: source.pipe.spans } : {}),
+      }, undefined, false, true);
+    } catch (error) {
+      discardBatchState(runtime);
+      if (error instanceof Error) error.message = withAbortSuffix(error.message, runtime.display);
+      throw error;
+    }
+    sourcePreparations.push({
+      move: source,
+      ...(sourceSeparators !== undefined ? { separators: sourceSeparators } : {}),
+      bytes: sourceBytes,
+      originalBytes: sourceOriginalBytes,
+    });
+  }
   const undo = await saveUndo(runtime.target, {
     content: base.content,
     bom: base.bom,
@@ -820,11 +905,43 @@ async function finishBatch(member: PlannedMember, signal?: AbortSignal): Promise
     discardBatchState(runtime);
     throw new Error(`[E_UNDO_UNAVAILABLE] Could not persist undo history for ${paths.displayPath}. Aborts batch ${runtime.display}.`);
   }
+  const undoRestores: Array<() => Promise<void>> = [undo.restore];
+  for (const preparation of sourcePreparations) {
+    const sourceUndo = await saveUndo(preparation.move.mutationTargetPath, {
+      content: preparation.move.pipe.originalNormalized,
+      bom: preparation.move.pipe.bom,
+      originalEnding: preparation.move.pipe.originalEnding,
+      separators: preparation.move.pipe.originalSeparators,
+      hashes: preparation.move.pipe.originalHashes,
+      resultContent: preparation.move.pipe.result,
+      ...(preparation.separators !== undefined ? { resultSeparators: preparation.separators } : {}),
+    });
+    if (!sourceUndo.persisted) {
+      for (const restore of [...undoRestores].reverse()) await restore();
+      discardBatchState(runtime);
+      throw new Error(`[E_UNDO_UNAVAILABLE] Could not persist undo history for ${preparation.move.displayPath}. Nothing was written. Aborts batch ${runtime.display}.`);
+    }
+    undoRestores.push(sourceUndo.restore);
+  }
+  const writtenFiles: Array<{ path: string; bytes: string }> = [];
   try {
     abortIf(signal);
-    await writeAtomic(paths.absolutePath, base.bom + joinSeparators(composed, resultSeparators), base.identity);
+    await writeAtomic(paths.absolutePath, finalBytes, base.identity);
+    writtenFiles.push({ path: paths.absolutePath, bytes: originalBytes });
+    for (const preparation of sourcePreparations) {
+      abortIf(signal);
+      await writeAtomic(preparation.move.mutationTargetPath, preparation.bytes, preparation.move.pipe.identity);
+      writtenFiles.push({ path: preparation.move.mutationTargetPath, bytes: preparation.originalBytes });
+    }
   } catch (error) {
-    await undo.restore();
+    for (const written of [...writtenFiles].reverse()) {
+      try {
+        await writeAtomic(written.path, written.bytes);
+      } catch (rollbackError) {
+        console.error("Failed to roll back a file after a batched cross-file move failed:", rollbackError);
+      }
+    }
+    for (const restore of [...undoRestores].reverse()) await restore();
     discardBatchState(runtime);
     if (error instanceof Error) error.message = withAbortSuffix(error.message, runtime.display);
     throw error;
@@ -839,7 +956,23 @@ async function finishBatch(member: PlannedMember, signal?: AbortSignal): Promise
     });
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
-    throw new Error(`${detail} File was written; anchor finalization failed. One undo reverts. Call read for fresh anchors.`);
+    const written = sourcePreparations.length > 0
+      ? "Files were written; anchor finalization failed. One undo per file reverts."
+      : "File was written; anchor finalization failed. One undo reverts.";
+    throw new Error(`${detail} ${written} Call read for fresh anchors.`);
+  }
+
+  for (const preparation of sourcePreparations) {
+    try {
+      await lineHashes(preparation.move.pipe.result, preparation.move.mutationTargetPath, {
+        content: preparation.move.pipe.originalNormalized,
+        hashes: preparation.move.pipe.originalHashes,
+        ...(preparation.move.pipe.spans !== undefined ? { spans: preparation.move.pipe.spans } : {}),
+      });
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      throw new Error(`${detail} Files were written; anchor finalization failed. One undo per file reverts. Call read for fresh anchors.`);
+    }
   }
   const writeReclaim = formatAnchorReclaimNotice(takeReclaimedPaths());
   if (writeReclaim !== undefined) warnings.push(writeReclaim);
@@ -880,6 +1013,18 @@ async function finishBatch(member: PlannedMember, signal?: AbortSignal): Promise
       indentHints: !runtime.pieces.some((piece) => piece.kind === "copy" || piece.kind === "move"),
     },
   );
+
+  if (sourcePreparations.length > 0) {
+    const patches = [changed.details.patch ?? ""];
+    let patchTruncated = changed.details.patchTruncated === true;
+    for (const preparation of sourcePreparations) {
+      const sourcePatch = genPatch(preparation.move.displayPath, preparation.move.pipe.originalNormalized, preparation.move.pipe.result);
+      if (sourcePatch.patch.length > 0) patches.push(sourcePatch.patch);
+      if (sourcePatch.truncated) patchTruncated = true;
+    }
+    changed.details.patch = patches.filter((patch) => patch.length > 0).join("\n");
+    if (patchTruncated) changed.details.patchTruncated = true;
+  }
   if (changed.details.diff.length > 0) {
     changed.details.diff = `${header}\n${changed.details.diff}`;
     changed.details.diffLineNumbers?.unshift(null);
@@ -890,7 +1035,13 @@ async function finishBatch(member: PlannedMember, signal?: AbortSignal): Promise
     console.error("Failed to mark batch diff served:", error);
   }
   const executed = runtime.applied + runtime.noops;
-  changed.content[0]!.text = `${header}\n${changed.content[0]!.text}\nBatch ${member.display}: ${executed} edit${executed === 1 ? "" : "s"} applied as one commit; one undo reverts them.`;
+  const movedLines = sourcePreparations.reduce((total, preparation) => total + preparation.move.pipe.totalRemovedLines, 0);
+  const sourceFiles = sourcePreparations.map((preparation) => preparation.move.displayPath);
+  const sourceNote = sourceFiles.length > 0
+    ? `\nMoved ${movedLines} line(s) out of ${sourceFiles.join(", ")}; each source file keeps its own undo. Read ${sourceFiles.join(", ")} for fresh anchors.`
+    : "";
+  const undoNote = sourceFiles.length > 0 ? "one undo reverts the destination edits" : "one undo reverts them";
+  changed.content[0]!.text = `${header}\n${changed.content[0]!.text}\nBatch ${member.display}: ${executed} edit${executed === 1 ? "" : "s"} applied as one commit; ${undoNote}.${sourceNote}`;
   changed.details.batch = { id: member.display, size: member.size, last: true, total: member.total };
   return changed;
 }
