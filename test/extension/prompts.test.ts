@@ -364,3 +364,44 @@ describe("edit prompt flag variants", () => {
     expect(result.snippet).not.toContain("include `path` (required)");
   });
 });
+
+describe("codemode prompt variants", () => {
+  it("adds the script batch wording and result contract only when codemode is active", () => {
+    const off = withReplacePrompts(replaceBase, DEFAULT_EDIT_FLAGS);
+    const on = withReplacePrompts(replaceBase, { ...DEFAULT_EDIT_FLAGS, codemode: true });
+    expect(off.guidelines.some((g) => g.includes("Script calls apply immediately"))).toBe(false);
+    expect(off.guidelines.some((g) => g.includes("failures resolve to"))).toBe(false);
+    expect(on.guidelines.some((g) => g.includes("Script calls apply immediately in order"))).toBe(true);
+    expect(on.guidelines.some((g) => g.includes("failures resolve to"))).toBe(true);
+    expect(on.guidelines.some((g) => g.includes("same-file calls in one message are grouped into one batch"))).toBe(true);
+  });
+
+  it("adds the result contract to read, grep, and undo only when codemode is active", () => {
+    const pairs: Array<[typeof withReadPrompts, typeof readBase]> = [
+      [withReadPrompts, readBase],
+      [withGrepPrompts, grepBase],
+      [withUndoPrompts, undoBase],
+    ];
+    for (const [build, base] of pairs) {
+      expect(build(base, DEFAULT_EDIT_FLAGS).guidelines.some((g) => g.includes("failures resolve to"))).toBe(false);
+      expect(build(base, { ...DEFAULT_EDIT_FLAGS, codemode: true }).guidelines.some((g) => g.includes("failures resolve to"))).toBe(true);
+    }
+  });
+
+  it("adds the script transfer and undo notes only when codemode is active", () => {
+    const transferBase = {
+      description: loadP("../prompts/copy.md"),
+      snippet: loadP("../prompts/copy-snippet.md"),
+      guidelines: loadGuide("../prompts/copy-guidelines.md"),
+    };
+    const transferOff = withTransferPrompts(transferBase, DEFAULT_EDIT_FLAGS);
+    const transferOn = withTransferPrompts(transferBase, { ...DEFAULT_EDIT_FLAGS, codemode: true });
+    expect(transferOff.guidelines.some((g) => g.includes("never joins a batch"))).toBe(false);
+    expect(transferOn.guidelines.some((g) => g.includes("never joins a batch"))).toBe(true);
+    const undoOff = withUndoPrompts(undoBase, DEFAULT_EDIT_FLAGS);
+    const undoOn = withUndoPrompts(undoBase, { ...DEFAULT_EDIT_FLAGS, codemode: true });
+    expect(undoOff.guidelines.some((g) => g.includes("takes the undo slot"))).toBe(false);
+    expect(undoOn.guidelines.some((g) => g.includes("takes the undo slot"))).toBe(true);
+    expect(undoOff.guidelines.some((g) => g.includes("one slot per file"))).toBe(true);
+  });
+});

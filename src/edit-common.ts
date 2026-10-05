@@ -15,6 +15,7 @@ export interface EditToolFlags {
   autoReadAllActive: boolean;
   replaceMatchEnabled: boolean;
   copyMoveEnabled: boolean;
+  codemode: boolean;
 }
 
 export const DEFAULT_EDIT_FLAGS: EditToolFlags = {
@@ -23,10 +24,11 @@ export const DEFAULT_EDIT_FLAGS: EditToolFlags = {
   autoRead: true,
   autoReadAllActive: false,
   replaceMatchEnabled: true,
-  copyMoveEnabled: true
+  copyMoveEnabled: true,
+  codemode: false,
 };
 
-export async function currentEditFlags(): Promise<EditToolFlags> {
+export async function currentEditFlags(codemode = false): Promise<EditToolFlags> {
   const config = await readConfig();
   return {
     requirePath: config.requirePath === true,
@@ -34,7 +36,8 @@ export async function currentEditFlags(): Promise<EditToolFlags> {
     autoRead: config.autoRead !== false,
     autoReadAllActive: (config.autoReadAll ?? "off") !== "off",
     replaceMatchEnabled: config.replaceMatchEnabled !== false,
-    copyMoveEnabled: config.copyMoveEnabled !== false
+    copyMoveEnabled: config.copyMoveEnabled !== false,
+    codemode
   };
 }
 
@@ -46,6 +49,14 @@ function preferenceGuideline(flags: EditToolFlags): string {
 const SHARED_EDIT_OPS = ["replace", "replace_match", "insert", "copy", "move"];
 const SHARED_PAYLOAD_OPS = ["replace", "replace_match", "insert"];
 const SHARED_DIFF_OPS = ["replace", "replace_match", "insert", "copy", "move", "undo_last_change"];
+const RESULT_CONTRACT_GUIDELINE =
+  'When called from a codemode script, failures resolve to `{ ok: false, kind: "error", error: { code, message } }`; branch on `ok` instead of `try`/`catch`.';
+const SCRIPT_BATCH_GUIDELINE =
+  "Script calls apply immediately in order, and only the most recent edit per file is undoable.";
+const SCRIPT_TRANSFER_GUIDELINE =
+  "`copy`/`move`: a call from a codemode script commits on its own and never joins a batch; a script cross-file `move` shows both the source and destination diffs.";
+const SCRIPT_UNDO_GUIDELINE =
+  "`undo_last_change`: each edit from one codemode script takes the undo slot, so only the most recent is undoable.";
 
 function operationNames(ops: string[], flags: EditToolFlags): string {
   return joinOps(gatedEditOps(ops, flags), { backtick: true, separator: "/" });
@@ -54,7 +65,8 @@ function operationNames(ops: string[], flags: EditToolFlags): string {
 function batchGuideline(flags: EditToolFlags): string {
   const tools = operationNames(SHARED_EDIT_OPS, flags);
   const outcome = flags.autoRead ? "diff" : "result";
-  return `${tools}: same-file calls in one message are grouped into one batch; earlier calls reply \`In batch N (queued)\` and the last call shows the combined ${outcome}, with one undo for the whole batch.`;
+  const script = flags.codemode ? ` ${SCRIPT_BATCH_GUIDELINE}` : "";
+  return `${tools}: same-file calls in one message are grouped into one batch; earlier calls reply \`In batch N (queued)\` and the last call shows the combined ${outcome}, with one undo for the whole batch.${script}`;
 }
 
 function diffGuideline(flags: EditToolFlags): string {
@@ -87,6 +99,7 @@ function finalizePrompts(
   options?: { stringPayload?: boolean },
 ): { description: string; snippet: string; guidelines: string[] } {
   const shared = [batchGuideline(flags), pathGuideline(flags)];
+  if (flags.codemode) shared.push(RESULT_CONTRACT_GUIDELINE);
   if (flags.autoRead) shared.push(diffGuideline(flags));
   if (options?.stringPayload !== false) shared.push(payloadGuideline(flags));
   if (flags.strictInput) shared.push(strictInputGuideline(flags));
@@ -104,13 +117,14 @@ export function withReplacePrompts(base: { description: string; snippet: string;
 
 export function withReadPrompts(base: { description: string; snippet: string; guidelines: string[] }, flags: EditToolFlags): { description: string; snippet: string; guidelines: string[] } {
   const preference = preferenceGuideline(flags);
+  const script = flags.codemode ? [RESULT_CONTRACT_GUIDELINE] : [];
   if (flags.autoReadAllActive) {
     const rewritten = base.guidelines
       .filter((guideline) => !guideline.includes("call again after an edit"))
-    return { description: base.description, snippet: base.snippet, guidelines: [preference, ...rewritten] };
+    return { description: base.description, snippet: base.snippet, guidelines: [preference, ...rewritten, ...script] };
   }
-  if (flags.autoRead) return { description: base.description, snippet: base.snippet, guidelines: [preference, ...base.guidelines] };
-  const guidelines = [preference, ...base.guidelines];
+  if (flags.autoRead) return { description: base.description, snippet: base.snippet, guidelines: [preference, ...base.guidelines, ...script] };
+  const guidelines = [preference, ...base.guidelines, ...script];
   const mapped = guidelines.map((guideline) => guideline.startsWith("`read`: call again after an edit") ? "`read`: call again after an edit when you need anchors you lack." : guideline);
   return { description: base.description, snippet: base.snippet, guidelines: mapped };
 }
@@ -143,15 +157,18 @@ function joinOps(ops: string[], options?: { backtick?: boolean; separator?: "/" 
 }
 
 export function withGrepPrompts(base: { description: string; snippet: string; guidelines: string[] }, flags: EditToolFlags): { description: string; snippet: string; guidelines: string[] } {
-  if (flags.copyMoveEnabled) return base;
-  return { ...base, description: base.description.replaceAll("replace, insert, copy, or move", joinOps(gatedEditOps(["replace", "insert", "copy", "move"], flags))) };
+  if (!flags.codemode && flags.copyMoveEnabled) return base;
+  const guidelines = flags.codemode ? [...base.guidelines, RESULT_CONTRACT_GUIDELINE] : base.guidelines;
+  if (flags.copyMoveEnabled) return { ...base, guidelines };
+  return { ...base, guidelines, description: base.description.replaceAll("replace, insert, copy, or move", joinOps(gatedEditOps(["replace", "insert", "copy", "move"], flags))) };
 }
 
 export function withUndoPrompts(base: { description: string; snippet: string; guidelines: string[] }, flags: EditToolFlags): { description: string; snippet: string; guidelines: string[] } {
   const ops = gatedEditOps(["replace", "replace_match", "insert", "copy", "move"], flags);
   let description = base.description;
   let snippet = base.snippet;
-  let guidelines = [...base.guidelines];
+  const script = flags.codemode ? [RESULT_CONTRACT_GUIDELINE, SCRIPT_UNDO_GUIDELINE] : [];
+  let guidelines = [...base.guidelines, ...script];
   if (!flags.autoRead) {
     guidelines = guidelines.map((guideline) => guideline.includes("bad diff") ? "`undo_last_change`: only the last `replace`/`replace_match`/`insert`/`copy`/`move` per file is undoable; a `write` clears it, so undo right after a bad edit — review what you're restoring." : guideline);
   }
@@ -167,7 +184,7 @@ export function withUndoPrompts(base: { description: string; snippet: string; gu
 }
 
 export function withTransferPrompts(base: { description: string; snippet: string; guidelines: string[] }, flags: EditToolFlags): { description: string; snippet: string; guidelines: string[] } {
-  const guidelines = [...base.guidelines];
+  const guidelines = flags.codemode ? [...base.guidelines, SCRIPT_TRANSFER_GUIDELINE] : [...base.guidelines];
   return finalizePrompts(base.description, base.snippet, guidelines, flags, { stringPayload: false });
 }
 

@@ -68,7 +68,7 @@ export default function (pi: ExtensionAPI): void {
 
   async function refreshEditTools(): Promise<void> {
     try {
-      const flags = await currentEditFlags();
+      const flags = await currentEditFlags(pi.getActiveTools().includes("codemode"));
       regRead(pi, flags);
       regReplace(pi, flags);
       regReplaceMatch(pi, flags);

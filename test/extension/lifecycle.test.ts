@@ -93,6 +93,19 @@ describe("session_start lifecycle", () => {
       expect(JSON.parse(lines[1]!).kind).toBe("allocate");
     });
   });
+  it("adds the codemode contract guideline only when codemode is active", async () => {
+    await withTempDir("lifecycle-codemode-prompts-", async (dir) => {
+      const withCode = makePiStub(["read", "replace", "insert", "anchor_grep", "undo_last_change", "codemode"]);
+      await registerExtension(withCode.pi);
+      await withCode.handlers.get("session_start")!({}, { cwd: dir, ui: { notify: vi.fn() } });
+      expect((withCode.getTool("read").promptGuidelines as string[]).some((g) => g.includes("failures resolve to"))).toBe(true);
+
+      const withoutCode = makePiStub(["read", "replace", "insert", "anchor_grep", "undo_last_change"]);
+      await registerExtension(withoutCode.pi);
+      await withoutCode.handlers.get("session_start")!({}, { cwd: dir, ui: { notify: vi.fn() } });
+      expect((withoutCode.getTool("read").promptGuidelines as string[]).some((g) => g.includes("failures resolve to"))).toBe(false);
+    });
+  });
 });
 
 describe("hashline-config command", () => {

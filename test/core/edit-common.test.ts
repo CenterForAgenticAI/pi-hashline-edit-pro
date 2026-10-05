@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { throwIfStrictInput } from "../../src/edit-common";
+import { currentEditFlags, throwIfStrictInput } from "../../src/edit-common";
 import { readConfig, writeConfig } from "../../src/config";
 import { withTempDir } from "../support/fixtures";
 
@@ -39,6 +39,15 @@ describe("throwIfStrictInput", () => {
     await withTempDir("pi-hashline-edit-common-test-", async () => {
       await writeConfig({ autoRead: true, anchorGrepEnabled: true, strictInput: true });
       await expect(throwIfStrictInput(['[H_LITERAL_ESCAPE] "lines" contains the literal escaped text "\\u200b"'])).resolves.toBeUndefined();
+    });
+  });
+});
+
+describe("currentEditFlags", () => {
+  it("carries the codemode flag through", async () => {
+    await withTempDir("pi-hashline-edit-common-flags-", async () => {
+      expect((await currentEditFlags()).codemode).toBe(false);
+      expect((await currentEditFlags(true)).codemode).toBe(true);
     });
   });
 });
