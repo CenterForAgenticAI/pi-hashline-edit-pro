@@ -142,7 +142,7 @@ function joinOps(ops: string[], options?: { backtick?: boolean; separator?: "/" 
   return formatted.length === 2 ? `${head} or ${last}` : `${head}, or ${last}`;
 }
 
-export function withGrepPrompts(base: { description: string; snippet: string }, flags: EditToolFlags): { description: string; snippet: string } {
+export function withGrepPrompts(base: { description: string; snippet: string; guidelines: string[] }, flags: EditToolFlags): { description: string; snippet: string; guidelines: string[] } {
   if (flags.copyMoveEnabled) return base;
   return { ...base, description: base.description.replaceAll("replace, insert, copy, or move", joinOps(gatedEditOps(["replace", "insert", "copy", "move"], flags))) };
 }

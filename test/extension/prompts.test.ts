@@ -40,6 +40,7 @@ const withinBase = {
 const grepBase = {
   description: loadP("../prompts/grep.md"),
   snippet: loadP("../prompts/grep-snippet.md"),
+  guidelines: loadGuide("../prompts/grep-guidelines.md"),
 };
 
 function collectTsFiles(dir: string): string[] {
@@ -304,6 +305,11 @@ describe("edit prompt flag variants", () => {
     expect(off.description).not.toContain("copy");
     expect(off.description).not.toContain("or move");
     expect(off.description).toContain("replace or insert");
+  });
+
+  it("withGrepPrompts keeps the anchor-first search guideline", () => {
+    const result = withGrepPrompts(grepBase, DEFAULT_EDIT_FLAGS);
+    expect(result.guidelines.some((guideline) => guideline.includes("prefer it over shell"))).toBe(true);
   });
 
   it("withReadPrompts lists only the enabled edit tools in its first guideline", () => {

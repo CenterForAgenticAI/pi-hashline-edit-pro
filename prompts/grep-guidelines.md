@@ -1,0 +1,1 @@
+- `anchor_grep`: prefer it over shell `rg`/`grep` for searching, so hits carry anchors and need no `read`; use `literal: true` when the pattern contains regex metacharacters.
