@@ -240,6 +240,42 @@ describe("replace_match", () => {
       expect(await readFile(path, "utf-8")).toBe("alpha\nbeta\n");
     });
   });
+
+  it("keeps the trailing empty line when the range ends on it", async () => {
+    await withTempFile("checkout.md", "before\n\n```\n\n", async ({ cwd, path }) => {
+      const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
+      const text = getText(await readTool.execute("r1", { path: "checkout.md" }, undefined, undefined, ctx));
+      const fence = anchorFor(text, "```");
+      const trailingEmpty = text.split("\n").filter((row) => /^[A-Za-z]{4}│$/.test(row)).pop()!.split("│")[0]!;
+      const result = await getTool("replace_match").execute(
+        "w1",
+        { replace_from: fence, replace_to: trailingEmpty, old_string: "```", new_string: "```done" },
+        undefined,
+        undefined,
+        ctx,
+      );
+      expect(getText(result)).toContain("Successfully replaced");
+      expect(await readFile(path, "utf-8")).toBe("before\n\n```done\n\n");
+    });
+  });
+
+  it("keeps an interior blank line when the range ends on it", async () => {
+    await withTempFile("sample.txt", "a\nb\n\nc\n", async ({ cwd, path }) => {
+      const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
+      const text = getText(await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx));
+      const b = anchorFor(text, "b");
+      const blank = text.split("\n").filter((row) => /^[A-Za-z]{4}│$/.test(row)).pop()!.split("│")[0]!;
+      const result = await getTool("replace_match").execute(
+        "w1",
+        { replace_from: b, replace_to: blank, old_string: "b", new_string: "B" },
+        undefined,
+        undefined,
+        ctx,
+      );
+      expect(getText(result)).toContain("Successfully replaced");
+      expect(await readFile(path, "utf-8")).toBe("a\nB\n\nc\n");
+    });
+  });
 });
 
 describe("replace_match requirePath", () => {

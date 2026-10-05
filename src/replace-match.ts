@@ -88,7 +88,7 @@ export function buildReplaceMatchEdit(
   const end = Math.max(fromLine, toLine);
   assertBoundaryLinesServed(fileLines, preload.fileHashes, served, start, end, displayPath);
   const rangeLines = fileLines.slice(start - 1, end);
-  const rangeText = rangeLines.join("\n");
+  const rangeText = `${rangeLines.join("\n")}${rangeLines[rangeLines.length - 1] === "" ? "\n" : ""}`;
   const oldText = toLF(req.old_string);
   const { text: replacement, count } = replaceAllOccurrences(rangeText, oldText, req.new_string);
   if (count === 0) {
