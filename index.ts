@@ -21,6 +21,7 @@ import {
   readConfigWithStatus,
   toggleAutoRead,
   cycleAutoReadAllMode,
+  toggleAutoReadAllRequireGit,
   toggleAnchorGrep,
   toggleCopyMove,
   toggleReplaceMatch,
@@ -60,6 +61,7 @@ export default function (pi: ExtensionAPI): void {
   let autoRead = true;
   let autoReadAll: AutoReadAllMode = "off";
   let autoReadAllIgnore: string[] = [];
+  let autoReadAllRequireGit = true;
   let disableOnModels: string[] = [];
   let readOnDisabledModels: ReadOnDisabledModels = "vanilla";
   let readFlavor: "anchored" | "vanilla" = "anchored";
@@ -153,6 +155,7 @@ export default function (pi: ExtensionAPI): void {
     if (corrupted && (ctx as { hasUI?: boolean }).hasUI) ctx.ui.notify("Hashline config was corrupt and was reset to defaults", "warning");
     autoRead = config.autoRead;
     autoReadAll = config.autoReadAll ?? "off";
+    autoReadAllRequireGit = config.autoReadAllRequireGit ?? true;
     autoReadAllIgnore = config.autoReadAllIgnore ?? [];
     disableOnModels = config.disableOnModels ?? [];
     readOnDisabledModels = config.readOnDisabledModels ?? "vanilla";
@@ -192,7 +195,7 @@ export default function (pi: ExtensionAPI): void {
     if (modelDisabled(ctx.model, disableOnModels)) return;
     autoReadAllInjected = true;
     try {
-      const injection = await buildAutoReadAllInjection(ctx.cwd, autoReadAllBudget(ctx.model), autoReadAll, autoReadAllIgnore);
+      const injection = await buildAutoReadAllInjection(ctx.cwd, autoReadAllBudget(ctx.model), autoReadAll, autoReadAllIgnore, autoReadAllRequireGit);
       if (!injection) return;
       if (ctx.hasUI) ctx.ui.notify(`Auto-read all: ${isOutlineAutoReadAll(autoReadAll) ? "outlined" : "attached"} ${injection.files} file(s)`, "info");
       return { message: { customType: AUTO_READ_ALL_CUSTOM_TYPE, content: injection.text, display: false } };
@@ -203,7 +206,7 @@ export default function (pi: ExtensionAPI): void {
   }));
 
   pi.registerCommand("hashline-config", {
-    description: "Open the hashline settings window (auto-read, auto-read all, ignore folders/files, disable on models, diff context, grep, copy/move, replace_match, path, strict input)",
+    description: "Open the hashline settings window (auto-read, auto-read all, git repos only, ignore folders/files, disable on models, diff context, grep, copy/move, replace_match, path, strict input)",
     handler: async (_args, ctx) => {
       if (!ctx.hasUI) {
         ctx.ui.notify("/hashline-config requires interactive mode", "error");
@@ -217,6 +220,7 @@ export default function (pi: ExtensionAPI): void {
           onToggle: async (key, delta, value) => {
             if (key === "autoRead") autoRead = await toggleAutoRead();
             else if (key === "autoReadAll") { autoReadAll = await cycleAutoReadAllMode(); autoReadAllInjected = false; }
+            else if (key === "autoReadAllRequireGit") autoReadAllRequireGit = await toggleAutoReadAllRequireGit();
             else if (key === "autoReadAllIgnore") autoReadAllIgnore = await setAutoReadAllIgnoreFromText(value ?? "");
             else if (key === "disableOnModels") disableOnModels = await setDisableOnModelsFromText(value ?? "");
             else if (key === "readOnDisabledModels") readOnDisabledModels = await cycleReadOnDisabledModels();

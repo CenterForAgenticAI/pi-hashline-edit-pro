@@ -25,7 +25,7 @@ describe("auto-read-all discovery fallback", () => {
       await mkdir(join(cwd, "dist"));
       await writeFile(join(cwd, "dist", "out.js"), "out\n");
 
-      const discovery = await discoverAutoReadAllFiles(cwd, "full");
+      const discovery = await discoverAutoReadAllFiles(cwd, "full", [], false);
       expect(discovery.source).toBe("walk");
       expect(discovery.files).toEqual(["sub/nested.md", "top.txt"]);
     } finally {

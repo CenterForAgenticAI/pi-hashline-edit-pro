@@ -2,7 +2,7 @@ import { Key, matchesKey, visibleWidth } from "@earendil-works/pi-tui";
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import { readConfig, type Config } from "./config";
 
-export type ConfigToggleKey = "autoRead" | "autoReadAll" | "autoReadAllIgnore" | "anchorGrepEnabled" | "copyMoveEnabled" | "replaceMatchEnabled" | "requirePath" | "strictInput" | "diffContextLines" | "disableOnModels" | "readOnDisabledModels";
+export type ConfigToggleKey = "autoRead" | "autoReadAll" | "autoReadAllRequireGit" | "autoReadAllIgnore" | "anchorGrepEnabled" | "copyMoveEnabled" | "replaceMatchEnabled" | "requirePath" | "strictInput" | "diffContextLines" | "disableOnModels" | "readOnDisabledModels";
 
 export interface ConfigRow {
   key: ConfigToggleKey;
@@ -19,7 +19,8 @@ export interface ConfigRow {
 export function configRows(config: Config): ConfigRow[] {
   return [
     { key: "autoRead", label: "Auto-read", hint: "Anchors after write + post-edit diffs", enabled: config.autoRead !== false },
-    { key: "autoReadAll", label: "Auto-read all", hint: "Attach on the first turn: off, outline(git) (git repos, structure map), outline (all files, structure map), git (git repos, full content), full (all files, full content)", enabled: (config.autoReadAll ?? "off") !== "off", mode: config.autoReadAll ?? "off", cycle: ["off", "outline(git)", "outline", "git", "full"] },
+    { key: "autoReadAll", label: "Auto-read all", hint: "Attach on the first turn: off, outline (structure map), full (full content)", enabled: (config.autoReadAll ?? "off") !== "off", mode: config.autoReadAll ?? "off", cycle: ["off", "outline", "full"] },
+    { key: "autoReadAllRequireGit", label: "Git repos only", hint: "Attach only inside a git repository", enabled: config.autoReadAllRequireGit !== false, disabled: (config.autoReadAll ?? "off") === "off" },
     { key: "autoReadAllIgnore", label: "Ignore folders/files", hint: "Extra folders, files, or globs skipped by auto-read all (comma-separated)", enabled: (config.autoReadAllIgnore ?? []).length > 0, entries: config.autoReadAllIgnore ?? [] },
     { key: "diffContextLines", label: "Diff context", hint: "Surrounding lines in post-edit diffs (needs Auto-read)", enabled: config.autoRead !== false, value: config.diffContextLines ?? 1, disabled: config.autoRead === false },
     { key: "anchorGrepEnabled", label: "Anchor grep", hint: "anchor_grep tool (builtin grep off while on)", enabled: config.anchorGrepEnabled === true },

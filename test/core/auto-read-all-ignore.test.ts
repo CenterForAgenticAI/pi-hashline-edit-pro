@@ -216,6 +216,7 @@ describe("HashlineConfigOverlay ignore editing", () => {
       await overlay.load();
       overlay.handleInput("j");
       overlay.handleInput("j");
+      overlay.handleInput("j");
       overlay.handleInput(" ");
       overlay.handleInput("d");
       overlay.handleInput("o");
@@ -238,6 +239,7 @@ describe("HashlineConfigOverlay ignore editing", () => {
       await overlay.load();
       overlay.handleInput("j");
       overlay.handleInput("j");
+      overlay.handleInput("j");
       overlay.handleInput("e");
       overlay.handleInput("x");
       overlay.handleInput("\x1b");
@@ -255,6 +257,7 @@ describe("HashlineConfigOverlay ignore editing", () => {
         seen.push(value ?? "");
       });
       await overlay.load();
+      overlay.handleInput("j");
       overlay.handleInput("j");
       overlay.handleInput("j");
       overlay.handleInput(" ");
@@ -288,7 +291,7 @@ describe("HashlineConfigOverlay ignore editing", () => {
         seen.push({ key, value });
       });
       await overlay.load();
-      for (let step = 0; step < 9; step++) overlay.handleInput("j");
+      for (let step = 0; step < 10; step++) overlay.handleInput("j");
       overlay.handleInput(" ");
       for (const char of "openai/*") overlay.handleInput(char);
       overlay.handleInput("\r");

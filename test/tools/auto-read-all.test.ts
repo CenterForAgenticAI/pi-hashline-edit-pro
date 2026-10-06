@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import { makeTempDir, rmRetry, setupIntegrationTest, withHome } from "../support/fixtures";
@@ -123,12 +124,12 @@ describe("auto-read all", () => {
     }
   });
 
-  it("injects in git mode inside a git repository", async () => {
+  it("injects inside a git repository when git is required", async () => {
     const cwd = await makeTempDir("pi-hashline-auto-read-all-giton-");
     try {
       initGitRepo(cwd);
       await writeFile(join(cwd, "sample.txt"), "alpha\nbeta\n");
-      await writeConfig(cwd, { autoRead: true, anchorGrepEnabled: true, autoReadAll: "git" });
+      await writeConfig(cwd, { autoRead: true, anchorGrepEnabled: true, autoReadAll: "full", autoReadAllRequireGit: true });
       const { handlers } = setupIntegrationTest(cwd);
       const ctx = sessionContext(cwd);
       await handlers.get("session_start")!({}, ctx);
@@ -140,17 +141,34 @@ describe("auto-read all", () => {
     }
   });
 
-  it("skips injection in git mode outside a git repository", async () => {
+  it("skips injection outside a git repository when git is required", async () => {
     const cwd = await makeTempDir("pi-hashline-auto-read-all-gitoff-");
     try {
       await writeFile(join(cwd, "sample.txt"), "alpha\nbeta\n");
-      await writeConfig(cwd, { autoRead: true, anchorGrepEnabled: true, autoReadAll: "git" });
+      await writeConfig(cwd, { autoRead: true, anchorGrepEnabled: true, autoReadAll: "full", autoReadAllRequireGit: true });
       const { handlers } = setupIntegrationTest(cwd);
       const ctx = sessionContext(cwd);
       await handlers.get("session_start")!({}, ctx);
       expect(await handlers.get("before_agent_start")!({}, ctx)).toBeUndefined();
     } finally {
       await cleanupCwd(cwd);
+    }
+  });
+
+  it("injects outside a git repository when git is not required", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "pi-hashline-auto-read-all-git-off-any-"));
+    const restoreHome = withHome(cwd);
+    try {
+      await writeFile(join(cwd, "sample.txt"), "alpha\nbeta\n");
+      await writeConfig(cwd, { autoRead: true, anchorGrepEnabled: true, autoReadAll: "full", autoReadAllRequireGit: false });
+      const { handlers } = setupIntegrationTest(cwd);
+      const ctx = sessionContext(cwd);
+      await handlers.get("session_start")!({}, ctx);
+      const first = (await handlers.get("before_agent_start")!({}, ctx)) as { message?: { content?: string } } | undefined;
+      expect(first?.message?.content).toContain("=== sample.txt ===");
+    } finally {
+      await cleanupCwd(cwd);
+      restoreHome();
     }
   });
 });

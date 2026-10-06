@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   toggleAutoRead,
   cycleAutoReadAllMode,
+  toggleAutoReadAllRequireGit,
   toggleAnchorGrep,
   toggleCopyMove,
   toggleReplaceMatch,
@@ -143,14 +144,10 @@ describe("config - cycleAutoReadAllMode", () => {
     });
   });
 
-  it("cycles off to outline(git) to outline to git to full and back to off", async () => {
+  it("cycles off to outline to full and back to off", async () => {
     await withTempDir("pi-hashline-config-test-", async () => {
-      expect(await cycleAutoReadAllMode()).toBe("outline(git)");
-      expect((await readConfig()).autoReadAll).toBe("outline(git)");
       expect(await cycleAutoReadAllMode()).toBe("outline");
       expect((await readConfig()).autoReadAll).toBe("outline");
-      expect(await cycleAutoReadAllMode()).toBe("git");
-      expect((await readConfig()).autoReadAll).toBe("git");
       expect(await cycleAutoReadAllMode()).toBe("full");
       expect((await readConfig()).autoReadAll).toBe("full");
       expect(await cycleAutoReadAllMode()).toBe("off");
@@ -158,12 +155,22 @@ describe("config - cycleAutoReadAllMode", () => {
     });
   });
 
-  it("reads the mode from the config file", async () => {
-    await withTempDir("pi-hashline-config-test-", async () => {
-      await writeConfig({ autoRead: true, anchorGrepEnabled: true, autoReadAll: "git" });
-      expect((await readConfig()).autoReadAll).toBe("git");
-      await writeConfig({ autoRead: true, anchorGrepEnabled: true, autoReadAll: "outline(git)" });
-      expect((await readConfig()).autoReadAll).toBe("outline(git)");
+  it("reads the mode from the config file and maps legacy git modes", async () => {
+    await withTempDir("pi-hashline-config-test-", async (dir) => {
+      const { writeFile, mkdir } = await import("fs/promises");
+      const { join: pathJoin } = await import("path");
+      const configDir = pathJoin(dir, ".config", "pi-hashline-edit-pro");
+      await mkdir(configDir, { recursive: true });
+      await writeFile(pathJoin(configDir, "config.json"), JSON.stringify({ autoRead: true, anchorGrepEnabled: true, autoReadAll: "git" }));
+      const legacyGit = await readConfig();
+      expect(legacyGit.autoReadAll).toBe("full");
+      expect(legacyGit.autoReadAllRequireGit).toBe(true);
+      await writeFile(pathJoin(configDir, "config.json"), JSON.stringify({ autoRead: true, anchorGrepEnabled: true, autoReadAll: "outline(git)" }));
+      const legacyOutlineGit = await readConfig();
+      expect(legacyOutlineGit.autoReadAll).toBe("outline");
+      expect(legacyOutlineGit.autoReadAllRequireGit).toBe(true);
+      await writeFile(pathJoin(configDir, "config.json"), JSON.stringify({ autoRead: true, anchorGrepEnabled: true, autoReadAll: "full" }));
+      expect((await readConfig()).autoReadAllRequireGit).toBe(false);
     });
   });
 
@@ -174,9 +181,31 @@ describe("config - cycleAutoReadAllMode", () => {
       const configDir = pathJoin(dir, ".config", "pi-hashline-edit-pro");
       await mkdir(configDir, { recursive: true });
       await writeFile(pathJoin(configDir, "config.json"), JSON.stringify({ autoRead: true, autoReadAll: true }));
-      expect((await readConfig()).autoReadAll).toBe("full");
+      const legacyTrue = await readConfig();
+      expect(legacyTrue.autoReadAll).toBe("full");
+      expect(legacyTrue.autoReadAllRequireGit).toBe(false);
       await writeFile(pathJoin(configDir, "config.json"), JSON.stringify({ autoRead: true, autoReadAll: "on" }));
-      expect((await readConfig()).autoReadAll).toBe("full");
+      const legacyOn = await readConfig();
+      expect(legacyOn.autoReadAll).toBe("full");
+      expect(legacyOn.autoReadAllRequireGit).toBe(false);
+    });
+  });
+});
+
+describe("config - toggleAutoReadAllRequireGit", () => {
+  it("defaults to true and toggles to false", async () => {
+    await withTempDir("pi-hashline-config-test-", async () => {
+      expect((await readConfig()).autoReadAllRequireGit).toBe(true);
+      expect(await toggleAutoReadAllRequireGit()).toBe(false);
+      expect((await readConfig()).autoReadAllRequireGit).toBe(false);
+    });
+  });
+
+  it("toggles from false back to true", async () => {
+    await withTempDir("pi-hashline-config-test-", async () => {
+      await writeConfig({ autoRead: true, anchorGrepEnabled: true, autoReadAllRequireGit: false });
+      expect(await toggleAutoReadAllRequireGit()).toBe(true);
+      expect((await readConfig()).autoReadAllRequireGit).toBe(true);
     });
   });
 });

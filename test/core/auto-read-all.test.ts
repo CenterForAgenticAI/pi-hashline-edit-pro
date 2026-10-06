@@ -53,7 +53,7 @@ describe("discoverAutoReadAllFiles", () => {
       await writeFile(join(cwd, ".gitignore"), "secret.txt\n");
       await writeFile(join(cwd, "secret.txt"), "no\n");
 
-      const discovery = await discoverAutoReadAllFiles(cwd, "full");
+      const discovery = await discoverAutoReadAllFiles(cwd, "full", [], false);
       expect(discovery.source).toBe("rg");
       expect(discovery.files).toEqual([".gitignore", "keep.txt"]);
     } finally {
@@ -77,7 +77,7 @@ describe("discoverAutoReadAllFiles", () => {
     }
   });
 
-  it("lists git files in git mode", async () => {
+  it("lists git files when git is required", async () => {
     const cwd = await makeTempDir("pi-hashline-auto-read-all-gitmode-git-");
     try {
       initGitRepo(cwd);
@@ -85,7 +85,7 @@ describe("discoverAutoReadAllFiles", () => {
       await writeFile(join(cwd, "untracked.md"), "# hi\n");
       execFileSync("git", ["add", "tracked.ts"], { cwd });
 
-      const discovery = await discoverAutoReadAllFiles(cwd, "git");
+      const discovery = await discoverAutoReadAllFiles(cwd, "full");
       expect(discovery.source).toBe("git");
       expect(discovery.files).toEqual(["tracked.ts", "untracked.md"]);
     } finally {
@@ -93,11 +93,11 @@ describe("discoverAutoReadAllFiles", () => {
     }
   });
 
-  it("returns no files in git mode outside a git repository", async () => {
+  it("returns no files outside a git repository when git is required", async () => {
     const cwd = await mkdtemp(join(tmpdir(), "pi-hashline-auto-read-all-gitmode-"));
     try {
       await writeFile(join(cwd, "keep.txt"), "keep\n");
-      const discovery = await discoverAutoReadAllFiles(cwd, "git");
+      const discovery = await discoverAutoReadAllFiles(cwd, "full");
       expect(discovery.source).toBe("git");
       expect(discovery.files).toEqual([]);
     } finally {
@@ -328,12 +328,12 @@ describe("buildAutoReadAllInjection", () => {
     }
   });
 
-  it("attaches git-discovered outlines in outline(git) mode", async () => {
+  it("attaches outlines when git is required", async () => {
     const cwd = await makeTempDir("pi-hashline-auto-read-all-outline-git-");
     try {
       initGitRepo(cwd);
       await writeFile(join(cwd, "app.ts"), "export function run() {\n  return 1;\n}\n");
-      const injection = await buildAutoReadAllInjection(cwd, 1_000_000, "outline(git)");
+      const injection = await buildAutoReadAllInjection(cwd, 1_000_000, "outline");
       expect(injection).toBeDefined();
       expect(injection!.text).toContain("outlined below");
       expect(injection!.text).toContain("=== app.ts (TypeScript) — 3 lines ===");
@@ -343,12 +343,13 @@ describe("buildAutoReadAllInjection", () => {
     }
   });
 
-  it("injects nothing in outline(git) mode outside a git repository", async () => {
+  it("injects nothing outside a git repository when git is required", async () => {
     const cwd = await mkdtemp(join(tmpdir(), "pi-hashline-auto-read-all-outline-git-off-"));
     try {
       await writeFile(join(cwd, "sample.txt"), "alpha\n");
-      expect(await buildAutoReadAllInjection(cwd, 1_000_000, "outline(git)")).toBeUndefined();
-      expect((await discoverAutoReadAllFiles(cwd, "outline(git)")).files).toEqual([]);
+      expect(await buildAutoReadAllInjection(cwd, 1_000_000, "outline")).toBeUndefined();
+      expect((await discoverAutoReadAllFiles(cwd, "outline")).files).toEqual([]);
+      expect(await buildAutoReadAllInjection(cwd, 1_000_000, "outline", [], false)).toBeDefined();
     } finally {
       await cleanupCwd(cwd);
     }

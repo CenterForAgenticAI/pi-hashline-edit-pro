@@ -305,21 +305,17 @@ async function forEachLimit<T>(items: T[], limit: number, work: (item: T) => Pro
   await Promise.all(workers);
 }
 
-function isGitOnlyAutoReadAll(mode: AutoReadAllMode): boolean {
-  return mode === "git" || mode === "outline(git)";
-}
-
 export function isOutlineAutoReadAll(mode: AutoReadAllMode): boolean {
-  return mode === "outline" || mode === "outline(git)";
+  return mode === "outline";
 }
 
-export async function discoverAutoReadAllFiles(cwd: string, mode: AutoReadAllMode = "off", ignoreDirs: readonly string[] = []): Promise<AutoReadAllDiscovery> {
+export async function discoverAutoReadAllFiles(cwd: string, mode: AutoReadAllMode = "off", ignoreDirs: readonly string[] = [], requireGit = true): Promise<AutoReadAllDiscovery> {
   if (mode === "off") return { files: [], source: "git", discovered: 0, skippedBinary: 0, skippedLarge: 0, skippedOther: 0, skippedByName: 0 };
   const customIgnore = normalizeAutoReadAllIgnoreList(ignoreDirs);
   let source: AutoReadAllSource = "git";
   let candidates = await listFromGit(cwd);
   if (candidates === undefined) {
-    if (isGitOnlyAutoReadAll(mode)) {
+    if (requireGit) {
       return { files: [], source: "git", discovered: 0, skippedBinary: 0, skippedLarge: 0, skippedOther: 0, skippedByName: 0 };
     }
     candidates = await listFromRg(cwd);
@@ -427,9 +423,9 @@ function buildFooter(attached: number, discovery: AutoReadAllDiscovery, omitted:
   return `[hashline auto-read-all: ${attached} file(s) attached from ${discovery.source}; ${summary}${omissionNote}]`;
 }
 
-export async function buildAutoReadAllInjection(cwd: string, budgetBytes: number, mode: AutoReadAllMode = "off", ignoreDirs: readonly string[] = []): Promise<AutoReadAllInjection | undefined> {
+export async function buildAutoReadAllInjection(cwd: string, budgetBytes: number, mode: AutoReadAllMode = "off", ignoreDirs: readonly string[] = [], requireGit = true): Promise<AutoReadAllInjection | undefined> {
   if (mode === "off") return undefined;
-  const discovery = await discoverAutoReadAllFiles(cwd, mode, ignoreDirs);
+  const discovery = await discoverAutoReadAllFiles(cwd, mode, ignoreDirs, requireGit);
   if (discovery.files.length === 0) return undefined;
   const outline = isOutlineAutoReadAll(mode);
   const sections: AutoReadAllSection[] = [];
