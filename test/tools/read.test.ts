@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import { fmtRegion } from "../../src/hashline";
 import { fmtReadPreview } from "../../src/read";
-import { useTestHome, withTempFile, setupIntegrationTest } from "../support/fixtures";
+import { useTestHome, withTempFile, setupIntegrationTest, makeFakePiRegistry } from "../support/fixtures";
+import register from "../../index";
 
 const home = useTestHome();
 
@@ -96,5 +97,42 @@ describe("read tool - file_path alias", () => {
         ),
       ).rejects.toThrow(/\[E_BAD_SHAPE\]/);
     });
+  });
+});
+
+describe("read tool - call rendering", () => {
+  const theme = {
+    fg: (_area: string, text: string) => text,
+    bold: (text: string) => text,
+  };
+  const context = { lastComponent: undefined, expanded: false, isError: false, cwd: process.cwd() };
+
+  function renderCall(args: unknown): string {
+    const { pi, getTool } = makeFakePiRegistry();
+    register(pi);
+    return (getTool("read").renderCall(args, theme, context) as unknown as { text: string }).text;
+  }
+
+  it("renders a numeric-string offset and limit as a line range", () => {
+    const text = renderCall({ path: "sample.ts", offset: "576", limit: "520" });
+    expect(text).toContain("sample.ts");
+    expect(text).toContain(":576-1095");
+    expect(text).not.toContain("576519");
+  });
+
+  it("renders numeric offsets the same way", () => {
+    expect(renderCall({ path: "sample.ts", offset: 576, limit: 520 })).toContain(":576-1095");
+  });
+
+  it("keeps an anchor offset from turning a numeric-string limit into a range", () => {
+    const text = renderCall({ path: "sample.ts", offset: "RKhl", limit: "520" });
+    expect(text).toContain(":RKhl");
+    expect(text).not.toContain("NaN");
+  });
+
+  it("renders incomplete and malformed args without throwing", () => {
+    expect(renderCall(undefined)).toContain("read");
+    expect(renderCall({ path: "sample.ts", offset: "576" })).toContain(":576");
+    expect(renderCall("nope")).toBeDefined();
   });
 });

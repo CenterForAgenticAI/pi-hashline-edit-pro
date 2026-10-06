@@ -1,6 +1,7 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import {
 	createReadTool,
+	createReadToolDefinition,
 	formatSize,
 	truncateHead,
 	DEFAULT_MAX_BYTES,
@@ -13,7 +14,7 @@ import { MAX_OVERSIZED_WARNING_LINES } from "./constants";
 import { readNormFile, safeSnapId } from "./file-reader";
 import { lineHashes, fmtRegion, fmtRow, HASH_SEP, MAX_HASH_LINES, parseHashRef, resolveAnchorLine, AnchorMismatchError } from "./hashline";
 import { toCwd } from "./paths";
-import { abortIf, makePrepareArguments, numberedRead, visLines, splitLines } from "./utils";
+import { abortIf, isRec, makePrepareArguments, numberedRead, visLines, splitLines } from "./utils";
 import { loadP, loadGuide } from "./prompts";
 import { withReadPrompts, DEFAULT_EDIT_FLAGS, type EditToolFlags } from "./edit-common";
 import { valAccess } from "./validation";
@@ -219,6 +220,23 @@ export function resolveReadOffset(
 	}
 }
 
+const builtinReadRenderCall = createReadToolDefinition(process.cwd()).renderCall as
+	(args: unknown, theme: any, context: any) => Text;
+
+function normalizeReadCallArgs(args: unknown): unknown {
+	if (!isRec(args)) return args;
+	const normalized: Record<string, unknown> = { ...args };
+	for (const key of ["offset", "limit"]) {
+		const value = normalized[key];
+		if (typeof value === "string" && /^\d+$/.test(value)) normalized[key] = Number(value);
+	}
+	return normalized;
+}
+
+function renderReadCall(args: unknown, theme: any, context: any): Text {
+	return builtinReadRenderCall(normalizeReadCallArgs(args), theme, context);
+}
+
 export function regRead(pi: ExtensionAPI, flags: EditToolFlags = DEFAULT_EDIT_FLAGS): void {
   const prompted = withReadPrompts({ description: R_DESC, snippet: R_SNIPPET, guidelines: readGuide() }, flags);
   pi.registerTool({
@@ -252,6 +270,7 @@ export function regRead(pi: ExtensionAPI, flags: EditToolFlags = DEFAULT_EDIT_FL
 		}),
 		outputSchema: readResultSchema,
 		executionMode: "sequential",
+		renderCall: renderReadCall,
 		renderResult(result, { isPartial, expanded }, theme, context) {
 			if (isPartial) return new Text((theme as unknown as { fg: (a:string,b:string)=>string }).fg("warning", "Reading..."), 0, 0);
 			const raw = (result.content?.[0] as { text?: string } | undefined)?.text;
