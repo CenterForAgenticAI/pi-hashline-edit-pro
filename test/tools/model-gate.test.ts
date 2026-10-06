@@ -156,7 +156,7 @@ describe("disableOnModels gate", () => {
 
   it("skips the auto-read-all injection for a matching model and injects after a switch", async () => {
     await withTempDir("model-gate-inject-", async (dir) => {
-      await writeConfig(dir, { autoRead: true, anchorGrepEnabled: true, autoReadAll: "on", disableOnModels: ["openai/*"] });
+      await writeConfig(dir, { autoRead: true, anchorGrepEnabled: true, autoReadAll: "full", disableOnModels: ["openai/*"] });
       initGitRepo(dir);
       await writeFile(join(dir, "sample.txt"), "alpha\nbeta\n", "utf-8");
       const { pi, handlers } = makePiStub([...ANCHOR_TOOLS, "grep", "edit"]);

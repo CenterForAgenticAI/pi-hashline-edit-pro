@@ -12,13 +12,13 @@ import {
 import { normalizeAutoReadAllIgnoreEntry, type AutoReadAllMode } from "./config";
 import { serveRows } from "./served";
 import { formatAnchorReclaimNotice, takeReclaimedPaths } from "./anchor-registry";
-import { readNormFile, safeSnapId } from "./file-reader";
+import { readNormFile } from "./file-reader";
 import { resolveRgPath } from "./grep";
 import { globToRegex } from "./glob";
 import { MAX_HASH_LINES } from "./hashline";
 import { fmtReadPreview } from "./read";
+import { buildFileOutline } from "./outline";
 import { splitLines } from "./utils";
-import { recordAutoReadAllComplete } from "./auto-read-all-state";
 
 const EXEC_TIMEOUT_MS = 20_000;
 const EXEC_MAX_BYTES = 64 * 1024 * 1024;
@@ -28,6 +28,9 @@ const MAX_REPORTED_OMISSIONS = 50;
 
 const HEADER =
   "[hashline auto-read-all] Every non-ignored project file is attached below as `=== path ===` then `anchor│content` rows with live anchors.\nEdit directly from the attachment with replace and insert; do not call read for files in [files complete: ...].\nFiles listed as omitted or not attached can be read normally.\nAnchors are case-sensitive and stay valid until their line is edited.";
+
+const OUTLINE_HEADER =
+  "[hashline auto-read-all] Every non-ignored project file is outlined below as `=== path (language) — lines ===` then `anchor│symbol` rows with live anchors.\nEdit a row's anchor with replace or insert, or read by that anchor for the surrounding lines; do not call read for files in [files complete: ...].\nFiles listed as omitted or not attached can be read normally.\nAnchors are case-sensitive and stay valid until their line is edited.";
 
 const IMAGE_EXTENSIONS = new Set([
   ".avif",
@@ -295,7 +298,8 @@ async function forEachLimit<T>(items: T[], limit: number, work: (item: T) => Pro
   await Promise.all(workers);
 }
 
-export async function discoverAutoReadAllFiles(cwd: string, mode: AutoReadAllMode = "on", ignoreDirs: readonly string[] = []): Promise<AutoReadAllDiscovery> {
+export async function discoverAutoReadAllFiles(cwd: string, mode: AutoReadAllMode = "off", ignoreDirs: readonly string[] = []): Promise<AutoReadAllDiscovery> {
+  if (mode === "off") return { files: [], source: "git", discovered: 0, skippedBinary: 0, skippedLarge: 0, skippedOther: 0, skippedByName: 0 };
   const customIgnore = normalizeAutoReadAllIgnoreList(ignoreDirs);
   let source: AutoReadAllSource = "git";
   let candidates = await listFromGit(cwd);
@@ -372,13 +376,18 @@ async function candidateFileBytes(cwd: string, file: string): Promise<number | u
   }
 }
 
-async function renderFile(file: string, cwd: string): Promise<AutoReadAllSection | undefined> {
+async function renderFile(file: string, cwd: string, outline: boolean): Promise<AutoReadAllSection | undefined> {
   try {
     const { normalized, fileHashes, absolutePath } = await readNormFile(file, cwd, { maxLines: MAX_HASH_LINES });
+    const fileLines = splitLines(normalized);
+    if (outline) {
+      const section = await buildFileOutline({ displayPath: file, content: normalized, hashes: fileHashes });
+      serveRows(absolutePath, fileHashes, fileLines, section.servedHashes);
+      return { file, text: section.text, totalLines: fileHashes.length, absolutePath };
+    }
     const preview = await fmtReadPreview(normalized, {}, fileHashes, absolutePath, AUTO_READ_ALL_MAX_BUDGET_BYTES, MAX_HASH_LINES);
-    serveRows(absolutePath, fileHashes, splitLines(normalized), preview.servedHashes);
-    const totalLines = fileHashes.length;
-    return { file, text: `=== ${file} ===\n${preview.text}`, totalLines, absolutePath };
+    serveRows(absolutePath, fileHashes, fileLines, preview.servedHashes);
+    return { file, text: `=== ${file} ===\n${preview.text}`, totalLines: fileHashes.length, absolutePath };
   } catch (error) {
     console.error(`Auto-read all: skipped ${file}:`, error);
     return undefined;
@@ -403,22 +412,24 @@ function buildFooter(attached: number, discovery: AutoReadAllDiscovery, omitted:
   return `[hashline auto-read-all: ${attached} file(s) attached from ${discovery.source}; ${summary}${omissionNote}]`;
 }
 
-export async function buildAutoReadAllInjection(cwd: string, budgetBytes: number, mode: AutoReadAllMode = "on", ignoreDirs: readonly string[] = [], sessionKey?: string): Promise<AutoReadAllInjection | undefined> {
+export async function buildAutoReadAllInjection(cwd: string, budgetBytes: number, mode: AutoReadAllMode = "off", ignoreDirs: readonly string[] = []): Promise<AutoReadAllInjection | undefined> {
+  if (mode === "off") return undefined;
   const discovery = await discoverAutoReadAllFiles(cwd, mode, ignoreDirs);
   if (discovery.files.length === 0) return undefined;
+  const outline = mode === "outline";
   const sections: AutoReadAllSection[] = [];
   const omitted: string[] = [];
   let bytes = 0;
   let completeFiles = 0;
   for (const file of discovery.files) {
-    if (sections.length > 0) {
+    if (!outline && sections.length > 0) {
       const size = await candidateFileBytes(cwd, file);
       if (size !== undefined && bytes + size > budgetBytes) {
         omitted.push(file);
         continue;
       }
     }
-    const section = await renderFile(file, cwd);
+    const section = await renderFile(file, cwd, outline);
     if (section === undefined) {
       omitted.push(file);
       continue;
@@ -429,8 +440,6 @@ export async function buildAutoReadAllInjection(cwd: string, budgetBytes: number
       continue;
     }
     sections.push(section);
-    const snapshotId = await safeSnapId(section.absolutePath, "auto-read-all");
-    if (snapshotId !== undefined) recordAutoReadAllComplete(sessionKey, section.absolutePath, snapshotId);
     bytes += sectionBytes;
     completeFiles += 1;
   }
@@ -440,7 +449,7 @@ export async function buildAutoReadAllInjection(cwd: string, budgetBytes: number
   const completeNames = sections.map((section) => section.file);
   const machineList = `[files complete: ${JSON.stringify(completeNames)} omitted: ${JSON.stringify(omitted)}]`;
   const reclaimNotice = formatAnchorReclaimNotice(takeReclaimedPaths());
-  const text = `${HEADER}\n\n${coverage}\n${machineList}\n\n${sectionTexts.join("\n\n")}\n\n${buildFooter(sections.length, discovery, omitted)}${reclaimNotice !== undefined ? `\n${reclaimNotice}` : ""}`;
+  const text = `${outline ? OUTLINE_HEADER : HEADER}\n\n${coverage}\n${machineList}\n\n${sectionTexts.join("\n\n")}\n\n${buildFooter(sections.length, discovery, omitted)}${reclaimNotice !== undefined ? `\n${reclaimNotice}` : ""}`;
   return { text, files: sections.length, bytes, omitted, completeFiles };
 }
 

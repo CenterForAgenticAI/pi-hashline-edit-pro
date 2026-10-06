@@ -1,4 +1,4 @@
-import { defineConfig } from "vitest/config";
+import { coverageConfigDefaults, defineConfig } from "vitest/config";
 
 export const mockIsolatedFiles = [
   "test/core/config-atomic.test.ts",
@@ -51,6 +51,9 @@ export function buildTestConfig(extraExcludes: string[] = []) {
           },
         },
       ],
+      coverage: {
+        exclude: [...coverageConfigDefaults.exclude, "**/src/outline/vendor/**"],
+      },
     },
   });
 }

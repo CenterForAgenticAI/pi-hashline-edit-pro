@@ -79,6 +79,35 @@ describe("auto-read all", () => {
     }
   });
 
+  it("attaches outlines whose anchors edit without read in outline mode", async () => {
+    const cwd = await makeTempDir("pi-hashline-auto-read-all-outline-");
+    try {
+      initGitRepo(cwd);
+      await writeFile(join(cwd, "app.ts"), "export function run() {\n  return 1;\n}\n");
+      await writeConfig(cwd, { autoRead: true, anchorGrepEnabled: true, autoReadAll: "outline" });
+      const { handlers, getTool } = setupIntegrationTest(cwd);
+      const ctx = sessionContext(cwd);
+      await handlers.get("session_start")!({}, ctx);
+      const first = (await handlers.get("before_agent_start")!({}, ctx)) as { message?: { customType?: string; content?: string } } | undefined;
+      const content = first!.message!.content as string;
+      expect(content).toContain("outlined below");
+      expect(content).toContain("=== app.ts (TypeScript) — 3 lines ===");
+      expect(content).not.toContain("return 1");
+      const anchor = content.match(/([A-Za-z]{4})│function run/)![1]!;
+      const editResult = await getTool("replace").execute(
+        "e1",
+        { remove_from: anchor, remove_to: anchor, text: "export async function run() {" },
+        undefined,
+        undefined,
+        ctx,
+      );
+      expect(editResult.content[0].text).toContain("Successfully replaced");
+      expect(await readFile(join(cwd, "app.ts"), "utf-8")).toContain("export async function run() {");
+    } finally {
+      await cleanupCwd(cwd);
+    }
+  });
+
   it("does not inject when the branch already holds the auto-read-all message", async () => {
     const cwd = await makeTempDir("pi-hashline-auto-read-all-resume-");
     try {

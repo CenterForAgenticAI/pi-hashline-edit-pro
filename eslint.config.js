@@ -60,6 +60,7 @@ export default tseslint.config(
       ".git/",
       "dist/",
       ".tmp/",
+      "src/outline/vendor/",
     ],
   },
 );

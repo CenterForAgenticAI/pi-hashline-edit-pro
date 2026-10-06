@@ -106,9 +106,9 @@ describe("discoverAutoReadAllFiles with custom ignores", () => {
       await writeFile(join(cwd, "docs", "readme.md"), "hi\n");
       await mkdir(join(cwd, "src", "docs"), { recursive: true });
       await writeFile(join(cwd, "src", "docs", "nested.md"), "hi\n");
-      const plain = await discoverAutoReadAllFiles(cwd, "on", []);
+      const plain = await discoverAutoReadAllFiles(cwd, "full", []);
       expect(plain.files).toContain("docs/readme.md");
-      const ignored = await discoverAutoReadAllFiles(cwd, "on", ["docs"]);
+      const ignored = await discoverAutoReadAllFiles(cwd, "full", ["docs"]);
       expect(ignored.files).toEqual(["keep.ts"]);
       expect(ignored.skippedByName).toBeGreaterThan(plain.skippedByName);
     } finally {
@@ -126,9 +126,9 @@ describe("discoverAutoReadAllFiles with custom ignores", () => {
       await writeFile(join(cwd, "src", "tmp", "b.txt"), "hi\n");
       await mkdir(join(cwd, "src", "other"), { recursive: true });
       await writeFile(join(cwd, "src", "other", "c.txt"), "hi\n");
-      const seg = await discoverAutoReadAllFiles(cwd, "on", ["TMP"]);
+      const seg = await discoverAutoReadAllFiles(cwd, "full", ["TMP"]);
       expect(seg.files).toEqual(["keep.ts", "src/other/c.txt"]);
-      const nested = await discoverAutoReadAllFiles(cwd, "on", ["src/tmp"]);
+      const nested = await discoverAutoReadAllFiles(cwd, "full", ["src/tmp"]);
       expect(nested.files).toEqual(["Tmp/a.txt", "keep.ts", "src/other/c.txt"]);
     } finally {
       await rmRetry(cwd);
@@ -141,7 +141,7 @@ describe("discoverAutoReadAllFiles with custom ignores", () => {
       await writeFile(join(cwd, "keep.ts"), "export const a = 1;\n");
       await mkdir(join(cwd, "secret"), { recursive: true });
       await writeFile(join(cwd, "secret", "hidden.txt"), "hi\n");
-      const injection = await buildAutoReadAllInjection(cwd, 1_000_000, "on", ["secret"]);
+      const injection = await buildAutoReadAllInjection(cwd, 1_000_000, "full", ["secret"]);
       expect(injection).toBeDefined();
       expect(injection!.text).toContain("=== keep.ts ===");
       expect(injection!.text).not.toContain("=== secret/hidden.txt ===");
@@ -157,7 +157,7 @@ describe("discoverAutoReadAllFiles with custom ignores", () => {
       await writeFile(join(cwd, "a.test.ts"), "export const b = 2;\n");
       await mkdir(join(cwd, "src"), { recursive: true });
       await writeFile(join(cwd, "src", "b.test.ts"), "export const c = 3;\n");
-      const ignored = await discoverAutoReadAllFiles(cwd, "on", ["*.test.ts"]);
+      const ignored = await discoverAutoReadAllFiles(cwd, "full", ["*.test.ts"]);
       expect(ignored.files).toEqual(["keep.ts"]);
       expect(ignored.skippedByName).toBe(2);
     } finally {
@@ -173,7 +173,7 @@ describe("discoverAutoReadAllFiles with custom ignores", () => {
       await writeFile(join(cwd, "src", "generated", "api.ts"), "export const b = 2;\n");
       await mkdir(join(cwd, "src", "other"), { recursive: true });
       await writeFile(join(cwd, "src", "other", "api.ts"), "export const c = 3;\n");
-      const injection = await buildAutoReadAllInjection(cwd, 1_000_000, "on", ["src/generated/*.ts"]);
+      const injection = await buildAutoReadAllInjection(cwd, 1_000_000, "full", ["src/generated/*.ts"]);
       expect(injection).toBeDefined();
       expect(injection!.text).toContain("=== src/other/api.ts ===");
       expect(injection!.text).not.toContain("=== src/generated/api.ts ===");

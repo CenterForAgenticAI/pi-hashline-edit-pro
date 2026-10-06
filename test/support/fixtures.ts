@@ -7,7 +7,6 @@ import register from "../../index";
 import { loadHashStore, shutdownHashStore } from "../../src/hash-store";
 import { initRegistry, resetRegistryForTests } from "../../src/anchor-registry";
 import { resetBatchStateForTests } from "../../src/batch";
-import { clearAllAutoReadAllComplete } from "../../src/auto-read-all-state";
 import { errCode } from "../../src/utils";
 const envRestores: Array<() => void> = [];
 
@@ -15,7 +14,6 @@ afterEach(() => {
   while (envRestores.length > 0) envRestores.pop()!();
   resetRegistryForTests();
   resetBatchStateForTests();
-  clearAllAutoReadAllComplete();
 });
 
 export async function getWritableTempRoot(): Promise<string> {

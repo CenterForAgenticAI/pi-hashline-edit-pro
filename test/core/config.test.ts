@@ -143,12 +143,14 @@ describe("config - cycleAutoReadAllMode", () => {
     });
   });
 
-  it("cycles off to on to git and back to off", async () => {
+  it("cycles off to outline to git to full and back to off", async () => {
     await withTempDir("pi-hashline-config-test-", async () => {
-      expect(await cycleAutoReadAllMode()).toBe("on");
-      expect((await readConfig()).autoReadAll).toBe("on");
+      expect(await cycleAutoReadAllMode()).toBe("outline");
+      expect((await readConfig()).autoReadAll).toBe("outline");
       expect(await cycleAutoReadAllMode()).toBe("git");
       expect((await readConfig()).autoReadAll).toBe("git");
+      expect(await cycleAutoReadAllMode()).toBe("full");
+      expect((await readConfig()).autoReadAll).toBe("full");
       expect(await cycleAutoReadAllMode()).toBe("off");
       expect((await readConfig()).autoReadAll).toBe("off");
     });
@@ -168,7 +170,9 @@ describe("config - cycleAutoReadAllMode", () => {
       const configDir = pathJoin(dir, ".config", "pi-hashline-edit-pro");
       await mkdir(configDir, { recursive: true });
       await writeFile(pathJoin(configDir, "config.json"), JSON.stringify({ autoRead: true, autoReadAll: true }));
-      expect((await readConfig()).autoReadAll).toBe("on");
+      expect((await readConfig()).autoReadAll).toBe("full");
+      await writeFile(pathJoin(configDir, "config.json"), JSON.stringify({ autoRead: true, autoReadAll: "on" }));
+      expect((await readConfig()).autoReadAll).toBe("full");
     });
   });
 });

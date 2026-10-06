@@ -462,7 +462,7 @@ describe("hashline-config overlay rendering", () => {
 
         overlay.handleInput("j");
         overlay.handleInput(" ");
-        await waitForConfig(async () => (await readConfig()).autoReadAll === "on");
+        await waitForConfig(async () => (await readConfig()).autoReadAll === "outline");
 
         overlay.handleInput("j");
         overlay.handleInput("j");
@@ -486,7 +486,7 @@ describe("hashline-config overlay rendering", () => {
         expect(config.autoRead).toBe(false);
         expect(config.anchorGrepEnabled).toBe(false);
         expect(config.copyMoveEnabled).toBe(false);
-        expect(config.autoReadAll).toBe("on");
+        expect(config.autoReadAll).toBe("outline");
         expect(config.requirePath).toBe(true);
         expect(config.strictInput).toBe(true);
         expect(config.diffContextLines).toBe(1);

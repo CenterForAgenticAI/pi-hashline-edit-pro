@@ -41,6 +41,7 @@
   "dependencies": {
     "diff": "^9.0.0",
     "file-type": "^22.0.2",
+    "web-tree-sitter": "^0.27.0",
     "xxhash-wasm": "^1.1.0"
   },
   "peerDependencies": {

@@ -10,7 +10,6 @@ import { regUndo, clearUndo } from "./src/replace-undo";
 import { regRead, fmtReadPreview } from "./src/read";
 import { ANCHOR_TOOL_NAMES, modelDisabled, type ModelLike } from "./src/model-gate";
 import { buildAutoReadAllInjection, autoReadAllBudget } from "./src/auto-read-all";
-import { clearAutoReadAllComplete } from "./src/auto-read-all-state";
 import type { RMetrics } from "./src/replace-response";
 import type { ReplaceDetails } from "./src/replace";
 import { extractHints, extractWarnings } from "./src/replace-render";
@@ -178,7 +177,6 @@ export default function (pi: ExtensionAPI): void {
   pi.on("session_shutdown", async (_event, ctx) => {
     try {
       const key = sessionKeyFor(ctx);
-      clearAutoReadAllComplete(key);
       if (key !== undefined) releaseRegistrySession(key);
     } catch (error) {
       console.error("Failed to release anchor registry session:", error);
@@ -194,9 +192,9 @@ export default function (pi: ExtensionAPI): void {
     if (modelDisabled(ctx.model, disableOnModels)) return;
     autoReadAllInjected = true;
     try {
-      const injection = await buildAutoReadAllInjection(ctx.cwd, autoReadAllBudget(ctx.model), autoReadAll, autoReadAllIgnore, sessionKeyFor(ctx));
+      const injection = await buildAutoReadAllInjection(ctx.cwd, autoReadAllBudget(ctx.model), autoReadAll, autoReadAllIgnore);
       if (!injection) return;
-      if (ctx.hasUI) ctx.ui.notify(`Auto-read all: attached ${injection.files} file(s) with anchors`, "info");
+      if (ctx.hasUI) ctx.ui.notify(`Auto-read all: ${autoReadAll === "outline" ? "outlined" : "attached"} ${injection.files} file(s)`, "info");
       return { message: { customType: AUTO_READ_ALL_CUSTOM_TYPE, content: injection.text, display: false } };
     } catch (error) {
       console.error("Auto-read all failed:", error);

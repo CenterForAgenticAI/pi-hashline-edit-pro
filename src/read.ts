@@ -11,19 +11,17 @@ import { Type } from "typebox";
 import { loadFileKindAndText } from "./file-kind";
 import { MAX_OVERSIZED_WARNING_LINES } from "./constants";
 import { readNormFile, safeSnapId } from "./file-reader";
-import { lineHashes, fmtRegion, fmtRow, HASH_SEP, MAX_HASH_LINES } from "./hashline";
+import { lineHashes, fmtRegion, fmtRow, HASH_SEP, MAX_HASH_LINES, parseHashRef, resolveAnchorLine, AnchorMismatchError, type Anchor } from "./hashline";
 import { toCwd } from "./paths";
 import { abortIf, makePrepareArguments, numberedRead, visLines, splitLines } from "./utils";
 import { loadP, loadGuide } from "./prompts";
 import { withReadPrompts, DEFAULT_EDIT_FLAGS, type EditToolFlags } from "./edit-common";
 import { valAccess } from "./validation";
-import { readConfig } from "./config";
-import { resolveTarget } from "./fs-write";
-import { withAnchorSession, servedForPath, sessionKeyFor, formatAnchorReclaimNotice, takeReclaimedPaths } from "./anchor-registry";
+import { withAnchorSession, adoptAnchors, ownerOf, ownersDifferingOnlyByCase, formatAnchorReclaimNotice, takeReclaimedPaths } from "./anchor-registry";
 import { serveRows } from "./served";
-import { getAutoReadAllSnapshot } from "./auto-read-all-state";
 import { Text } from "@earendil-works/pi-tui";
 import { anchoredLine, readResultSchema, withStructuredErrors, type AnchoredLine, type ReadResult } from "./structured";
+import { buildFileOutline } from "./outline";
 const R_DESC = loadP("../prompts/read.md");
 const R_SNIPPET = loadP("../prompts/read-snippet.md");
 function readGuide(): string[] {
@@ -196,6 +194,110 @@ export async function fmtReadPreview(
 	};
 }
 
+const READ_ANCHOR_DEFAULT_AFTER = 20;
+
+export type ReadAddress =
+	| { kind: "offset" }
+	| { kind: "window"; anchor: Anchor; before: number; after: number }
+	| { kind: "range"; from: Anchor; to: Anchor }
+	| { kind: "outline" };
+
+export interface ReadAddressInput {
+	offset?: number;
+	limit?: number;
+	anchor?: string;
+	before?: number;
+	after?: number;
+	from?: string;
+	to?: string;
+	outline?: boolean;
+}
+
+function nonNegativeInteger(value: number | undefined, field: string): number {
+	if (value === undefined) return 0;
+	if (!Number.isInteger(value) || value < 0) {
+		throw new Error(`[E_BAD_SHAPE] Read request field "${field}" must be a non-negative integer.`);
+	}
+	return value;
+}
+
+export function parseReadAddress(input: ReadAddressInput): ReadAddress {
+	const anchored = input.anchor !== undefined;
+	const ranged = input.from !== undefined || input.to !== undefined;
+	const addressed = input.offset !== undefined || input.limit !== undefined;
+	const outlined = input.outline === true;
+	if (outlined && (anchored || ranged || addressed || input.before !== undefined || input.after !== undefined)) {
+		throw new Error('[E_BAD_SHAPE] Read request field "outline" cannot be combined with offset, limit, anchor, from, to, before, or after.');
+	}
+	if (outlined) return { kind: "outline" };
+	if (anchored && ranged) {
+		throw new Error('[E_BAD_SHAPE] Read request cannot combine "anchor" with "from"/"to".');
+	}
+	if ((anchored || ranged) && addressed) {
+		throw new Error('[E_BAD_SHAPE] Read request cannot combine anchor addressing with "offset"/"limit".');
+	}
+	if (ranged && (input.from === undefined || input.to === undefined)) {
+		throw new Error('[E_BAD_SHAPE] Read request requires both "from" and "to" anchors.');
+	}
+	if (!anchored && (input.before !== undefined || input.after !== undefined)) {
+		throw new Error('[E_BAD_SHAPE] Read request fields "before" and "after" require an "anchor".');
+	}
+	if (anchored) {
+		return {
+			kind: "window",
+			anchor: parseHashRef(input.anchor!),
+			before: nonNegativeInteger(input.before, "before"),
+			after: input.after === undefined ? READ_ANCHOR_DEFAULT_AFTER : nonNegativeInteger(input.after, "after"),
+		};
+	}
+	if (ranged) {
+		return { kind: "range", from: parseHashRef(input.from!), to: parseHashRef(input.to!) };
+	}
+	return { kind: "offset" };
+}
+
+export function resolveReadWindow(
+	address: ReadAddress,
+	fileLines: string[],
+	fileHashes: string[],
+	resolvedPath: string,
+	offset?: number,
+	limit?: number,
+): { offset?: number; limit?: number } {
+	if (address.kind === "offset" || address.kind === "outline") return { offset, limit };
+	const totalLines = fileLines.length;
+	let first: number;
+	let last: number;
+	const resolveRef = (ref: Anchor): number => {
+		const owner = ownerOf(ref.hash);
+		if (owner === undefined) {
+			const folded = ownersDifferingOnlyByCase(ref.hash);
+			const hint = folded.length > 0 ? ` Anchors are case-sensitive; ${folded.map((match) => `"${match.anchor}"`).join(", ")} differs only in case.` : "";
+			throw new Error(`[E_STALE_ANCHOR] "${ref.hash}" is not owned in this session.${hint} Call read() on ${resolvedPath} first.`);
+		}
+		if (owner.path !== resolvedPath) {
+			throw new Error(`[E_STALE_ANCHOR] "${ref.hash}" is owned by ${owner.path}. Call read() on ${resolvedPath} for fresh anchors.`);
+		}
+		return resolveAnchorLine(ref, fileLines, fileHashes, resolvedPath);
+	};
+	try {
+		if (address.kind === "window") {
+			const line = resolveRef(address.anchor);
+			first = Math.max(1, line - address.before);
+			last = Math.min(totalLines, line + address.after);
+		} else {
+			const start = resolveRef(address.from);
+			const end = resolveRef(address.to);
+			first = Math.min(start, end);
+			last = Math.max(start, end);
+		}
+	} catch (error) {
+		if (error instanceof AnchorMismatchError) adoptAnchors(resolvedPath, error.feedbackMap);
+		throw error;
+	}
+	return { offset: first, limit: last - first + 1 };
+}
+
 export function regRead(pi: ExtensionAPI, flags: EditToolFlags = DEFAULT_EDIT_FLAGS): void {
   const prompted = withReadPrompts({ description: R_DESC, snippet: R_SNIPPET, guidelines: readGuide() }, flags);
   pi.registerTool({
@@ -221,6 +323,38 @@ export function regRead(pi: ExtensionAPI, flags: EditToolFlags = DEFAULT_EDIT_FL
 					description: "Maximum number of lines to read",
 				}),
 			),
+			anchor: Type.Optional(
+				Type.String({
+					description: "4-char anchor of the line to center the read on; combine with before/after. Cannot be combined with offset/limit/from/to.",
+				}),
+			),
+			before: Type.Optional(
+				Type.Integer({
+					minimum: 0,
+					description: "Lines to show before the anchor line (default 0)",
+				}),
+			),
+			after: Type.Optional(
+				Type.Integer({
+					minimum: 0,
+					description: "Lines to show after the anchor line (default 20)",
+				}),
+			),
+			from: Type.Optional(
+				Type.String({
+					description: "4-char anchor of the first line of an anchored range; requires to. Cannot be combined with offset/limit/anchor.",
+				}),
+			),
+			to: Type.Optional(
+				Type.String({
+					description: "4-char anchor of the last line of an anchored range; requires from.",
+				}),
+			),
+			outline: Type.Optional(
+				Type.Boolean({
+					description: "Return an anchor-stamped structural outline of a large file instead of its lines. Cannot be combined with offset/limit/anchor/from/to.",
+				}),
+			),
 		}),
 		outputSchema: readResultSchema,
 		executionMode: "sequential",
@@ -241,24 +375,9 @@ export function regRead(pi: ExtensionAPI, flags: EditToolFlags = DEFAULT_EDIT_FL
 				const rawPath = params.path;
 				const absolutePath = toCwd(rawPath, ctx.cwd);
 
+				const address = parseReadAddress(params);
 				abortIf(signal);
 				await valAccess(absolutePath, rawPath);
-                const autoReadAllMode = (await readConfig()).autoReadAll ?? "off";
-                if (autoReadAllMode !== "off") {
-                  const canonical = await resolveTarget(absolutePath).catch(() => undefined);
-                  if (canonical !== undefined) {
-                    const stored = getAutoReadAllSnapshot(sessionKeyFor(ctx), canonical);
-                    if (stored !== undefined) {
-                      const current = await safeSnapId(canonical, "auto-read-all guard");
-                      if (current !== undefined && current === stored) {
-                        const served = servedForPath(canonical);
-                        if (served !== undefined && served.size > 0) {
-                          throw new Error(`[E_AUTO_READ_ALL] ${rawPath} is unchanged since this session's start-of-session auto-read, so the attached content is still exact. Read succeeds on files that have changed since the full auto read.`);
-                        }
-                      }
-                    }
-                  }
-                }
 
 				abortIf(signal);
 				const file = await loadFileKindAndText(absolutePath, { maxLines: MAX_HASH_LINES, displayPath: rawPath });
@@ -279,50 +398,59 @@ export function regRead(pi: ExtensionAPI, flags: EditToolFlags = DEFAULT_EDIT_FL
 	        rawPath, ctx.cwd, { signal, preloadedFile: file, maxLines: MAX_HASH_LINES },
 	      );
 				const fileLines = splitLines(normalized);
-				const preview = await fmtReadPreview(
-					normalized,
-					{
-						offset: params.offset,
-						limit: params.limit,
-					},
-					fileHashes,
-					resolvedPath,
-				);
-				serveRows(resolvedPath, fileHashes, fileLines, preview.servedHashes);
+				const outline = address.kind === "outline" && normalized.length > 0
+					? await buildFileOutline({ displayPath: rawPath, content: normalized, hashes: fileHashes })
+					: undefined;
+				const preview = outline === undefined
+					? await fmtReadPreview(
+						normalized,
+						resolveReadWindow(address, fileLines, fileHashes, resolvedPath, params.offset, params.limit),
+						fileHashes,
+						resolvedPath,
+					)
+					: undefined;
+				serveRows(resolvedPath, fileHashes, fileLines, outline?.servedHashes ?? preview?.servedHashes ?? []);
 				const snapshotId = await safeSnapId(absolutePath, "read");
 				const reclaimNotice = formatAnchorReclaimNotice(takeReclaimedPaths());
 				const previewText = [
-					preview.text,
+					outline?.text ?? preview?.text ?? "",
 					hadUtf8DecodeErrors ? "[Non-UTF-8 bytes shown as U+FFFD; editing rewrites the file as UTF-8.]" : undefined,
 					reclaimNotice,
 				].filter((part): part is string => part !== undefined).join("\n\n");
 
+				const anchoredLines = outline !== undefined
+					? outline.rows.map((row) => anchoredLine(row.line, row.text, row.anchor))
+					: preview?.anchoredLines ?? [];
+				const totalLines = outline !== undefined ? fileHashes.length : preview?.totalLines ?? 0;
+				const startLine = outline !== undefined ? 1 : preview?.startLine ?? 1;
+				const nextOffset = preview?.nextOffset;
+				const truncated = outline !== undefined ? outline.truncated : preview?.truncation !== undefined;
 				const structuredContent: ReadResult = {
 					ok: true,
 					kind: "read",
 					path: rawPath,
 					text: previewText,
-					lines: preview.anchoredLines,
-					totalLines: preview.totalLines,
-					startLine: preview.startLine,
-					nextOffset: preview.nextOffset ?? null,
-					truncated: preview.truncation !== undefined,
-					blockedByLongLine: preview.blockedByLongLine,
+					lines: anchoredLines,
+					totalLines,
+					startLine,
+					nextOffset: nextOffset ?? null,
+					truncated,
+					blockedByLongLine: preview?.blockedByLongLine ?? false,
 					hadUtf8DecodeErrors,
 				};
 				return {
 					content: [{ type: "text", text: previewText }],
 					details: {
-						truncation: preview.truncation,
+						truncation: preview?.truncation,
 						snapshotId,
-						offset: params.offset ?? 1,
-						...(preview.nextOffset !== undefined
-							? { nextOffset: preview.nextOffset }
+						offset: startLine,
+						...(nextOffset !== undefined
+							? { nextOffset }
 							: {}),
 						metrics: {
-							truncated: !!preview.truncation,
-							...(preview.nextOffset !== undefined
-								? { next_offset: preview.nextOffset }
+							truncated,
+							...(nextOffset !== undefined
+								? { next_offset: nextOffset }
 								: {}),
 						},
 					},
