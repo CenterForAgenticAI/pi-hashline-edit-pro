@@ -27,10 +27,10 @@ const SCAN_LIMIT_MULTIPLIER = 4;
 const MAX_REPORTED_OMISSIONS = 50;
 
 const HEADER =
-  "[hashline auto-read-all] Every non-ignored project file is attached below as `=== path ===` then `anchor│content` rows with live anchors.\nEdit directly from the attachment with replace and insert; do not call read for files in [files complete: ...].\nFiles listed as omitted or not attached can be read normally.\nAnchors are case-sensitive and stay valid until their line is edited.";
+  "[hashline auto-read-all] Every non-ignored project file is attached below as `=== path ===` then `anchor│content` rows with live anchors.\nEdit directly from the attachment with replace and insert; do not call read for attached files.\nFiles listed as not attached can be read normally.\nAnchors are case-sensitive and stay valid until their line is edited.";
 
 const OUTLINE_HEADER =
-  "[hashline auto-read-all] Every non-ignored project file is outlined below as `=== path (language) — lines ===` then `anchor│symbol` rows with live anchors.\nEdit a row's anchor with replace or insert, or read from it with `offset` set to that anchor and the row's `limit`; do not call read for files in [files complete: ...].\nFiles listed as omitted or not attached can be read normally.\nAnchors are case-sensitive and stay valid until their line is edited.";
+  "[hashline auto-read-all] Every non-ignored project file is outlined below as `=== path (language) — lines ===` then `anchor│symbol` rows with live anchors.\nEdit a row's anchor with replace or insert, or read from it with `offset` set to that anchor and the row's `limit`; do not call read for attached files.\nFiles listed as not attached can be read normally.\nAnchors are case-sensitive and stay valid until their line is edited.";
 
 const IMAGE_EXTENSIONS = new Set([
   ".avif",
@@ -199,6 +199,7 @@ export interface AutoReadAllSection {
   text: string;
   totalLines: number;
   absolutePath: string;
+  complete: boolean;
 }
 export interface AutoReadAllInjection {
   text: string;
@@ -397,11 +398,11 @@ async function renderFile(file: string, cwd: string, outline: boolean): Promise<
     if (outline) {
       const section = await buildFileOutline({ displayPath: file, content: normalized, hashes: fileHashes });
       serveRows(absolutePath, fileHashes, fileLines, section.servedHashes);
-      return { file, text: section.text, totalLines: fileHashes.length, absolutePath };
+      return { file, text: section.text, totalLines: fileHashes.length, absolutePath, complete: !section.truncated };
     }
     const preview = await fmtReadPreview(normalized, {}, fileHashes, absolutePath, AUTO_READ_ALL_MAX_BUDGET_BYTES, MAX_HASH_LINES);
     serveRows(absolutePath, fileHashes, fileLines, preview.servedHashes);
-    return { file, text: `=== ${file} ===\n${preview.text}`, totalLines: fileHashes.length, absolutePath };
+    return { file, text: `=== ${file} ===\n${preview.text}`, totalLines: fileHashes.length, absolutePath, complete: preview.truncation === undefined && !preview.blockedByLongLine };
   } catch (error) {
     console.error(`Auto-read all: skipped ${file}:`, error);
     return undefined;
@@ -455,15 +456,13 @@ export async function buildAutoReadAllInjection(cwd: string, budgetBytes: number
     }
     sections.push(section);
     bytes += sectionBytes;
-    completeFiles += 1;
+    if (section.complete) completeFiles += 1;
   }
   if (sections.length === 0) return undefined;
   const sectionTexts = sections.map((section) => section.text);
   const coverage = `[coverage: ${completeFiles} complete]`;
-  const completeNames = sections.map((section) => section.file);
-  const machineList = `[files complete: ${JSON.stringify(completeNames)} omitted: ${JSON.stringify(omitted)}]`;
   const reclaimNotice = formatAnchorReclaimNotice(takeReclaimedPaths());
-  const text = `${outline ? OUTLINE_HEADER : HEADER}\n\n${coverage}\n${machineList}\n\n${sectionTexts.join("\n\n")}\n\n${buildFooter(sections.length, discovery, omitted)}${reclaimNotice !== undefined ? `\n${reclaimNotice}` : ""}`;
+  const text = `${outline ? OUTLINE_HEADER : HEADER}\n\n${coverage}\n\n${sectionTexts.join("\n\n")}\n\n${buildFooter(sections.length, discovery, omitted)}${reclaimNotice !== undefined ? `\n${reclaimNotice}` : ""}`;
   return { text, files: sections.length, bytes, omitted, completeFiles };
 }
 

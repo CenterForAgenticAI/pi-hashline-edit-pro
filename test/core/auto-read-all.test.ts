@@ -206,7 +206,24 @@ describe("discoverAutoReadAllFiles", () => {
       expect(injection!.text).not.toContain("[complete,");
       expect(injection!.text).toContain("=== big.txt ===");
       expect(injection!.text).toContain("[coverage: 2 complete]");
-      expect(injection!.text).toContain("[files complete:");
+      expect(injection!.text).not.toContain("[files complete:");
+    } finally {
+      await cleanupCwd(cwd);
+    }
+  });
+
+  it("does not count a truncated outline as complete", async () => {
+    const cwd = await makeTempDir("pi-hashline-auto-read-all-coverage-");
+    try {
+      initGitRepo(cwd);
+      await writeFile(join(cwd, "small.ts"), "export function a() { return 1; }\nexport function b() { return 2; }\n");
+      await writeFile(join(cwd, "many.ts"), Array.from({ length: 500 }, (_, i) => `export function f${i}() { return ${i}; }`).join("\n") + "\n");
+      const injection = await buildAutoReadAllInjection(cwd, 1_000_000, "outline");
+      expect(injection).toBeDefined();
+      expect(injection!.completeFiles).toBe(1);
+      expect(injection!.text).toContain("[coverage: 1 complete]");
+      expect(injection!.text).not.toContain("[files complete:");
+      expect(injection!.omitted).toEqual([]);
     } finally {
       await cleanupCwd(cwd);
     }
