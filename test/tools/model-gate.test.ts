@@ -49,6 +49,30 @@ describe("disableOnModels gate", () => {
     });
   });
 
+  it("keeps read active when disableReadOnModels is off", async () => {
+    await withTempDir("model-gate-read-", async (dir) => {
+      await writeConfig(dir, { autoRead: true, anchorGrepEnabled: true, disableOnModels: ["openai/*"], disableReadOnModels: false });
+      const { pi, handlers, getActive } = makePiStub([...ANCHOR_TOOLS, "grep", "edit"]);
+      register(pi);
+      await handlers.get("session_start")!({}, sessionContext(dir, OPENAI));
+      expect(getActive()).toEqual(["read", "grep"]);
+    });
+  });
+
+  it("keeps read through a gate switch when disableReadOnModels is off", async () => {
+    await withTempDir("model-gate-read-switch-", async (dir) => {
+      await writeConfig(dir, { autoRead: true, anchorGrepEnabled: true, disableOnModels: ["openai/*"], disableReadOnModels: false });
+      const { pi, handlers, getActive } = makePiStub([...ANCHOR_TOOLS, "grep", "edit"]);
+      register(pi);
+      const ctx = sessionContext(dir, ANTHROPIC);
+      await handlers.get("session_start")!({}, ctx);
+      await handlers.get("model_select")!(modelSelect(OPENAI, ANTHROPIC), ctx);
+      expect(getActive()).toEqual(["read", "grep"]);
+      await handlers.get("model_select")!(modelSelect(ANTHROPIC, OPENAI), ctx);
+      expect(getActive()).toEqual([...ANCHOR_TOOLS]);
+    });
+  });
+
   it("keeps an already active built-in grep when gating a model", async () => {
     await withTempDir("model-gate-grep-", async (dir) => {
       await writeConfig(dir, { autoRead: true, anchorGrepEnabled: false, disableOnModels: ["openai/*"] });

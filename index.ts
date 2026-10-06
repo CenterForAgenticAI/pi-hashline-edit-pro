@@ -25,6 +25,7 @@ import {
   toggleAnchorGrep,
   toggleCopyMove,
   toggleReplaceMatch,
+  toggleDisableReadOnModels,
   toggleRequirePath,
   toggleStrictInput,
   adjustDiffContextLines,
@@ -61,6 +62,7 @@ export default function (pi: ExtensionAPI): void {
   let autoReadAll: AutoReadAllMode = "off";
   let autoReadAllIgnore: string[] = [];
   let disableOnModels: string[] = [];
+  let disableReadOnModels = true;
   let autoReadAllInjected = false;
   let grepWasActive = false;
   const baseAnchorTools = new Set<string>();
@@ -85,7 +87,8 @@ export default function (pi: ExtensionAPI): void {
   async function syncModelGate(model: ModelLike | undefined): Promise<void> {
     if (disableOnModels.length > 0 && modelDisabled(model, disableOnModels)) {
       const active = pi.getActiveTools();
-      const next = active.filter((tool) => !ANCHOR_TOOL_NAMES.includes(tool));
+      const gated = disableReadOnModels ? ANCHOR_TOOL_NAMES : ANCHOR_TOOL_NAMES.filter((tool) => tool !== "read");
+      const next = active.filter((tool) => !gated.includes(tool));
       if (grepWasActive && !next.includes("grep")) next.push("grep");
       pi.setActiveTools(next);
       gateApplied = true;
@@ -133,6 +136,7 @@ export default function (pi: ExtensionAPI): void {
     autoReadAll = config.autoReadAll ?? "off";
     autoReadAllIgnore = config.autoReadAllIgnore ?? [];
     disableOnModels = config.disableOnModels ?? [];
+    disableReadOnModels = config.disableReadOnModels !== false;
     const sessionBranch = (ctx as { sessionManager?: { getBranch?: () => Array<{ type?: string; customType?: string }> } }).sessionManager?.getBranch?.() ?? [];
     autoReadAllInjected = sessionBranch.some((entry) => entry.type === "custom_message" && entry.customType === AUTO_READ_ALL_CUSTOM_TYPE);
     await refreshEditTools();
@@ -197,6 +201,7 @@ export default function (pi: ExtensionAPI): void {
             else if (key === "autoReadAll") { autoReadAll = await cycleAutoReadAllMode(); autoReadAllInjected = false; }
             else if (key === "autoReadAllIgnore") autoReadAllIgnore = await setAutoReadAllIgnoreFromText(value ?? "");
             else if (key === "disableOnModels") disableOnModels = await setDisableOnModelsFromText(value ?? "");
+            else if (key === "disableReadOnModels") disableReadOnModels = await toggleDisableReadOnModels();
             else if (key === "diffContextLines") await adjustDiffContextLines(delta ?? 1);
             else if (key === "anchorGrepEnabled") {
               const enabled = await toggleAnchorGrep();

@@ -5,6 +5,7 @@ import {
   toggleAnchorGrep,
   toggleCopyMove,
   toggleReplaceMatch,
+  toggleDisableReadOnModels,
   toggleRequirePath,
   toggleStrictInput,
   adjustDiffContextLines,
@@ -410,6 +411,41 @@ describe("config - disableOnModels", () => {
       const filled = configRows(await readConfig()).find((row) => row.key === "disableOnModels")!;
       expect(filled.entries).toEqual(["openai/*"]);
       expect(filled.enabled).toBe(true);
+    });
+  });
+});
+
+describe("config - disableReadOnModels", () => {
+  it("defaults to true when no config file exists", async () => {
+    await withTempDir("pi-hashline-config-test-", async () => {
+      expect((await readConfig()).disableReadOnModels).toBe(true);
+    });
+  });
+
+  it("reads a stored value", async () => {
+    await withTempDir("pi-hashline-config-test-", async () => {
+      await writeConfig({ autoRead: true, anchorGrepEnabled: true, disableReadOnModels: false });
+      expect((await readConfig()).disableReadOnModels).toBe(false);
+    });
+  });
+
+  it("toggles the flag", async () => {
+    await withTempDir("pi-hashline-config-test-", async () => {
+      expect(await toggleDisableReadOnModels()).toBe(false);
+      expect((await readConfig()).disableReadOnModels).toBe(false);
+      expect(await toggleDisableReadOnModels()).toBe(true);
+      expect((await readConfig()).disableReadOnModels).toBe(true);
+    });
+  });
+
+  it("exposes the row and follows the stored value", async () => {
+    await withTempDir("pi-hashline-config-test-", async () => {
+      const on = configRows(await readConfig()).find((row) => row.key === "disableReadOnModels")!;
+      expect(on.label).toBe("Disable read on models");
+      expect(on.enabled).toBe(true);
+      await writeConfig({ autoRead: true, anchorGrepEnabled: true, disableReadOnModels: false });
+      const off = configRows(await readConfig()).find((row) => row.key === "disableReadOnModels")!;
+      expect(off.enabled).toBe(false);
     });
   });
 });

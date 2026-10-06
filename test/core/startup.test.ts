@@ -423,12 +423,12 @@ describe("hashline-config overlay rendering", () => {
         expect(lines[lines.length - 1]).toBe(`╰${"─".repeat(58)}╯`);
         expect(lines.some((line) => line.includes("Hashline Config"))).toBe(true);
         expect(lines.some((line) => line.includes("↑↓ navigate"))).toBe(true);
-        expect(lines.filter((line) => line.includes("[x]")).length).toBe(4);
+        expect(lines.filter((line) => line.includes("[x]")).length).toBe(5);
         expect(lines.filter((line) => line.includes("[ ]")).length).toBe(2);
         expect(lines.filter((line) => line.includes("[on]")).length).toBe(0);
         expect(lines.filter((line) => line.includes("[off]")).length).toBe(1);
         overlay.handleInput("k");
-        expect(overlay.render(60).find((line) => line.includes("Disable on models"))!).toContain("> ");
+        expect(overlay.render(60).find((line) => line.includes("Disable read on models"))!).toContain("> ");
         overlay.handleInput("j");
         expect(overlay.render(60).find((line) => line.includes("Auto-read"))!).toContain("> ");
         overlay.invalidate();

@@ -21,6 +21,7 @@ export interface Config {
   strictInput?: boolean;
   diffContextLines?: number;
   disableOnModels?: string[];
+  disableReadOnModels?: boolean;
 }
 
 const DEFAULT_CONFIG: Config = {
@@ -33,7 +34,8 @@ const DEFAULT_CONFIG: Config = {
   requirePath: false,
   strictInput: false,
   diffContextLines: DEFAULT_DIFF_CONTEXT_LINES,
-  disableOnModels: []
+  disableOnModels: [],
+  disableReadOnModels: true,
 };
 
 function parseAutoReadAllMode(value: unknown): AutoReadAllMode {
@@ -94,6 +96,7 @@ function parseConfig(content: string): Config {
   const diffContextLines = parsed.diffContextLines;
   const autoReadAllIgnore = parsed.autoReadAllIgnore;
   const disableOnModels = parsed.disableOnModels;
+  const disableReadOnModels = parsed.disableReadOnModels;
   return {
     autoRead: typeof autoRead === "boolean" ? autoRead : DEFAULT_CONFIG.autoRead,
     anchorGrepEnabled: typeof anchorGrepEnabled === "boolean" ? anchorGrepEnabled : DEFAULT_CONFIG.anchorGrepEnabled,
@@ -105,6 +108,7 @@ function parseConfig(content: string): Config {
     diffContextLines: normalizeDiffContextLines(diffContextLines),
     autoReadAllIgnore: parseAutoReadAllIgnore(autoReadAllIgnore),
     disableOnModels: parseDisableOnModels(disableOnModels),
+    disableReadOnModels: typeof disableReadOnModels === "boolean" ? disableReadOnModels : DEFAULT_CONFIG.disableReadOnModels,
   };
 }
 
@@ -212,7 +216,7 @@ export async function writeConfig(config: Config): Promise<void> {
 }
 
 
-type ToggleKey = "autoRead" | "anchorGrepEnabled" | "copyMoveEnabled" | "replaceMatchEnabled" | "requirePath" | "strictInput";
+type ToggleKey = "autoRead" | "anchorGrepEnabled" | "copyMoveEnabled" | "replaceMatchEnabled" | "requirePath" | "strictInput" | "disableReadOnModels";
 
 async function toggleFlag(key: ToggleKey): Promise<boolean> {
   const config = await updateConfig((c) => { c[key] = !(c[key] === true); });
@@ -222,6 +226,7 @@ export const toggleAutoRead = (): Promise<boolean> => toggleFlag("autoRead");
 export const toggleAnchorGrep = (): Promise<boolean> => toggleFlag("anchorGrepEnabled");
 export const toggleCopyMove = (): Promise<boolean> => toggleFlag("copyMoveEnabled");
 export const toggleReplaceMatch = (): Promise<boolean> => toggleFlag("replaceMatchEnabled");
+export const toggleDisableReadOnModels = (): Promise<boolean> => toggleFlag("disableReadOnModels");
 export async function cycleAutoReadAllMode(): Promise<AutoReadAllMode> {
   let next: AutoReadAllMode = "off";
   await updateConfig((c) => {
