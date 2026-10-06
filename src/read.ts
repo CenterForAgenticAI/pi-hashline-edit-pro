@@ -233,8 +233,26 @@ function normalizeReadCallArgs(args: unknown): unknown {
 	return normalized;
 }
 
+function anchorLimitOf(args: unknown): { anchor: string; limit: number } | undefined {
+	if (!isRec(args)) return undefined;
+	const { offset, limit } = args;
+	if (typeof offset !== "string" || offset.length === 0 || /^\d+$/.test(offset)) return undefined;
+	if (typeof limit !== "number" || !Number.isInteger(limit) || limit < 1) return undefined;
+	return { anchor: offset, limit };
+}
+
 function renderReadCall(args: unknown, theme: any, context: any): Text {
-	return builtinReadRenderCall(normalizeReadCallArgs(args), theme, context);
+	const normalized = normalizeReadCallArgs(args);
+	const rendered = builtinReadRenderCall(normalized, theme, context);
+	const anchorLimit = anchorLimitOf(normalized);
+	if (anchorLimit === undefined) return rendered;
+	const marker = `:${anchorLimit.anchor}`;
+	const text = (rendered as unknown as { text: string }).text;
+	const index = text.lastIndexOf(marker);
+	if (index < 0) return rendered;
+	const suffix = theme.fg("warning", ` +${anchorLimit.limit}`);
+	rendered.setText(`${text.slice(0, index + marker.length)}${suffix}${text.slice(index + marker.length)}`);
+	return rendered;
 }
 
 export function regRead(pi: ExtensionAPI, flags: EditToolFlags = DEFAULT_EDIT_FLAGS): void {

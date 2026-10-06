@@ -124,10 +124,22 @@ describe("read tool - call rendering", () => {
     expect(renderCall({ path: "sample.ts", offset: 576, limit: 520 })).toContain(":576-1095");
   });
 
-  it("keeps an anchor offset from turning a numeric-string limit into a range", () => {
+  it("shows an anchor offset's limit as a +N suffix", () => {
     const text = renderCall({ path: "sample.ts", offset: "RKhl", limit: "520" });
-    expect(text).toContain(":RKhl");
+    expect(text).toContain(":RKhl +520");
     expect(text).not.toContain("NaN");
+  });
+
+  it("leaves an anchor offset without a limit unsuffixed", () => {
+    const text = renderCall({ path: "sample.ts", offset: "RKhl" });
+    expect(text).toContain(":RKhl");
+    expect(text).not.toContain(":RKhl +");
+  });
+
+  it("keeps the +N suffix ahead of the compact expand hint", () => {
+    const text = renderCall({ path: "AGENTS.md", offset: "RKhl", limit: 560 });
+    expect(text).toContain(":RKhl +560");
+    expect(text.indexOf(":RKhl +560")).toBeLessThan(text.indexOf("to expand"));
   });
 
   it("renders incomplete and malformed args without throwing", () => {
