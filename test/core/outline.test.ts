@@ -85,6 +85,26 @@ describe("renderPreviewOutline", () => {
 		expect(result.text).toContain("H029│line 30");
 		expect(result.rows).toHaveLength(4);
 	});
+
+	it("keeps every line when head and tail cover the file", () => {
+		for (const count of [21, 25, 30]) {
+			const lines = Array.from({ length: count }, (_, index) => `line ${index + 1}`);
+			const hashes = lines.map((_, index) => `H${String(index).padStart(3, "0")}`);
+			const result = renderPreviewOutline({ displayPath: "notes.txt", lines, hashes });
+			expect(result.rows).toHaveLength(count);
+			expect(result.text).not.toContain("more lines");
+			expect(result.rows.at(-1)?.text).toBe(`line ${count}`);
+		}
+	});
+
+	it("shows the ellipsis only when the head and tail leave a gap", () => {
+		const lines = Array.from({ length: 31 }, (_, index) => `line ${index + 1}`);
+		const hashes = lines.map((_, index) => `H${String(index).padStart(3, "0")}`);
+		const result = renderPreviewOutline({ displayPath: "notes.txt", lines, hashes });
+		expect(result.rows).toHaveLength(30);
+		expect(result.text).toContain("... (1 more lines)");
+		expect(result.rows.at(-1)?.text).toBe("line 31");
+	});
 });
 
 describe("buildFileOutline", () => {
@@ -114,5 +134,14 @@ describe("buildFileOutline", () => {
 		expect(result.text).toContain("=== notes.txt — 2 lines ===");
 		expect(result.text).toContain("Aaaa│alpha");
 		expect(result.text).toContain("Bbbb│beta");
+	});
+
+	it("serves the empty-line anchor for an empty file", async () => {
+		const result = await buildFileOutline({ displayPath: "empty.txt", content: "", hashes: ["Aaaa"] });
+		expect(result.text).toContain("=== empty.txt — 0 lines ===");
+		expect(result.text).toContain("Aaaa│");
+		expect(result.text).toContain("File is empty. Use replace to insert content.");
+		expect(result.servedHashes).toEqual(["Aaaa"]);
+		expect(result.rows).toHaveLength(1);
 	});
 });

@@ -120,6 +120,14 @@ export function renderPreviewOutline(input: PreviewOutlineInput): OutlineRender 
 	const output: string[] = [header];
 	let bytes = Buffer.byteLength(header, "utf-8") + 1;
 	let truncated = false;
+	if (input.lines.length === 0) {
+		const anchor = input.hashes[0];
+		if (anchor !== undefined) {
+			output.push(`${anchor}│`, "[File is empty. Use replace to insert content.]");
+			rows.push({ line: 1, anchor, text: "" });
+		}
+		return { text: output.join("\n"), rows, servedHashes: servedHashesOf(rows), truncated: false };
+	}
 
 	const addRow = (index: number): boolean => {
 		const line = input.lines[index];
@@ -145,6 +153,8 @@ export function renderPreviewOutline(input: PreviewOutlineInput): OutlineRender 
 	}
 	if (!truncated && head + tail < input.lines.length) {
 		output.push(`... (${input.lines.length - head - tail} more lines)`);
+	}
+	if (!truncated) {
 		for (let index = input.lines.length - tail; index < input.lines.length; index += 1) {
 			if (!addRow(index)) break;
 		}

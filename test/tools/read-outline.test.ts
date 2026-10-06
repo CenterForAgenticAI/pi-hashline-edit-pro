@@ -39,6 +39,17 @@ describe("read tool - outline mode", () => {
 		});
 	});
 
+	it("keeps the tail of a previewed file", async () => {
+		const content = Array.from({ length: 25 }, (_, index) => `line ${index + 1}`).join("\n") + "\n";
+		await withTempFile("notes.txt", content, async ({ cwd }) => {
+			const { ctx, readTool } = setupIntegrationTest(cwd);
+			const result = getText(await readTool.execute("r1", { path: "notes.txt", outline: true }, undefined, undefined, ctx));
+			expect(result).toContain("=== notes.txt — 25 lines ===");
+			expect(result).toContain("line 25");
+			expect(result).not.toContain("more lines");
+		});
+	});
+
 	it("rejects outline combined with other addressing", async () => {
 		await withTempFile("app.ts", TS_CONTENT, async ({ cwd }) => {
 			const { ctx, readTool } = setupIntegrationTest(cwd);

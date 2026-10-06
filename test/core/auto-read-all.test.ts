@@ -274,6 +274,22 @@ describe("buildAutoReadAllInjection", () => {
     }
   });
 
+  it("serves the empty-line anchor for an empty file in outline mode", async () => {
+    const cwd = await makeTempDir("pi-hashline-auto-read-all-outline-empty-");
+    try {
+      initGitRepo(cwd);
+      await writeFile(join(cwd, "empty.txt"), "");
+      const injection = await buildAutoReadAllInjection(cwd, 1_000_000, "outline");
+      expect(injection).toBeDefined();
+      expect(injection!.text).toContain("=== empty.txt — 0 lines ===");
+      expect(injection!.text).toContain("File is empty. Use replace to insert content.");
+      const absolute = await resolveTarget(join(cwd, "empty.txt"));
+      expect(servedForPath(absolute)?.size).toBe(1);
+    } finally {
+      await cleanupCwd(cwd);
+    }
+  });
+
   it("returns nothing in off mode", async () => {
     const cwd = await makeTempDir("pi-hashline-auto-read-all-offmode-");
     try {

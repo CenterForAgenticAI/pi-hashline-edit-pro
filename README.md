@@ -159,7 +159,7 @@ The extension registers eight tools: `read`, `replace`, `replace_match`, `insert
 
 ### read
 
-`read` returns a text file with every line prefixed by `anchor│content`. The anchor is the line's address. A read can also be addressed by anchors: `anchor` with `before`/`after` centers a window on a served line, and `from`+`to` reads an inclusive anchored range; anchor addressing is stable across edits and returns the same editable rows. Pass `outline: true` for an anchor-stamped structural outline of a large file instead of its lines: tree-sitter languages (JavaScript/TypeScript/TSX, Python, Go, Rust, Solidity, Java, SCSS, Sass, and Markdown) return nested symbols with their line ranges, other files return a head/tail preview, and every outline row is served, so its anchor can be read or edited immediately.
+`read` returns a text file with every line prefixed by `anchor│content`. The anchor is the line's address. A read can also be addressed by anchors: `anchor` with `before`/`after` centers a window on a served line, and `from`+`to` reads an inclusive anchored range; anchor addressing is stable across edits and returns the same editable rows. Pass `outline: true` for an anchor-stamped structural outline of a large file instead of its lines: tree-sitter languages (JavaScript/TypeScript/TSX, Python, Go, Rust, Solidity, Java, SCSS, Sass) and Markdown headings return nested symbols with their line ranges, other files return a head/tail preview, and every outline row is served, so its anchor can be read or edited immediately. An outline row shows a symbol label, not the file's line text: edit by anchor, and read the anchor first when a `replace_match` needs the exact `old_string`.
 
 | Parameter | Description |
 | --- | --- |
@@ -171,7 +171,7 @@ The extension registers eight tools: `read`, `replace`, `replace_match`, `insert
 | `after` | Lines to show after the anchor line (default `20`). |
 | `from` | 4-char anchor of the first line of an anchored range; requires `to`. |
 | `to` | 4-char anchor of the last line of an anchored range; requires `from`. |
-| `outline` | `true` returns an anchor-stamped structural outline instead of the file's lines (tree-sitter languages; a head/tail preview otherwise). Cannot be combined with `offset`/`limit`/`anchor`/`from`/`to`. |
+| `outline` | `true` returns an anchor-stamped structural outline instead of the file's lines (tree-sitter languages plus Markdown headings; a head/tail preview otherwise). Cannot be combined with `offset`/`limit`/`anchor`/`from`/`to`. |
 
 Output is capped at 2000 lines and 50KB. Paged output ends with a continuation hint, for example `[Showing lines 1-50 of 120. Use offset=51 to continue.]`.
 
