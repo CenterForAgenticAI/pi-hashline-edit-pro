@@ -7,6 +7,7 @@ import { setupIntegrationTest, withTempDir, toolError } from "../support/fixture
 const state = vi.hoisted(() => ({
   mode: "exit" as "exit" | "spawn-error" | "hang",
   child: null as { killed: boolean; kill(signal?: string): boolean } | null,
+  onSpawn: null as (() => void) | null,
 }));
 
 vi.mock("node:child_process", async (importOriginal) => {
@@ -28,6 +29,7 @@ vi.mock("node:child_process", async (importOriginal) => {
     spawn: () => {
       const child = new FakeChild();
       state.child = child;
+      state.onSpawn?.();
       setImmediate(() => {
         if (state.mode === "spawn-error") {
           child.emit("error", new Error("spawn rg ENOENT"));
@@ -51,6 +53,7 @@ function runGrep(dir: string, pattern: string): Promise<{ content: readonly unkn
 beforeEach(() => {
   state.mode = "exit";
   state.child = null;
+  state.onSpawn = null;
 });
 
 describe("anchor_grep ripgrep failure contract", () => {
@@ -81,15 +84,16 @@ describe("anchor_grep ripgrep failure contract", () => {
       const { ctx, getTool } = setupIntegrationTest(dir);
       vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
       try {
+        const spawned = new Promise<void>((resolve) => {
+          state.onSpawn = resolve;
+        });
         const pending = getTool("anchor_grep")
           .execute("g1", { pattern: "alpha", path: "sample.txt" }, undefined, undefined, ctx)
           .then((result: { content: readonly unknown[] }) => {
             const first = result.content[0] as { text?: string } | undefined;
             return first?.text ?? "";
           });
-        for (let attempt = 0; attempt < 400 && state.child === null; attempt += 1) {
-          await vi.advanceTimersByTimeAsync(5);
-        }
+        await spawned;
         expect(state.child).not.toBeNull();
         await vi.advanceTimersByTimeAsync(RG_TIMEOUT_MS);
         expect(await pending).toContain("[E_GREP_TIMEOUT]");
