@@ -100,26 +100,31 @@ export default function (pi: ExtensionAPI): void {
       await refreshEditTools();
     }
     if (gated) {
-      const active = pi.getActiveTools();
+      const active = pi.getActiveTools().filter((tool) => tool !== "edit");
       const gatedTools = readOnDisabledModels === "vanilla" ? ANCHOR_TOOL_NAMES.filter((tool) => tool !== "read") : ANCHOR_TOOL_NAMES;
       const next = active.filter((tool) => !gatedTools.includes(tool));
-      if (readOnDisabledModels === "vanilla" && baseAnchorTools.has("read") && !next.includes("read")) next.push("read");
       if (grepWasActive && !next.includes("grep")) next.push("grep");
       pi.setActiveTools(next);
       gateApplied = true;
       return;
     }
-    if (!gateApplied) return;
+    if (!gateApplied) {
+      const current = pi.getActiveTools();
+      const withoutEdit = current.filter((tool) => tool !== "edit");
+      if (withoutEdit.length !== current.length) pi.setActiveTools(withoutEdit);
+      return;
+    }
     gateApplied = false;
     const config = await readConfig();
     const enabled = ANCHOR_TOOL_NAMES.filter((tool) => {
+      if (tool === "read") return true;
       if (!baseAnchorTools.has(tool)) return false;
       if (tool === "replace_match") return config.replaceMatchEnabled !== false;
       if (tool === "copy" || tool === "move") return config.copyMoveEnabled !== false;
       if (tool === "anchor_grep") return config.anchorGrepEnabled === true;
       return true;
     });
-    let next = [...new Set([...pi.getActiveTools(), ...enabled])];
+    let next = [...new Set([...pi.getActiveTools().filter((tool) => tool !== "edit"), ...enabled])];
     if (enabled.includes("anchor_grep") && grepWasActive) next = next.filter((tool) => tool !== "grep");
     pi.setActiveTools(next);
   }

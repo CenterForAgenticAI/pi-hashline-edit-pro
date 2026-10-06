@@ -66,6 +66,38 @@ describe("disableOnModels gate", () => {
     });
   });
 
+  it("does not activate read for the vanilla policy when read is inactive", async () => {
+    await withTempDir("model-gate-read-inactive-", async (dir) => {
+      await writeConfig(dir, { autoRead: true, anchorGrepEnabled: true, disableOnModels: ["openai/*"] });
+      const withoutRead = ANCHOR_TOOLS.filter((tool) => tool !== "read");
+      const { pi, handlers, getActive } = makePiStub([...withoutRead, "grep", "edit"]);
+      register(pi);
+      const ctx = sessionContext(dir, OPENAI);
+      await handlers.get("session_start")!({}, ctx);
+      expect(getActive()).toEqual(["grep"]);
+      pi.setActiveTools([...getActive(), "edit"]);
+      await handlers.get("before_agent_start")!({}, ctx);
+      expect(getActive()).toEqual(["grep"]);
+    });
+  });
+
+  it("restores read when the gate stops even if read was inactive at session start", async () => {
+    await withTempDir("model-gate-read-restore-", async (dir) => {
+      await writeConfig(dir, { autoRead: true, anchorGrepEnabled: true, disableOnModels: ["openai/*"] });
+      const withoutRead = ANCHOR_TOOLS.filter((tool) => tool !== "read");
+      const { pi, handlers, getActive } = makePiStub([...withoutRead, "grep", "edit"]);
+      register(pi);
+      const ctx = sessionContext(dir, OPENAI);
+      await handlers.get("session_start")!({}, ctx);
+      expect(getActive()).toEqual(["grep"]);
+      await handlers.get("model_select")!(modelSelect(ANTHROPIC, OPENAI), ctx);
+      expect(getActive()).toEqual([...ANCHOR_TOOLS]);
+      pi.setActiveTools([...getActive(), "edit"]);
+      await handlers.get("before_agent_start")!({}, sessionContext(dir, ANTHROPIC));
+      expect(getActive()).toEqual([...ANCHOR_TOOLS]);
+    });
+  });
+
   it("swaps vanilla and anchored read as the gate lifts and returns", async () => {
     await withTempDir("model-gate-read-switch-", async (dir) => {
       await writeConfig(dir, { autoRead: true, anchorGrepEnabled: true, disableOnModels: ["openai/*"], readOnDisabledModels: "vanilla" });
