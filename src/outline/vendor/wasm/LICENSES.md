@@ -11,6 +11,8 @@ The `.wasm` files in this directory are compiled from the following MIT-licensed
 | `tree-sitter-rust.wasm` | [tree-sitter/tree-sitter-rust](https://github.com/tree-sitter/tree-sitter-rust) | Copyright (c) 2017 Maxim Sokolov |
 | `tree-sitter-solidity.wasm` | [JoranHonig/tree-sitter-solidity](https://github.com/JoranHonig/tree-sitter-solidity) | Copyright (c) 2020 Joran Honig |
 | `tree-sitter-java.wasm` | [tree-sitter/tree-sitter-java](https://github.com/tree-sitter/tree-sitter-java) | Copyright (c) 2017 Ayman Nadeem |
+| `tree-sitter-php.wasm` | [tree-sitter/tree-sitter-php](https://github.com/tree-sitter/tree-sitter-php) | Copyright (c) 2017 Josh Vera, GitHub; Copyright (c) 2019 Max Brunsfeld, Amaan Qureshi, Christian Frøystad, Caleb White |
+| `tree-sitter-blade.wasm` | [EmranMR/tree-sitter-blade](https://github.com/EmranMR/tree-sitter-blade) | Copyright (c) 2023 Emran Mashhadi Ramezan |
 | `tree-sitter-scss.wasm` | [tree-sitter-grammars/tree-sitter-scss](https://github.com/tree-sitter-grammars/tree-sitter-scss) | Copyright (c) 2024 Amaan Qureshi |
 | `tree-sitter-sass.wasm` | [bajrangCoder/tree-sitter-sass](https://github.com/bajrangCoder/tree-sitter-sass) | Copyright (c) 2024 Tree-sitter Community |
 

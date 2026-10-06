@@ -211,6 +211,43 @@ describe("discoverAutoReadAllFiles", () => {
       await cleanupCwd(cwd);
     }
   });
+
+  it("keeps Laravel view overrides under resources/views/vendor", async () => {
+    const cwd = await makeTempDir("pi-hashline-auto-read-all-vendor-views-");
+    try {
+      initGitRepo(cwd);
+      await mkdir(join(cwd, "vendor", "laravel"), { recursive: true });
+      await mkdir(join(cwd, "resources", "views", "vendor", "mail"), { recursive: true });
+      await writeFile(join(cwd, "vendor", "laravel", "framework.php"), "<?php\n");
+      await writeFile(join(cwd, "resources", "views", "vendor", "mail", "message.blade.php"), "@extends('layouts.app')\n");
+      await writeFile(join(cwd, "resources", "views", "home.blade.php"), "@extends('layouts.app')\n");
+
+      const discovery = await discoverAutoReadAllFiles(cwd, "full");
+      expect(discovery.files).toContain("resources/views/vendor/mail/message.blade.php");
+      expect(discovery.files).toContain("resources/views/home.blade.php");
+      expect(discovery.files).not.toContain("vendor/laravel/framework.php");
+      expect(discovery.skippedByName).toBe(1);
+    } finally {
+      await cleanupCwd(cwd);
+    }
+  });
+
+  it("skips Laravel IDE helper output", async () => {
+    const cwd = await makeTempDir("pi-hashline-auto-read-all-ide-helper-");
+    try {
+      initGitRepo(cwd);
+      await writeFile(join(cwd, "User.php"), "<?php\n");
+      await writeFile(join(cwd, "_ide_helper.php"), "<?php\n");
+      await writeFile(join(cwd, "_ide_helper_models.php"), "<?php\n");
+      await writeFile(join(cwd, ".phpstorm.meta.php"), "<?php\n");
+
+      const discovery = await discoverAutoReadAllFiles(cwd, "full");
+      expect(discovery.files).toEqual(["User.php"]);
+      expect(discovery.skippedByName).toBe(3);
+    } finally {
+      await cleanupCwd(cwd);
+    }
+  });
 });
 
 describe("buildAutoReadAllInjection", () => {

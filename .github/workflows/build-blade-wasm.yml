@@ -1,0 +1,25 @@
+name: build-blade-wasm
+
+on: workflow_dispatch
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: emscripten-core/setup-emsdk@v14
+        with:
+          version: 6.0.11
+      - name: Build tree-sitter-blade.wasm
+        run: |
+          curl -fsSL -o blade.tar.gz https://codeload.github.com/EmranMR/tree-sitter-blade/tar.gz/refs/tags/v0.12.3
+          mkdir blade
+          tar xzf blade.tar.gz --strip-components=1 -C blade
+          cd blade
+          npx -y tree-sitter-cli@0.25.6 build --wasm
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tree-sitter-blade-wasm
+          path: blade/tree-sitter-blade.wasm

@@ -81,12 +81,18 @@ export const AUTO_READ_ALL_EXCLUDED_NAMES = [
   "go.sum",
   "flake.lock",
   ".eslintcache",
+  "_ide_helper.php",
+  "_ide_helper_models.php",
+  ".phpstorm.meta.php",
 ];
 const EXCLUDED_NAME_SET = new Set(AUTO_READ_ALL_EXCLUDED_NAMES);
 const EXCLUDED_SEGMENT_SET = new Set(AUTO_READ_ALL_EXCLUDED_SEGMENTS);
 function isExcludedBySegment(path: string): boolean {
-  for (const segment of path.split("/")) {
-    if (EXCLUDED_SEGMENT_SET.has(segment.toLowerCase())) return true;
+  const lower = path.toLowerCase();
+  const vendorViews = lower.startsWith("resources/views/vendor/");
+  for (const segment of lower.split("/")) {
+    if (vendorViews && segment === "vendor") continue;
+    if (EXCLUDED_SEGMENT_SET.has(segment)) return true;
   }
   return false;
 }

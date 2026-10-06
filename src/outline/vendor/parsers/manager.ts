@@ -9,6 +9,8 @@ import { fileURLToPath } from "node:url";
 import { Parser, Language, type Node } from "web-tree-sitter";
 import type { SymbolInfo, ImportInfo } from "../types.js";
 import { extractJava, extractJavaImports } from "./java.js";
+import { extractPhp } from "./php.js";
+import { extractBlade } from "./blade.js";
 import { extractScss, extractScssImports } from "./scss.js";
 import { extractSass, extractSassImports } from "./sass.js";
 
@@ -70,6 +72,16 @@ const GRAMMAR_REGISTRY: Record<
     wasm: "tree-sitter-java.wasm",
     label: "Java",
   },
+  php: {
+    package: "tree-sitter-php",
+    wasm: "tree-sitter-php.wasm",
+    label: "PHP",
+  },
+  blade: {
+    package: "tree-sitter-blade",
+    wasm: "tree-sitter-blade.wasm",
+    label: "Blade",
+  },
   markdown: {
     package: "markdown",
     wasm: "markdown.wasm",
@@ -94,8 +106,14 @@ const EXTENSION_MAP: Record<string, string> = {
   ".java": "java",
   ".scss": "scss",
   ".sass": "sass",
+  ".blade.php": "blade",
+  ".php": "php",
   ".md": "markdown",
   ".markdown": "markdown",
+};
+
+const BASENAME_MAP: Record<string, string> = {
+  artisan: "php",
 };
 
 // ---- Singleton state ----
@@ -134,6 +152,9 @@ async function loadLanguage(key: string): Promise<Language> {
 /** Detect grammar key from a file path's extension. */
 export function detectLanguage(filePath: string): string | null {
   const lower = filePath.toLowerCase();
+  const base = lower.split(/[/\\]/).pop() ?? lower;
+  const named = BASENAME_MAP[base];
+  if (named !== undefined) return named;
   for (const [ext, key] of Object.entries(EXTENSION_MAP)) {
     if (lower.endsWith(ext)) return key;
   }
@@ -194,6 +215,10 @@ function extractSymbols(
       return extractSass(node, source, depth);
     case "java":
       return extractJava(node, source, depth);
+    case "php":
+      return extractPhp(node, source, depth);
+    case "blade":
+      return extractBlade(node, source, depth);
     case "markdown":
       return extractMarkdown(source);
     default:
