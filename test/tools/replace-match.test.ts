@@ -172,18 +172,29 @@ describe("replace_match", () => {
     });
   });
 
-  it("rejects remove_from/remove_to aliases", async () => {
+  it("accepts remove_from/remove_to aliases", async () => {
     await withTempFile("sample.txt", "alpha\nbeta\n", async ({ cwd, path }) => {
       const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
       const text = getText(await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx));
       const anchor = anchorFor(text, "beta");
-      await expect(
-        getTool("replace_match").execute(
-          "w1",
-          { remove_from: anchor, remove_to: anchor, old_string: "beta", new_string: "gamma" },
-          undefined, undefined, ctx,
-        ),
-      ).rejects.toThrow("[E_BAD_SHAPE]");
+      const result = await getTool("replace_match").execute(
+        "w1",
+        { remove_from: anchor, remove_to: anchor, old_string: "beta", new_string: "gamma" },
+        undefined, undefined, ctx,
+      );
+      expect(getText(result)).toContain("Successfully replaced");
+      expect(await readFile(path, "utf-8")).toBe("alpha\ngamma\n");
+    });
+  });
+
+  it("previews remove_from/remove_to aliases", async () => {
+    await withTempFile("sample.txt", "alpha\nbeta\n", async ({ cwd, path }) => {
+      const { ctx, readTool } = setupIntegrationTest(cwd);
+      const text = getText(await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx));
+      const anchor = anchorFor(text, "beta");
+      const preview = await replaceMatchPreview({ remove_from: anchor, remove_to: anchor, old_string: "beta", new_string: "gamma" }, cwd);
+      expect(preview).toHaveProperty("diff");
+      expect((preview as { diff: string }).diff).toContain("gamma");
       expect(await readFile(path, "utf-8")).toBe("alpha\nbeta\n");
     });
   });

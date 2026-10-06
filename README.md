@@ -190,6 +190,8 @@ Edge cases:
 | `remove_to` | 4-char anchor marking the LAST line to remove (inclusive). |
 | `text` | The exact text to write in place of the removed range, as one string: `""` deletes the range, `"\n"` is one blank line, and a trailing line break sets the last line's ending instead of adding a blank line. Embedded `\r\n`/`\r`/`\n` are preserved; JSON decoding happens once, before the tool; the tool writes the string it receives and never decodes — `\uXXXX` is the character, `\\uXXXX` the literal text. Legacy arrays are converted to text (elements joined with LF); prefer the string form. |
 
+`replace_from` and `replace_to` are accepted as aliases for `remove_from` and `remove_to`.
+
 Example: read showed `Hasu│old` and `arvm│old2`; to replace both:
 
 ```json
@@ -218,6 +220,8 @@ After a successful edit, the diff is capped at 50KB. A row over 50KB is shown as
 ### replace_match
 
 `replace_match` changes part of a line (or a range of lines) without retyping the rest. `replace_from` and `replace_to` are bare anchors marking the first and last line of the range; use the same anchor for a single line. `old_string` is the exact text to find inside that range, and `new_string` replaces every occurrence of it; every other character stays untouched. That makes it the tool for a change the request quotes as a substring: a whole-line `replace` has to reproduce the rest of the line, so a slipped character becomes a wrong byte, while `replace_match` leaves everything the request did not name untouched. It is enabled by default; turn Replace match off in `/hashline-config` to remove the tool.
+
+`remove_from` and `remove_to` are accepted as aliases for `replace_from` and `replace_to`.
 
 `old_string` is matched against the range's text (LF line breaks, no final terminator) and every non-overlapping occurrence is replaced, left to right. A missing match is refused with `[E_SUBSTRING_NOT_FOUND]` and the current `anchor│content` rows, so the retry needs no `read`. The two boundary anchors are verified against what was last shown; lines strictly inside the range are matched against the file as it currently stands on disk.
 

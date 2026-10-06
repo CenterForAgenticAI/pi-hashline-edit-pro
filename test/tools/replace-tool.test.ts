@@ -30,7 +30,7 @@ describe("regReplace", () => {
     expect(tool.parameters).toBe(editToolSchema);
   });
 
-  it("leaves replace_from/replace_to untouched in prepareArguments", () => {
+  it("normalizes the replace_from/replace_to aliases in prepareArguments", () => {
     const { pi, getTool } = makeFakePiRegistry();
     regReplace(pi);
     const tool = getTool("replace");
@@ -38,10 +38,10 @@ describe("regReplace", () => {
       replace_from: "ATIm", replace_to: "BeSR",
       text: ["new"],
     });
-    expect(result.replace_from).toBe("ATIm");
-    expect(result.replace_to).toBe("BeSR");
-    expect(result.remove_from).toBeUndefined();
-    expect(result.remove_to).toBeUndefined();
+    expect(result.remove_from).toBe("ATIm");
+    expect(result.remove_to).toBe("BeSR");
+    expect(result.replace_from).toBeUndefined();
+    expect(result.replace_to).toBeUndefined();
   });
 
 
@@ -69,25 +69,38 @@ describe("regReplace", () => {
     });
   });
 
-  it("rejects the replace_from/replace_to aliases", async () => {
-    await withTempFile("sample.txt", "aaa\nbbb\nccc\n", async ({ cwd }) => {
+  it("applies the replace_from/replace_to aliases", async () => {
+    await withTempFile("sample.txt", "aaa\nbbb\nccc\n", async ({ cwd, path }) => {
       const { pi, getTool } = makeFakePiRegistry();
       regReplace(pi);
       const tool = getTool("replace");
       const hashes = await lineHashes("aaa\nbbb\nccc\n", join(cwd, "sample.txt"));
 
-      await expect(
-        tool.execute(
-          "e1",
-          {
-            replace_from: hashes[1]!, replace_to: hashes[1]!,
-            text: ["BeSR"],
-          },
-          undefined,
-          undefined,
-          { cwd } as any,
-        ),
-      ).rejects.toThrow(/\[E_BAD_SHAPE\]/);
+      const result = await tool.execute(
+        "e1",
+        {
+          replace_from: hashes[1]!, replace_to: hashes[1]!,
+          text: ["BeSR"],
+        },
+        undefined,
+        undefined,
+        { cwd } as any,
+      );
+
+      expect(result.content[0].text).toContain("Successfully replaced in sample.txt");
+      expect(await readFile(path, "utf-8")).toBe("aaa\nBeSR\nccc\n");
+    });
+  });
+
+  it("previews the replace_from/replace_to aliases", async () => {
+    await withTempFile("sample.txt", "aaa\nbbb\nccc\n", async ({ cwd }) => {
+      const hashes = await lineHashes("aaa\nbbb\nccc\n", join(cwd, "sample.txt"));
+      const preview = await compPreview(
+        { replace_from: hashes[1]!, replace_to: hashes[1]!, text: ["BeSR"] },
+        cwd,
+      );
+      expect(preview).toHaveProperty("diff");
+      expect((preview as { diff: string }).diff).toContain("BeSR");
     });
   });
 

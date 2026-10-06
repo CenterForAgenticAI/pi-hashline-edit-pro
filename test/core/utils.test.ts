@@ -218,6 +218,12 @@ describe("makePrepareArguments", () => {
     const result = prepare({ remove_from: "a", from: "b", to: "c" });
     expect(result).toEqual({ remove_from: "a", from: "b", to: "c" });
   });
+  it("canonicalizes anchor aliases when a tool pair is given", () => {
+    const removePrepare = makePrepareArguments("remove");
+    expect(removePrepare({ replace_from: "a", replace_to: "b", text: "x" })).toEqual({ remove_from: "a", remove_to: "b", text: "x" });
+    const replacePrepare = makePrepareArguments("replace");
+    expect(replacePrepare({ remove_from: "a", remove_to: "b", old_string: "x", new_string: "y" })).toEqual({ replace_from: "a", replace_to: "b", old_string: "x", new_string: "y" });
+  });
 });
 
 describe("truncateToBytes", () => {

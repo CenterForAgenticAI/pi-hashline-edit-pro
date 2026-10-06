@@ -11,9 +11,10 @@ import {
   assertReplaceMatchReq,
   buildReplaceMatchToolSchema,
   getReplaceMatchInput,
+  normReq,
   type ReplaceMatchReq,
 } from "./payload-contract";
-import { literalEscapeHints, splitLines } from "./utils";
+import { literalEscapeHints, makePrepareArguments, splitLines } from "./utils";
 import { toLF } from "./normalize";
 import { MAX_RANGE_STALE_LINES } from "./constants";
 import {
@@ -110,7 +111,7 @@ export function buildReplaceMatchEdit(
 
 export async function replaceMatchPreview(request: unknown, cwd: string, signal?: AbortSignal): Promise<RPreview> {
   try {
-    const normalized: unknown = request;
+    const normalized = normReq(request, "replace");
     assertReplaceMatchReq(normalized);
     const req = normalized;
     const { refs, warnings } = parseMatchAnchors(req);
@@ -158,6 +159,7 @@ export function buildReplaceMatchToolDef(flags: EditToolFlags = DEFAULT_EDIT_FLA
     promptSnippet: prompted.snippet,
     promptGuidelines: prompted.guidelines,
     ...editToolBase,
+    prepareArguments: makePrepareArguments("replace"),
     parameters: buildReplaceMatchToolSchema(flags.requirePath),
     outputSchema: editResultSchema,
     renderCall: makeRenderCall(replaceMatchPreview, {
@@ -168,7 +170,7 @@ export function buildReplaceMatchToolDef(flags: EditToolFlags = DEFAULT_EDIT_FLA
     renderResult: editRenderResultWrapper,
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
       return withStructuredErrors(signal, { diff: "" }, () => withAnchorSession(ctx, async () => {
-        const normalized: unknown = params;
+        const normalized = normReq(params, "replace");
         assertReplaceMatchReq(normalized);
         const req = normalized;
         let refs: MatchRefs;

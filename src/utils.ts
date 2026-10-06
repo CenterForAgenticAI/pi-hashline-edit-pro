@@ -8,15 +8,31 @@ export function isRec(value: unknown): value is Record<string, unknown> {
 }
 
 
-export function normalizeRequest(input: unknown): unknown {
+export type AnchorPairName = "remove" | "replace";
+
+const ANCHOR_ALIASES: Record<AnchorPairName, Record<string, string>> = {
+  remove: { replace_from: "remove_from", replace_to: "remove_to" },
+  replace: { remove_from: "replace_from", remove_to: "replace_to" },
+};
+
+function normalizeAnchorAliases(record: Record<string, unknown>, pair: AnchorPairName): void {
+  for (const [alias, canonical] of Object.entries(ANCHOR_ALIASES[pair])) {
+    if (!(alias in record)) continue;
+    if (record[canonical] === undefined) record[canonical] = record[alias];
+    delete record[alias];
+  }
+}
+
+export function normalizeRequest(input: unknown, pair?: AnchorPairName): unknown {
   if (!isRec(input)) return input;
   const record: Record<string, unknown> = { ...input };
   normalizeEditLines(record);
+  if (pair !== undefined) normalizeAnchorAliases(record, pair);
   return record;
 }
 
-export function makePrepareArguments(): (args: unknown) => any {
-  return normalizeRequest;
+export function makePrepareArguments(pair?: AnchorPairName): (args: unknown) => any {
+  return (args) => normalizeRequest(args, pair);
 }
 
 export function splitLines(text: string): string[] {

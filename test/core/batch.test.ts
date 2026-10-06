@@ -165,4 +165,20 @@ describe("planAssistantMessage", () => {
       expect(batchMemberFor("c2")).toBeUndefined();
     });
   });
+
+  it("groups aliased anchor fields for replace and replace_match", async () => {
+    await withTempFile("sample.txt", "aaa\nbbb\nccc\n", async ({ cwd, path }) => {
+      setupIntegrationTest(cwd);
+      const hashes = await lineHashes("aaa\nbbb\nccc\n", path);
+      await planAssistantMessage(
+        assistantMessage([
+          toolCall("c1", "replace", { replace_from: hashes[0], replace_to: hashes[0], text: ["x"] }),
+          toolCall("c2", "replace_match", { remove_from: hashes[2], remove_to: hashes[2], old_string: "ccc", new_string: "y" }),
+        ]),
+        cwd,
+      );
+      expect(batchMemberFor("c1")).toMatchObject({ display: 1, order: 1, size: 2, last: false });
+      expect(batchMemberFor("c2")).toMatchObject({ display: 1, order: 2, size: 2, last: true });
+    });
+  });
 });

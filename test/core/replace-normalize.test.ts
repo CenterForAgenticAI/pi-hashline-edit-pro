@@ -200,3 +200,37 @@ describe("normReq - line fields", () => {
 		expect(result.text).toBe("a\nb");
 	});
 });
+
+describe("normReq - anchor aliases", () => {
+  it("maps replace_from/replace_to onto remove_from/remove_to for the replace shape", () => {
+    const result = normReq({ replace_from: "ATIm", replace_to: "BeSR", text: "new" }, "remove") as Record<string, unknown>;
+    expect(result.remove_from).toBe("ATIm");
+    expect(result.remove_to).toBe("BeSR");
+    expect(result.replace_from).toBeUndefined();
+    expect(result.replace_to).toBeUndefined();
+  });
+
+  it("maps remove_from/remove_to onto replace_from/replace_to for the replace_match shape", () => {
+    const result = normReq({ remove_from: "ATIm", remove_to: "BeSR", old_string: "a", new_string: "b" }, "replace") as Record<string, unknown>;
+    expect(result.replace_from).toBe("ATIm");
+    expect(result.replace_to).toBe("BeSR");
+    expect(result.remove_from).toBeUndefined();
+    expect(result.remove_to).toBeUndefined();
+  });
+
+  it("keeps the canonical field when both spellings are present", () => {
+    const result = normReq({ remove_from: "ATIm", replace_from: "ZZZZ", remove_to: "BeSR", replace_to: "YYYY", text: "new" }, "remove") as Record<string, unknown>;
+    expect(result.remove_from).toBe("ATIm");
+    expect(result.remove_to).toBe("BeSR");
+    expect(result.replace_from).toBeUndefined();
+    expect(result.replace_to).toBeUndefined();
+  });
+
+  it("leaves both spellings untouched without a pair", () => {
+    const result = normReq({ replace_from: "ATIm", replace_to: "BeSR", text: "new" }) as Record<string, unknown>;
+    expect(result.replace_from).toBe("ATIm");
+    expect(result.replace_to).toBe("BeSR");
+    expect(result.remove_from).toBeUndefined();
+    expect(result.remove_to).toBeUndefined();
+  });
+});

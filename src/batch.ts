@@ -233,7 +233,7 @@ export function resetBatchStateForTests(): void {
 
 function normalizeEditArgs(name: string, args: unknown): NormalizedEditArgs | undefined {
   if (!isRec(args)) return undefined;
-  const normalized = normReq(args);
+  const normalized = normReq(args, name === "replace_match" ? "replace" : name === "replace" ? "remove" : undefined);
   if (!isRec(normalized)) return undefined;
   const path = typeof normalized.path === "string" ? normalized.path : undefined;
   if (name === "copy" || name === "move") {
@@ -787,7 +787,7 @@ async function finishBatch(member: PlannedMember, signal?: AbortSignal): Promise
     if (!planned) continue;
     if (executedOrders.has(planned.order)) continue;
     try {
-      const normalized = normReq(planned.args);
+      const normalized = normReq(planned.args, planned.kind === "replace_match" ? "replace" : planned.kind === "replace" ? "remove" : undefined);
       if (planned.kind === "insert") assertInsertReq(normalized);
       else if (planned.kind === "replace") assertReq(normalized);
       else if (planned.kind === "replace_match") assertReplaceMatchReq(normalized);

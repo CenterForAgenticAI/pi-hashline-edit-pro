@@ -85,7 +85,7 @@ export { normalizeRequest as normReq } from "./utils";
 export function getPreviewInput(args: unknown): { path?: string; remove_from: string; remove_to: string; text: string } | null {
   let normalized: unknown;
   try {
-    normalized = normalizeRequest(args);
+    normalized = normalizeRequest(args, "remove");
   } catch {
     return null;
   }
@@ -196,7 +196,12 @@ export function assertReplaceMatchReq(request: unknown): asserts request is Repl
 }
 
 export function getReplaceMatchInput(args: unknown): { path?: string; replace_from: string; replace_to: string; old_string: string; new_string: string } | null {
-  const normalized: unknown = args;
+  let normalized: unknown;
+  try {
+    normalized = normalizeRequest(args, "replace");
+  } catch {
+    return null;
+  }
   if (!isRec(normalized)) return null;
   if (
     typeof normalized.replace_from !== "string" ||
