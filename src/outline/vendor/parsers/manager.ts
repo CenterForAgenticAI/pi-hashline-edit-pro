@@ -257,6 +257,7 @@ function extractJavaScriptLike(
       child.type === "export_statement"
         ? findChildByType(child, [
             "class_declaration",
+            "class",
             "abstract_class_declaration",
             "interface_declaration",
             "enum_declaration",
@@ -288,8 +289,11 @@ function extractJavaScriptLike(
 
 const JS_SYMBOL_TYPES: Record<string, string> = {
   function_declaration: "function",
+  function_expression: "function",
+  arrow_function: "arrow_function",
   method_definition: "method",
   class_declaration: "class",
+  class: "class",
   interface_declaration: "interface",
   enum_declaration: "enum",
   type_alias_declaration: "type",
@@ -298,13 +302,17 @@ const JS_SYMBOL_TYPES: Record<string, string> = {
   variable_declaration: "variable",
 };
 
+function isFunctionNode(node: Node): boolean {
+  return node.type === "arrow_function" || node.type === "function_expression" || node.type === "function";
+}
+
 function extractJSChild(
   child: Node,
   source: string,
 ): SymbolInfo | null {
   const type = child.type;
 
-  // Arrow function assigned to const
+  // Top-level declarations: functions, arrow functions, and variables
   if (
     type === "lexical_declaration" ||
     type === "variable_declaration"
@@ -316,7 +324,7 @@ function extractJSChild(
       const name = fieldChildText(d, "name", source);
       if (!name) continue;
       const value = d.childForFieldName("value");
-      if (value && (value.type === "arrow_function" || value.type === "function")) {
+      if (value && isFunctionNode(value)) {
         const [sl, el] = nodeRange(d);
         declarators.push({
           name,
@@ -324,6 +332,14 @@ function extractJSChild(
           startLine: sl,
           endLine: el,
           detail: extractFnDetail(value, source),
+        });
+      } else {
+        const [sl, el] = nodeRange(d);
+        declarators.push({
+          name,
+          type: "variable",
+          startLine: sl,
+          endLine: el,
         });
       }
     }
@@ -342,15 +358,21 @@ function extractJSChild(
 
   // Export statement — unwrap
   if (type === "export_statement") {
+    const isDefault = child.text.startsWith("export default");
     for (let j = 0; j < child.namedChildCount; j++) {
       const inner = child.namedChild(j);
       if (inner) {
         const result = extractJSChild(inner, source);
-        if (result) return result;
+        if (result) {
+          if (isDefault && result.name === "<anonymous>") result.name = "default";
+          return result;
+        }
       }
     }
     return null;
   }
+
+  if (type === "expression_statement") return testCallSymbol(child, source);
 
   const symbolType = JS_SYMBOL_TYPES[type];
   if (!symbolType) return null;
@@ -365,11 +387,47 @@ function extractJSChild(
 
   // For functions/methods, try to get the parameters as detail
   let detail: string | undefined;
-  if (type === "function_declaration" || type === "method_definition") {
+  if (type === "function_declaration" || type === "function_expression" || type === "method_definition" || type === "arrow_function") {
     detail = extractFnDetail(child, source);
   }
 
   return { name, type: symbolType, startLine: sl, endLine: el, detail };
+}
+
+const TEST_CALLEES = new Set(["describe", "test", "it", "suite", "context", "specify"]);
+
+function testCallSymbol(child: Node, source: string): SymbolInfo | null {
+  const expr = child.namedChildCount > 0 ? child.namedChild(0) : null;
+  if (!expr || expr.type !== "call_expression") return null;
+  const fn = expr.childForFieldName("function");
+  const args = expr.childForFieldName("arguments");
+  if (!fn || !args) return null;
+  const callee = (source.slice(fn.startIndex, fn.endIndex).split(".")[0] ?? "").trim();
+  if (!TEST_CALLEES.has(callee)) return null;
+  const first = args.namedChildren[0];
+  if (!first || first.type !== "string") return null;
+  const name = source.slice(first.startIndex, first.endIndex).replace(/^["'`]|["'`]$/g, "");
+  const [sl, el] = nodeRange(expr);
+  const symbol: SymbolInfo = { name, type: callee, startLine: sl, endLine: el };
+  const children = extractTestCalls(expr, source);
+  if (children.length > 0) symbol.children = children;
+  return symbol;
+}
+
+function extractTestCalls(call: Node, source: string): SymbolInfo[] {
+  const results: SymbolInfo[] = [];
+  const args = call.childForFieldName("arguments");
+  for (const arg of args?.namedChildren ?? []) {
+    if (arg.type !== "arrow_function" && arg.type !== "function_expression" && arg.type !== "function") continue;
+    const body = arg.childForFieldName("body");
+    if (!body || body.type !== "statement_block") continue;
+    for (const stmt of body.namedChildren) {
+      if (stmt.type !== "expression_statement") continue;
+      const inner = testCallSymbol(stmt, source);
+      if (inner) results.push(inner);
+    }
+  }
+  return results;
 }
 
 function extractFnDetail(

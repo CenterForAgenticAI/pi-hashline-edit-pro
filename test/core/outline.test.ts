@@ -129,6 +129,34 @@ describe("buildFileOutline", () => {
 		expect(result.text).toContain("Aaaa│function run () [limit 3]");
 	});
 
+	it("outlines anonymous default exports", async () => {
+		const content = ["export default function (pi) {", "  return pi;", "}", "export default class {", "  run() {}", "}", ""].join("\n");
+		const result = await buildFileOutline({ displayPath: "entry.ts", content, hashes: HASHES });
+		expect(result.text).toContain("Aaaa│function default (pi) [limit 3]");
+		expect(result.text).toContain("Dddd│class default (1 children) [limit 3]");
+		expect(result.text).toContain("Eeee│  method run () [limit 1]");
+	});
+
+	it("outlines function expressions and variable declarators", async () => {
+		const content = ["const config = defineConfig({", "  run() {},", "});", "const handler = function () {", "  return 1;", "};", ""].join("\n");
+		const result = await buildFileOutline({ displayPath: "config.ts", content, hashes: HASHES });
+		expect(result.text).toContain("Aaaa│variable config [limit 3]");
+		expect(result.text).toContain("Dddd│function handler () [limit 3]");
+	});
+
+	it("outlines an arrow default export", async () => {
+		const result = await buildFileOutline({ displayPath: "hook.ts", content: "export default () => {\n  return 1;\n};\n", hashes: HASHES });
+		expect(result.text).toContain("Aaaa│arrow_function default () [limit 3]");
+	});
+
+	it("outlines test calls", async () => {
+		const content = ['describe("math", () => {', '  it("adds", () => {', "    expect(1 + 1).toBe(2);", "  });", '  test("subtracts", () => {});', "});", ""].join("\n");
+		const result = await buildFileOutline({ displayPath: "math.test.ts", content, hashes: HASHES });
+		expect(result.text).toContain("Aaaa│describe math (2 children) [limit 6]");
+		expect(result.text).toContain("Bbbb│  it adds [limit 3]");
+		expect(result.text).toContain("Eeee│  test subtracts [limit 1]");
+	});
+
 	it("falls back to a preview for unsupported files", async () => {
 		const result = await buildFileOutline({ displayPath: "notes.txt", content: "alpha\nbeta\n", hashes: ["Aaaa", "Bbbb"] });
 		expect(result.text).toContain("=== notes.txt — 2 lines ===");
