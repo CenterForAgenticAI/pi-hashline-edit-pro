@@ -3,8 +3,8 @@ import { dirname } from "node:path";
 import { configPath } from "./paths";
 import { errCode, isRec } from "./utils";
 import { writeAtomic } from "./fs-write";
-export type AutoReadAllMode = "off" | "outline" | "git" | "full";
-const AUTO_READ_ALL_MODES: AutoReadAllMode[] = ["off", "outline", "git", "full"];
+export type AutoReadAllMode = "off" | "outline(git)" | "outline" | "git" | "full";
+const AUTO_READ_ALL_MODES: AutoReadAllMode[] = ["off", "outline(git)", "outline", "git", "full"];
 
 export type ReadOnDisabledModels = "remove" | "vanilla";
 const READ_ON_DISABLED_MODELS: ReadOnDisabledModels[] = ["remove", "vanilla"];
@@ -42,7 +42,7 @@ const DEFAULT_CONFIG: Config = {
 };
 
 function parseAutoReadAllMode(value: unknown): AutoReadAllMode {
-  if (value === "off" || value === "outline" || value === "git" || value === "full") return value;
+  if (value === "off" || value === "outline(git)" || value === "outline" || value === "git" || value === "full") return value;
   if (value === "on" || value === true) return "full";
   if (value === false) return "off";
   return DEFAULT_CONFIG.autoReadAll ?? "off";

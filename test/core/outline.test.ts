@@ -28,8 +28,8 @@ describe("renderSymbolOutline", () => {
 			symbols,
 		});
 		expect(result.text).toContain("=== src/app.ts (TypeScript) — 5 lines ===");
-		expect(result.text).toContain("Bbbb│class App (1 children) [2:5]");
-		expect(result.text).toContain("Cccc│  method run (speed: number) [3:4]");
+		expect(result.text).toContain("Bbbb│class App (1 children) [limit 4]");
+		expect(result.text).toContain("Cccc│  method run (speed: number) [limit 2]");
 		expect(result.servedHashes).toEqual(["Bbbb", "Cccc"]);
 		expect(result.truncated).toBe(false);
 	});
@@ -119,14 +119,14 @@ describe("buildFileOutline", () => {
 		const content = ["export class App {", "  run(speed: number) {", "    return speed;", "  }", "}", ""].join("\n");
 		const result = await buildFileOutline({ displayPath: "app.ts", content, hashes: HASHES });
 		expect(result.text).toContain("(TypeScript)");
-		expect(result.text).toContain("Aaaa│class App (1 children) [1:5]");
-		expect(result.text).toContain("Bbbb│  method run (speed: number) [2:4]");
+		expect(result.text).toContain("Aaaa│class App (1 children) [limit 5]");
+		expect(result.text).toContain("Bbbb│  method run (speed: number) [limit 3]");
 		expect(result.servedHashes).toEqual(["Aaaa", "Bbbb"]);
 	});
 
 	it("outlines exported declarations", async () => {
 		const result = await buildFileOutline({ displayPath: "app.ts", content: "export function run() {\n  return 1;\n}\n", hashes: ["Aaaa", "Bbbb"] });
-		expect(result.text).toContain("Aaaa│function run () [1:3]");
+		expect(result.text).toContain("Aaaa│function run () [limit 3]");
 	});
 
 	it("falls back to a preview for unsupported files", async () => {

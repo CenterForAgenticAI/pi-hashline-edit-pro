@@ -159,19 +159,13 @@ The extension registers eight tools: `read`, `replace`, `replace_match`, `insert
 
 ### read
 
-`read` returns a text file with every line prefixed by `anchor│content`. The anchor is the line's address. A read can also be addressed by anchors: `anchor` with `before`/`after` centers a window on a served line, and `from`+`to` reads an inclusive anchored range; anchor addressing is stable across edits and returns the same editable rows. Pass `outline: true` for an anchor-stamped structural outline of a large file instead of its lines: tree-sitter languages (JavaScript/TypeScript/TSX, Python, Go, Rust, Solidity, Java, SCSS, Sass) and Markdown headings return nested symbols with their line ranges, other files return a head/tail preview, and every outline row is served, so its anchor can be read or edited immediately. An outline row shows a symbol label, not the file's line text: edit by anchor, and read the anchor first when a `replace_match` needs the exact `old_string`.
+`read` returns a text file with every line prefixed by `anchor│content`. The anchor is the line's address. `offset` accepts a 1-indexed line number or a served anchor; with an anchor, `limit` counts the lines to return after it. Anchor offsets are stable across edits and return the same editable rows.
 
 | Parameter | Description |
 | --- | --- |
 | `path` | Path to the file (relative or absolute). |
-| `offset` | Line number to start reading from (1-indexed). |
-| `limit` | Maximum number of lines to return. |
-| `anchor` | 4-char anchor of the line to center the read on; combine with `before`/`after`. Cannot be combined with `offset`/`limit`/`from`/`to`. |
-| `before` | Lines to show before the anchor line (default `0`). |
-| `after` | Lines to show after the anchor line (default `20`). |
-| `from` | 4-char anchor of the first line of an anchored range; requires `to`. |
-| `to` | 4-char anchor of the last line of an anchored range; requires `from`. |
-| `outline` | `true` returns an anchor-stamped structural outline instead of the file's lines (tree-sitter languages plus Markdown headings; a head/tail preview otherwise). Cannot be combined with `offset`/`limit`/`anchor`/`from`/`to`. |
+| `offset` | Line number (1-indexed) or a served anchor to start reading from. |
+| `limit` | Maximum number of lines to return from `offset`. |
 
 Output is capped at 2000 lines and 50KB. Paged output ends with a continuation hint, for example `[Showing lines 1-50 of 120. Use offset=51 to continue.]`.
 
@@ -342,15 +336,15 @@ Auto-read keeps the same 50KB and 2000-line budget as `read`. Auto-read and Diff
 
 ## Auto-read all
 
-Auto-read all is off by default and has four modes, selected in `/hashline-config`: `off` injects nothing; `outline` discovers every file like `full` but attaches an anchor-stamped structural outline per file instead of its lines; `git` uses `git ls-files` only and attaches full contents, injecting nothing when the working directory is not a git repository; and `full` discovers every file in the working directory that is not git-ignored (`git ls-files`, falling back to `ripgrep`, then to a directory walk) and attaches full contents. On the first turn of a session, the extension discovers the files, reads each one, and attaches the resulting `anchor│content` rows to the conversation as one extension message before the model answers. Those anchors are served exactly like `read` output, so the model can `replace` and `insert` immediately without calling `read` first. The message is injected once per session; resumed, forked, and cloned sessions that already contain it skip the injection.
+Auto-read all is off by default and has five modes, selected in `/hashline-config`: `off` injects nothing; `outline(git)` uses `git ls-files` only and attaches an anchor-stamped structural outline per file; `outline` discovers every file like `full` but attaches outlines; `git` uses `git ls-files` only and attaches full contents; and `full` discovers every file in the working directory that is not git-ignored (`git ls-files`, falling back to `ripgrep`, then to a directory walk) and attaches full contents. `outline(git)` and `git` inject nothing when the working directory is not a git repository. On the first turn of a session, the extension discovers the files, reads each one, and attaches the resulting `anchor│content` rows to the conversation as one extension message before the model answers. Those anchors are served exactly like `read` output, so the model can `replace` and `insert` immediately without calling `read` first. The message is injected once per session; resumed, forked, and cloned sessions that already contain it skip the injection.
 
 Files are filtered before injection: symlinks, directories, image extensions (including SVG), binary files (a NUL byte in the first 8KB), files over 200KB, any path with a vendored segment (vendor, node_modules, bower_components, third_party, thirdparty, jspm_packages, .venv, venv, site-packages, __pycache__, .tox, .gradle, .terraform, Pods, Carthage, DerivedData, coreui, coreui-icons, case-insensitive), and vendored or generated names and patterns (*.min.js, *.min.css, *.min.mjs, *-min.js, *-min.css, *.bundle.*, *.chunk.*, *.umd.js, *.map, *.lock, package-lock.json, yarn.lock, composer.lock, Gemfile.lock, Cargo.lock, poetry.lock, Pipfile.lock, go.sum, flake.lock, *.generated.*, *.gen.*, *_pb2.py, *.pb.go, *.g.dart, *.freezed.dart, *.designer.cs, *.g.cs, *.snap, .eslintcache, coreui-icons.*, coreui.css) are skipped. The attachment stops at 500 files or at a byte budget derived from the model context window (200KB floor, 2MB ceiling), and it never drops below one file. Skipped and not-attached files are named at the end of the message so the model can `read` them on demand. A model matched by `disableOnModels` skips the injection entirely.
 
-Each attached file starts with a header (`=== path ===` in `git` and `full` modes, `=== path (language) — lines ===` in `outline` mode) followed by its anchor rows. Edit directly from the attachment with replace and insert, so no `read` is needed. `git` and `full` attach files whole; `outline` attaches each file's structural outline within the budget.
+Each attached file starts with a header (`=== path ===` in `git` and `full` modes, `=== path (language) — lines ===` in `outline` and `outline(git)` modes) followed by its anchor rows. Edit directly from the attachment with replace and insert, so no `read` is needed. `git` and `full` attach files whole; `outline` and `outline(git)` attach each file's structural outline within the budget.
 
 A coverage line after the header reports the complete count. A `[files complete: [...] omitted: [...]]` line right after it lists every attached complete file and omitted file in one place. Check that line instead of scanning sections.
 
-The setting lives in `/hashline-config` as Auto-read all and in `config.json` as `autoReadAll` (`"off"`, `"outline"`, `"git"`, or `"full"`; older configs with `"on"` or `true` are read as `"full"`, and `false` as `"off"`). Extra folders and files are ignored via `/hashline-config` as Ignore folders/files and via `config.json` as `autoReadAllIgnore` (array of folder names, file names, or globs, for example `["docs", "scratch.md", "*.test.ts"]`). A single-segment entry skips any folder or file with that exact name (case-insensitive); an entry containing glob characters (`*`, `?`, `[`, `]`, `{`, `}`) is matched as a glob against the file name, or against the whole relative path when it also contains a slash, with the same syntax as `anchor_grep`'s `glob`; any other entry with a slash (for example `"src/tmp"`) skips that path. Custom ignores are counted with the vendor/name/pattern skips in the footer.
+The setting lives in `/hashline-config` as Auto-read all and in `config.json` as `autoReadAll` (`"off"`, `"outline(git)"`, `"outline"`, `"git"`, or `"full"`; older configs with `"on"` or `true` are read as `"full"`, and `false` as `"off"`). Extra folders and files are ignored via `/hashline-config` as Ignore folders/files and via `config.json` as `autoReadAllIgnore` (array of folder names, file names, or globs, for example `["docs", "scratch.md", "*.test.ts"]`). A single-segment entry skips any folder or file with that exact name (case-insensitive); an entry containing glob characters (`*`, `?`, `[`, `]`, `{`, `}`) is matched as a glob against the file name, or against the whole relative path when it also contains a slash, with the same syntax as `anchor_grep`'s `glob`; any other entry with a slash (for example `"src/tmp"`) skips that path. Custom ignores are counted with the vendor/name/pattern skips in the footer.
 
 ## Configuration
 
@@ -380,7 +374,7 @@ Settings live in `~/.config/pi-hashline-edit-pro/config.json`, created when a se
 | Key | `/hashline-config` label | Default | Effect |
 | --- | --- | --- | --- |
 | `autoRead` | Auto-read | `true` | Append the auto-read block after `write` and show post-edit diffs. |
-| `autoReadAll` | Auto-read all | `"off"` | Attachment mode: `"off"`, `"outline"` (anchor-stamped per-file outlines), `"git"` (git-tracked files, full contents), or `"full"` (every discovered file, full contents). |
+| `autoReadAll` | Auto-read all | `"off"` | Attachment mode: `"off"`, `"outline(git)"` (git-tracked files, anchor-stamped per-file outlines), `"outline"` (every discovered file, anchor-stamped per-file outlines), `"git"` (git-tracked files, full contents), or `"full"` (every discovered file, full contents). |
 | `autoReadAllIgnore` | Ignore folders/files | `[]` | Extra folder names, file names, or globs skipped by auto-read all. |
 | `anchorGrepEnabled` | Anchor grep | `true` | Register `anchor_grep` and disable the built-in grep while it is on. |
 | `copyMoveEnabled` | Copy/move | `true` | Offer the `copy` and `move` tools; when off, both are removed from the active tools. |
@@ -574,7 +568,7 @@ Set `PI_HASHLINE_DEBUG=1` to show an "active" notification at session start.
 
 - [RimuruW](https://github.com/RimuruW), original `pi-hashline-edit` and the strict-semantics policy
 - [can1357](https://github.com/can1357), original [oh-my-pi](https://github.com/can1357/oh-my-pi) implementation and the hashline concept
-- [HanzCEO](https://github.com/HanzCEO), [pi-codebase-reader](https://github.com/HanzCEO/pi-codebase-reader): vendored tree-sitter parsers and outline extraction (Apache-2.0), exposed through `read({ outline: true })`
+- [HanzCEO](https://github.com/HanzCEO), [pi-codebase-reader](https://github.com/HanzCEO/pi-codebase-reader): vendored tree-sitter parsers and outline extraction (Apache-2.0), exposed through the auto-read-all `outline` and `outline(git)` modes
 
 ## License
 

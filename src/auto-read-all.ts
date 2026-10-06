@@ -30,7 +30,7 @@ const HEADER =
   "[hashline auto-read-all] Every non-ignored project file is attached below as `=== path ===` then `anchor│content` rows with live anchors.\nEdit directly from the attachment with replace and insert; do not call read for files in [files complete: ...].\nFiles listed as omitted or not attached can be read normally.\nAnchors are case-sensitive and stay valid until their line is edited.";
 
 const OUTLINE_HEADER =
-  "[hashline auto-read-all] Every non-ignored project file is outlined below as `=== path (language) — lines ===` then `anchor│symbol` rows with live anchors.\nEdit a row's anchor with replace or insert, or read by that anchor for the surrounding lines; do not call read for files in [files complete: ...].\nFiles listed as omitted or not attached can be read normally.\nAnchors are case-sensitive and stay valid until their line is edited.";
+  "[hashline auto-read-all] Every non-ignored project file is outlined below as `=== path (language) — lines ===` then `anchor│symbol` rows with live anchors.\nEdit a row's anchor with replace or insert, or read from it with `offset` set to that anchor and the row's `limit`; do not call read for files in [files complete: ...].\nFiles listed as omitted or not attached can be read normally.\nAnchors are case-sensitive and stay valid until their line is edited.";
 
 const IMAGE_EXTENSIONS = new Set([
   ".avif",
@@ -298,13 +298,21 @@ async function forEachLimit<T>(items: T[], limit: number, work: (item: T) => Pro
   await Promise.all(workers);
 }
 
+function isGitOnlyAutoReadAll(mode: AutoReadAllMode): boolean {
+  return mode === "git" || mode === "outline(git)";
+}
+
+export function isOutlineAutoReadAll(mode: AutoReadAllMode): boolean {
+  return mode === "outline" || mode === "outline(git)";
+}
+
 export async function discoverAutoReadAllFiles(cwd: string, mode: AutoReadAllMode = "off", ignoreDirs: readonly string[] = []): Promise<AutoReadAllDiscovery> {
   if (mode === "off") return { files: [], source: "git", discovered: 0, skippedBinary: 0, skippedLarge: 0, skippedOther: 0, skippedByName: 0 };
   const customIgnore = normalizeAutoReadAllIgnoreList(ignoreDirs);
   let source: AutoReadAllSource = "git";
   let candidates = await listFromGit(cwd);
   if (candidates === undefined) {
-    if (mode === "git") {
+    if (isGitOnlyAutoReadAll(mode)) {
       return { files: [], source: "git", discovered: 0, skippedBinary: 0, skippedLarge: 0, skippedOther: 0, skippedByName: 0 };
     }
     candidates = await listFromRg(cwd);
@@ -416,7 +424,7 @@ export async function buildAutoReadAllInjection(cwd: string, budgetBytes: number
   if (mode === "off") return undefined;
   const discovery = await discoverAutoReadAllFiles(cwd, mode, ignoreDirs);
   if (discovery.files.length === 0) return undefined;
-  const outline = mode === "outline";
+  const outline = isOutlineAutoReadAll(mode);
   const sections: AutoReadAllSection[] = [];
   const omitted: string[] = [];
   let bytes = 0;

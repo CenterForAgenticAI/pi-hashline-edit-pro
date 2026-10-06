@@ -62,7 +62,7 @@ function symbolLabel(symbol: OutlineSymbol, depth: number): string {
 		? ` ${symbol.detail.length > MAX_DETAIL_CHARS ? `${symbol.detail.slice(0, MAX_DETAIL_CHARS - 3)}...` : symbol.detail}`
 		: "";
 	const children = symbol.children !== undefined && symbol.children.length > 0 ? ` (${symbol.children.length} children)` : "";
-	return `${indent}${symbol.type}${name}${detail}${children} [${symbol.startLine}:${symbol.endLine}]`;
+	return `${indent}${symbol.type}${name}${detail}${children} [limit ${symbol.endLine - symbol.startLine + 1}]`;
 }
 
 export function renderSymbolOutline(input: SymbolOutlineInput): OutlineRender {

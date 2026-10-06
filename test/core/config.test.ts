@@ -143,8 +143,10 @@ describe("config - cycleAutoReadAllMode", () => {
     });
   });
 
-  it("cycles off to outline to git to full and back to off", async () => {
+  it("cycles off to outline(git) to outline to git to full and back to off", async () => {
     await withTempDir("pi-hashline-config-test-", async () => {
+      expect(await cycleAutoReadAllMode()).toBe("outline(git)");
+      expect((await readConfig()).autoReadAll).toBe("outline(git)");
       expect(await cycleAutoReadAllMode()).toBe("outline");
       expect((await readConfig()).autoReadAll).toBe("outline");
       expect(await cycleAutoReadAllMode()).toBe("git");
@@ -160,6 +162,8 @@ describe("config - cycleAutoReadAllMode", () => {
     await withTempDir("pi-hashline-config-test-", async () => {
       await writeConfig({ autoRead: true, anchorGrepEnabled: true, autoReadAll: "git" });
       expect((await readConfig()).autoReadAll).toBe("git");
+      await writeConfig({ autoRead: true, anchorGrepEnabled: true, autoReadAll: "outline(git)" });
+      expect((await readConfig()).autoReadAll).toBe("outline(git)");
     });
   });
 

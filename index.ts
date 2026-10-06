@@ -9,7 +9,7 @@ import { regGrep } from "./src/grep";
 import { regUndo, clearUndo } from "./src/replace-undo";
 import { regRead, fmtReadPreview } from "./src/read";
 import { ANCHOR_TOOL_NAMES, modelDisabled, type ModelLike } from "./src/model-gate";
-import { buildAutoReadAllInjection, autoReadAllBudget } from "./src/auto-read-all";
+import { buildAutoReadAllInjection, autoReadAllBudget, isOutlineAutoReadAll } from "./src/auto-read-all";
 import type { RMetrics } from "./src/replace-response";
 import type { ReplaceDetails } from "./src/replace";
 import { extractHints, extractWarnings } from "./src/replace-render";
@@ -194,7 +194,7 @@ export default function (pi: ExtensionAPI): void {
     try {
       const injection = await buildAutoReadAllInjection(ctx.cwd, autoReadAllBudget(ctx.model), autoReadAll, autoReadAllIgnore);
       if (!injection) return;
-      if (ctx.hasUI) ctx.ui.notify(`Auto-read all: ${autoReadAll === "outline" ? "outlined" : "attached"} ${injection.files} file(s)`, "info");
+      if (ctx.hasUI) ctx.ui.notify(`Auto-read all: ${isOutlineAutoReadAll(autoReadAll) ? "outlined" : "attached"} ${injection.files} file(s)`, "info");
       return { message: { customType: AUTO_READ_ALL_CUSTOM_TYPE, content: injection.text, display: false } };
     } catch (error) {
       console.error("Auto-read all failed:", error);

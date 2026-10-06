@@ -274,6 +274,32 @@ describe("buildAutoReadAllInjection", () => {
     }
   });
 
+  it("attaches git-discovered outlines in outline(git) mode", async () => {
+    const cwd = await makeTempDir("pi-hashline-auto-read-all-outline-git-");
+    try {
+      initGitRepo(cwd);
+      await writeFile(join(cwd, "app.ts"), "export function run() {\n  return 1;\n}\n");
+      const injection = await buildAutoReadAllInjection(cwd, 1_000_000, "outline(git)");
+      expect(injection).toBeDefined();
+      expect(injection!.text).toContain("outlined below");
+      expect(injection!.text).toContain("=== app.ts (TypeScript) — 3 lines ===");
+      expect(injection!.text).not.toContain("return 1");
+    } finally {
+      await cleanupCwd(cwd);
+    }
+  });
+
+  it("injects nothing in outline(git) mode outside a git repository", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "pi-hashline-auto-read-all-outline-git-off-"));
+    try {
+      await writeFile(join(cwd, "sample.txt"), "alpha\n");
+      expect(await buildAutoReadAllInjection(cwd, 1_000_000, "outline(git)")).toBeUndefined();
+      expect((await discoverAutoReadAllFiles(cwd, "outline(git)")).files).toEqual([]);
+    } finally {
+      await cleanupCwd(cwd);
+    }
+  });
+
   it("serves the empty-line anchor for an empty file in outline mode", async () => {
     const cwd = await makeTempDir("pi-hashline-auto-read-all-outline-empty-");
     try {
