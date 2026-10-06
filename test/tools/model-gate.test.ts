@@ -5,8 +5,8 @@ import { describe, expect, it, vi } from "vitest";
 import register from "../../index";
 import { makePiStub, withTempDir } from "../support/fixtures";
 
-const OPENAI = { provider: "openai", id: "gpt-5.1-codex", api: "openai-codex-responses" };
-const ANTHROPIC = { provider: "anthropic", id: "claude-sonnet-4", api: "anthropic-messages" };
+const OPENAI = { provider: "openai", id: "gpt-5.1-codex", api: "openai-codex-responses", input: [] };
+const ANTHROPIC = { provider: "anthropic", id: "claude-sonnet-4", api: "anthropic-messages", input: [] };
 
 const ANCHOR_TOOLS = ["read", "replace", "replace_match", "insert", "copy", "move", "anchor_grep", "undo_last_change"];
 
@@ -39,9 +39,9 @@ function modelSelect(model: unknown, previousModel: unknown) {
 }
 
 describe("disableOnModels gate", () => {
-  it("disables the anchored surface for a matching model and restores grep", async () => {
+  it("removes read for a matching model when readOnDisabledModels is remove", async () => {
     await withTempDir("model-gate-off-", async (dir) => {
-      await writeConfig(dir, { autoRead: true, anchorGrepEnabled: true, disableOnModels: ["openai/*"] });
+      await writeConfig(dir, { autoRead: true, anchorGrepEnabled: true, disableOnModels: ["openai/*"], readOnDisabledModels: "remove" });
       const { pi, handlers, getActive } = makePiStub([...ANCHOR_TOOLS, "grep", "edit"]);
       register(pi);
       await handlers.get("session_start")!({}, sessionContext(dir, OPENAI));
@@ -49,27 +49,41 @@ describe("disableOnModels gate", () => {
     });
   });
 
-  it("keeps read active when disableReadOnModels is off", async () => {
+  it("keeps the vanilla read for a matching model by default", async () => {
     await withTempDir("model-gate-read-", async (dir) => {
-      await writeConfig(dir, { autoRead: true, anchorGrepEnabled: true, disableOnModels: ["openai/*"], disableReadOnModels: false });
-      const { pi, handlers, getActive } = makePiStub([...ANCHOR_TOOLS, "grep", "edit"]);
+      await writeConfig(dir, { autoRead: true, anchorGrepEnabled: true, disableOnModels: ["openai/*"] });
+      await writeFile(join(dir, "sample.txt"), "alpha\nbeta\n", "utf-8");
+      const { pi, handlers, getActive, getTool } = makePiStub([...ANCHOR_TOOLS, "grep", "edit"]);
       register(pi);
-      await handlers.get("session_start")!({}, sessionContext(dir, OPENAI));
+      const ctx = sessionContext(dir, OPENAI);
+      await handlers.get("session_start")!({}, ctx);
       expect(getActive()).toEqual(["read", "grep"]);
+      expect(getTool("read").promptSnippet).toBe("Read file contents");
+      const result = await getTool("read").execute("r1", { path: "sample.txt" }, undefined, undefined, ctx);
+      const text = result.content[0]!.text as string;
+      expect(text).toContain("alpha");
+      expect(text).not.toMatch(/^[A-Za-z]{4}│/m);
     });
   });
 
-  it("keeps read through a gate switch when disableReadOnModels is off", async () => {
+  it("swaps vanilla and anchored read as the gate lifts and returns", async () => {
     await withTempDir("model-gate-read-switch-", async (dir) => {
-      await writeConfig(dir, { autoRead: true, anchorGrepEnabled: true, disableOnModels: ["openai/*"], disableReadOnModels: false });
-      const { pi, handlers, getActive } = makePiStub([...ANCHOR_TOOLS, "grep", "edit"]);
+      await writeConfig(dir, { autoRead: true, anchorGrepEnabled: true, disableOnModels: ["openai/*"], readOnDisabledModels: "vanilla" });
+      await writeFile(join(dir, "sample.txt"), "alpha\nbeta\n", "utf-8");
+      const { pi, handlers, getActive, getTool } = makePiStub([...ANCHOR_TOOLS, "grep", "edit"]);
       register(pi);
       const ctx = sessionContext(dir, ANTHROPIC);
       await handlers.get("session_start")!({}, ctx);
       await handlers.get("model_select")!(modelSelect(OPENAI, ANTHROPIC), ctx);
       expect(getActive()).toEqual(["read", "grep"]);
+      expect(getTool("read").promptSnippet).toBe("Read file contents");
+      const vanilla = await getTool("read").execute("r1", { path: "sample.txt" }, undefined, undefined, ctx);
+      expect(vanilla.content[0]!.text as string).not.toMatch(/^[A-Za-z]{4}│/m);
       await handlers.get("model_select")!(modelSelect(ANTHROPIC, OPENAI), ctx);
       expect(getActive()).toEqual([...ANCHOR_TOOLS]);
+      expect(getTool("read").promptSnippet).toContain("anchor│content");
+      const anchored = await getTool("read").execute("r2", { path: "sample.txt" }, undefined, undefined, ctx);
+      expect(anchored.content[0]!.text as string).toMatch(/^[A-Za-z]{4}│/m);
     });
   });
 
@@ -79,7 +93,7 @@ describe("disableOnModels gate", () => {
       const { pi, handlers, getActive } = makePiStub([...ANCHOR_TOOLS, "grep", "edit"]);
       register(pi);
       await handlers.get("session_start")!({}, sessionContext(dir, OPENAI));
-      expect(getActive()).toEqual(["grep"]);
+      expect(getActive()).toEqual(["read", "grep"]);
     });
   });
 
@@ -102,7 +116,7 @@ describe("disableOnModels gate", () => {
       await handlers.get("session_start")!({}, ctx);
       expect(getActive()).toEqual([...ANCHOR_TOOLS]);
       await handlers.get("model_select")!(modelSelect(OPENAI, ANTHROPIC), ctx);
-      expect(getActive()).toEqual(["grep"]);
+      expect(getActive()).toEqual(["read", "grep"]);
       await handlers.get("model_select")!(modelSelect(ANTHROPIC, OPENAI), ctx);
       expect(getActive()).toEqual([...ANCHOR_TOOLS]);
     });

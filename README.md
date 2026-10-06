@@ -346,7 +346,7 @@ The setting lives in `/hashline-config` as Auto-read all and in `config.json` as
 
 | Command | Description |
 | --- | --- |
-| `/hashline-config` | Open the settings window: auto-read anchors, auto-read all mode, ignore folders/files, disable on models, disable read on models, diff context lines, `anchor_grep` tool, copy/move tools, replace_match tool, required `path`, and strict input. Persists across sessions. |
+| `/hashline-config` | Open the settings window: auto-read anchors, auto-read all mode, ignore folders/files, disable on models, read on disabled models, diff context lines, `anchor_grep` tool, copy/move tools, replace_match tool, required `path`, and strict input. Persists across sessions. |
 | `/clear-anchors` | Clear the session's anchor claims. Anchors are re-claimed on the next `read`. |
 
 Settings live in `~/.config/pi-hashline-edit-pro/config.json`, created when a setting is first changed in `/hashline-config`:
@@ -363,7 +363,7 @@ Settings live in `~/.config/pi-hashline-edit-pro/config.json`, created when a se
   "strictInput": false,
   "diffContextLines": 1,
   "disableOnModels": [],
-  "disableReadOnModels": true
+  "readOnDisabledModels": "vanilla"
 }
 ```
 
@@ -378,10 +378,10 @@ Settings live in `~/.config/pi-hashline-edit-pro/config.json`, created when a se
 | `requirePath` | Require path | `false` | `replace`, `replace_match`, `insert`, `copy`, and `move` require a `path` argument that must match anchor ownership. |
 | `strictInput` | Strict input | `false` | Reject auto-fixable slips (`[W_BAD_SHAPE]`, `[W_BAD_REF]`, `[W_INVALID_PATCH]`, `[W_BARE_HASH_PREFIX]`) with `[E_BAD_SHAPE]` instead of applying them with a warning. |
 | `diffContextLines` | Diff context | `1` | Surrounding lines in post-edit diffs, 0-10 (needs Auto-read). |
-| `disableOnModels` | Disable on models | `[]` | Model globs matched case-insensitively against `provider/id`, the bare `id`, and `api`, with `*` and `?` wildcards. A matching model gets no anchored edit tools, no auto-read, and no write-echo refusal; `read` is only removed while Disable read on models is on. |
-| `disableReadOnModels` | Disable read on models | `true` | Also remove `read` from the active tools for a model matched by `disableOnModels`. Turn it off to keep `read` active on those models. |
+| `disableOnModels` | Disable on models | `[]` | Model globs matched case-insensitively against `provider/id`, the bare `id`, and `api`, with `*` and `?` wildcards. A matching model gets no anchored edit tools, no auto-read, and no write-echo refusal; `read` stays available as pi's ordinary read unless Read on disabled models is `remove`. |
+| `readOnDisabledModels` | Read on disabled models | `"vanilla"` | `read` for a model matched by `disableOnModels`: `"vanilla"` keeps pi's ordinary `read` active while the anchored edit tools stay off; `"remove"` disables `read` with the rest of the anchored tools. |
 
-`disableOnModels` turns off the whole anchored surface for the models you name, so another edit tool (`apply_patch`, a shell read) can own the session without competing instructions. A match removes `replace`, `replace_match`, `insert`, `copy`, `move`, `anchor_grep`, and `undo_last_change` from the active tools, and also `read` while Disable read on models is on (the default), restoring the built-in `grep` when it was active, and it also skips the auto-read-all injection, the auto-read block after `write`, the post-edit diff substitution, and the `write` hook that refuses a `write` echoing a served anchor. Because the extension's `read` replaces the built-in one, a matched model has no `read` at all unless another extension provides one, so turn Disable read on models off to keep the anchored `read` active on those models. The list is checked on `session_start`, on `model_select`, and again on `before_agent_start`, so a model change inside a session switches the surface immediately and another extension cannot re-add the tools mid-session. The default `[]` leaves every model unchanged.
+`disableOnModels` turns off the whole anchored surface for the models you name, so another edit tool (`apply_patch`, a shell read) can own the session without competing instructions. A match removes `replace`, `replace_match`, `insert`, `copy`, `move`, `anchor_grep`, and `undo_last_change` from the active tools, and also `read` when Read on disabled models is `remove`, restoring the built-in `grep` when it was active, and it also skips the auto-read-all injection, the auto-read block after `write`, the post-edit diff substitution, and the `write` hook that refuses a `write` echoing a served anchor. Because the extension's `read` replaces the built-in one, a matched model has no `read` at all under `remove` unless another extension provides one; the default `vanilla` gives those models pi's ordinary `read` while the anchored edit tools stay off. The list is checked on `session_start`, on `model_select`, and again on `before_agent_start`, so a model change inside a session switches the surface immediately and another extension cannot re-add the tools mid-session. The default `[]` leaves every model unchanged.
 
 When `PI_HASHLINE_DIR` is unset or empty, non-Windows platforms honor `XDG_CONFIG_HOME` when set (falling back to `~/.config`); on Windows the directory always uses `~/.config`, where `~` is `%USERPROFILE%`. To move the directory explicitly, see [Isolated state](#isolated-state).
 

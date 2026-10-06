@@ -1,5 +1,5 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES } from "@earendil-works/pi-coding-agent";
+import { createReadToolDefinition, DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES } from "@earendil-works/pi-coding-agent";
 import { initHasher } from "./src/hashline";
 import { regReplaceMatch } from "./src/replace-match";
 import { regReplace } from "./src/replace";
@@ -16,7 +16,7 @@ import type { ReplaceDetails } from "./src/replace";
 import { extractHints, extractWarnings } from "./src/replace-render";
 import { MAX_HASH_LINES } from "./src/hashline";
 import { withStructuredText } from "./src/structured";
-import type { AutoReadAllMode } from "./src/config";
+import type { AutoReadAllMode, ReadOnDisabledModels } from "./src/config";
 import {
   readConfig,
   readConfigWithStatus,
@@ -25,7 +25,7 @@ import {
   toggleAnchorGrep,
   toggleCopyMove,
   toggleReplaceMatch,
-  toggleDisableReadOnModels,
+  cycleReadOnDisabledModels,
   toggleRequirePath,
   toggleStrictInput,
   adjustDiffContextLines,
@@ -62,7 +62,9 @@ export default function (pi: ExtensionAPI): void {
   let autoReadAll: AutoReadAllMode = "off";
   let autoReadAllIgnore: string[] = [];
   let disableOnModels: string[] = [];
-  let disableReadOnModels = true;
+  let readOnDisabledModels: ReadOnDisabledModels = "vanilla";
+  let readFlavor: "anchored" | "vanilla" = "anchored";
+  let readFlavorCwd: string | undefined;
   let autoReadAllInjected = false;
   let grepWasActive = false;
   const baseAnchorTools = new Set<string>();
@@ -71,7 +73,7 @@ export default function (pi: ExtensionAPI): void {
   async function refreshEditTools(): Promise<void> {
     try {
       const flags = await currentEditFlags(pi.getActiveTools().includes("codemode"));
-      regRead(pi, flags);
+      if (readFlavor !== "vanilla") regRead(pi, flags);
       regReplace(pi, flags);
       regReplaceMatch(pi, flags);
       regInsert(pi, flags);
@@ -84,11 +86,24 @@ export default function (pi: ExtensionAPI): void {
     }
   }
 
-  async function syncModelGate(model: ModelLike | undefined): Promise<void> {
-    if (disableOnModels.length > 0 && modelDisabled(model, disableOnModels)) {
+  async function syncModelGate(model: ModelLike | undefined, cwd: string): Promise<void> {
+    const gated = disableOnModels.length > 0 && modelDisabled(model, disableOnModels);
+    if (gated && readOnDisabledModels === "vanilla") {
+      if (readFlavor !== "vanilla" || readFlavorCwd !== cwd) {
+        pi.registerTool(createReadToolDefinition(cwd));
+        readFlavor = "vanilla";
+        readFlavorCwd = cwd;
+      }
+    } else if (readFlavor === "vanilla") {
+      readFlavor = "anchored";
+      readFlavorCwd = undefined;
+      await refreshEditTools();
+    }
+    if (gated) {
       const active = pi.getActiveTools();
-      const gated = disableReadOnModels ? ANCHOR_TOOL_NAMES : ANCHOR_TOOL_NAMES.filter((tool) => tool !== "read");
-      const next = active.filter((tool) => !gated.includes(tool));
+      const gatedTools = readOnDisabledModels === "vanilla" ? ANCHOR_TOOL_NAMES.filter((tool) => tool !== "read") : ANCHOR_TOOL_NAMES;
+      const next = active.filter((tool) => !gatedTools.includes(tool));
+      if (readOnDisabledModels === "vanilla" && baseAnchorTools.has("read") && !next.includes("read")) next.push("read");
       if (grepWasActive && !next.includes("grep")) next.push("grep");
       pi.setActiveTools(next);
       gateApplied = true;
@@ -136,7 +151,7 @@ export default function (pi: ExtensionAPI): void {
     autoReadAll = config.autoReadAll ?? "off";
     autoReadAllIgnore = config.autoReadAllIgnore ?? [];
     disableOnModels = config.disableOnModels ?? [];
-    disableReadOnModels = config.disableReadOnModels !== false;
+    readOnDisabledModels = config.readOnDisabledModels ?? "vanilla";
     const sessionBranch = (ctx as { sessionManager?: { getBranch?: () => Array<{ type?: string; customType?: string }> } }).sessionManager?.getBranch?.() ?? [];
     autoReadAllInjected = sessionBranch.some((entry) => entry.type === "custom_message" && entry.customType === AUTO_READ_ALL_CUSTOM_TYPE);
     await refreshEditTools();
@@ -148,7 +163,7 @@ export default function (pi: ExtensionAPI): void {
         return true;
       }),
     );
-    await syncModelGate(ctx.model);
+    await syncModelGate(ctx.model, ctx.cwd);
     const debugValue = process.env.PI_HASHLINE_DEBUG;
     if (debugValue === "1" || debugValue === "true") {
       ctx.ui.notify(`Hashline Edit mode active`, "info");
@@ -165,11 +180,11 @@ export default function (pi: ExtensionAPI): void {
     }
   });
   pi.on("model_select", async (event, ctx) => withAnchorSession(ctx, async () => {
-    await syncModelGate(event.model);
+    await syncModelGate(event.model, ctx.cwd);
   }));
 
   pi.on("before_agent_start", async (_event, ctx) => withAnchorSession(ctx, async () => {
-    await syncModelGate(ctx.model);
+    await syncModelGate(ctx.model, ctx.cwd);
     if (autoReadAll === "off" || autoReadAllInjected) return;
     if (modelDisabled(ctx.model, disableOnModels)) return;
     autoReadAllInjected = true;
@@ -201,7 +216,7 @@ export default function (pi: ExtensionAPI): void {
             else if (key === "autoReadAll") { autoReadAll = await cycleAutoReadAllMode(); autoReadAllInjected = false; }
             else if (key === "autoReadAllIgnore") autoReadAllIgnore = await setAutoReadAllIgnoreFromText(value ?? "");
             else if (key === "disableOnModels") disableOnModels = await setDisableOnModelsFromText(value ?? "");
-            else if (key === "disableReadOnModels") disableReadOnModels = await toggleDisableReadOnModels();
+            else if (key === "readOnDisabledModels") readOnDisabledModels = await cycleReadOnDisabledModels();
             else if (key === "diffContextLines") await adjustDiffContextLines(delta ?? 1);
             else if (key === "anchorGrepEnabled") {
               const enabled = await toggleAnchorGrep();
@@ -229,7 +244,7 @@ export default function (pi: ExtensionAPI): void {
             else if (key === "requirePath") await toggleRequirePath();
             else if (key === "strictInput") await toggleStrictInput();
             await refreshEditTools();
-            await syncModelGate(ctx.model);
+            await syncModelGate(ctx.model, ctx.cwd);
           },
         });
         await overlay.load();

@@ -5,7 +5,7 @@ import {
   toggleAnchorGrep,
   toggleCopyMove,
   toggleReplaceMatch,
-  toggleDisableReadOnModels,
+  cycleReadOnDisabledModels,
   toggleRequirePath,
   toggleStrictInput,
   adjustDiffContextLines,
@@ -415,37 +415,53 @@ describe("config - disableOnModels", () => {
   });
 });
 
-describe("config - disableReadOnModels", () => {
-  it("defaults to true when no config file exists", async () => {
+describe("config - readOnDisabledModels", () => {
+  it("defaults to vanilla when no config file exists", async () => {
     await withTempDir("pi-hashline-config-test-", async () => {
-      expect((await readConfig()).disableReadOnModels).toBe(true);
+      expect((await readConfig()).readOnDisabledModels).toBe("vanilla");
     });
   });
 
   it("reads a stored value", async () => {
     await withTempDir("pi-hashline-config-test-", async () => {
-      await writeConfig({ autoRead: true, anchorGrepEnabled: true, disableReadOnModels: false });
-      expect((await readConfig()).disableReadOnModels).toBe(false);
+      await writeConfig({ autoRead: true, anchorGrepEnabled: true, readOnDisabledModels: "remove" });
+      expect((await readConfig()).readOnDisabledModels).toBe("remove");
     });
   });
 
-  it("toggles the flag", async () => {
+  it("cycles the policy", async () => {
     await withTempDir("pi-hashline-config-test-", async () => {
-      expect(await toggleDisableReadOnModels()).toBe(false);
-      expect((await readConfig()).disableReadOnModels).toBe(false);
-      expect(await toggleDisableReadOnModels()).toBe(true);
-      expect((await readConfig()).disableReadOnModels).toBe(true);
+      expect(await cycleReadOnDisabledModels()).toBe("remove");
+      expect((await readConfig()).readOnDisabledModels).toBe("remove");
+      expect(await cycleReadOnDisabledModels()).toBe("vanilla");
+      expect((await readConfig()).readOnDisabledModels).toBe("vanilla");
+    });
+  });
+
+  it("migrates the legacy disableReadOnModels boolean", async () => {
+    await withTempDir("pi-hashline-config-test-", async (dir) => {
+      const { writeFile, mkdir } = await import("fs/promises");
+      const { join: pathJoin } = await import("path");
+      const configDir = pathJoin(dir, ".config", "pi-hashline-edit-pro");
+      await mkdir(configDir, { recursive: true });
+      await writeFile(pathJoin(configDir, "config.json"), JSON.stringify({ autoRead: true, disableReadOnModels: false }));
+      expect((await readConfig()).readOnDisabledModels).toBe("vanilla");
+      await writeFile(pathJoin(configDir, "config.json"), JSON.stringify({ autoRead: true, disableReadOnModels: true }));
+      expect((await readConfig()).readOnDisabledModels).toBe("remove");
     });
   });
 
   it("exposes the row and follows the stored value", async () => {
     await withTempDir("pi-hashline-config-test-", async () => {
-      const on = configRows(await readConfig()).find((row) => row.key === "disableReadOnModels")!;
-      expect(on.label).toBe("Disable read on models");
-      expect(on.enabled).toBe(true);
-      await writeConfig({ autoRead: true, anchorGrepEnabled: true, disableReadOnModels: false });
-      const off = configRows(await readConfig()).find((row) => row.key === "disableReadOnModels")!;
-      expect(off.enabled).toBe(false);
+      const vanilla = configRows(await readConfig()).find((row) => row.key === "readOnDisabledModels")!;
+      expect(vanilla.label).toBe("Read on disabled models");
+      expect(vanilla.mode).toBe("vanilla");
+      expect(vanilla.enabled).toBe(true);
+      expect(vanilla.cycle).toEqual(["remove", "vanilla"]);
+      await writeConfig({ autoRead: true, anchorGrepEnabled: true, readOnDisabledModels: "remove" });
+      const remove = configRows(await readConfig()).find((row) => row.key === "readOnDisabledModels")!;
+      expect(remove.mode).toBe("remove");
+      expect(remove.enabled).toBe(false);
     });
   });
 });

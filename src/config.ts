@@ -6,6 +6,9 @@ import { writeAtomic } from "./fs-write";
 export type AutoReadAllMode = "off" | "on" | "git";
 const AUTO_READ_ALL_MODES: AutoReadAllMode[] = ["off", "on", "git"];
 
+export type ReadOnDisabledModels = "remove" | "vanilla";
+const READ_ON_DISABLED_MODELS: ReadOnDisabledModels[] = ["remove", "vanilla"];
+
 export const DEFAULT_DIFF_CONTEXT_LINES = 1;
 export const MIN_DIFF_CONTEXT_LINES = 0;
 export const MAX_DIFF_CONTEXT_LINES = 10;
@@ -21,7 +24,7 @@ export interface Config {
   strictInput?: boolean;
   diffContextLines?: number;
   disableOnModels?: string[];
-  disableReadOnModels?: boolean;
+  readOnDisabledModels?: ReadOnDisabledModels;
 }
 
 const DEFAULT_CONFIG: Config = {
@@ -35,7 +38,7 @@ const DEFAULT_CONFIG: Config = {
   strictInput: false,
   diffContextLines: DEFAULT_DIFF_CONTEXT_LINES,
   disableOnModels: [],
-  disableReadOnModels: true,
+  readOnDisabledModels: "vanilla",
 };
 
 function parseAutoReadAllMode(value: unknown): AutoReadAllMode {
@@ -43,6 +46,12 @@ function parseAutoReadAllMode(value: unknown): AutoReadAllMode {
   if (value === true) return "on";
   if (value === false) return "off";
   return DEFAULT_CONFIG.autoReadAll ?? "off";
+}
+
+function parseReadOnDisabledModels(value: unknown, legacy: unknown): ReadOnDisabledModels {
+  if (value === "remove" || value === "vanilla") return value;
+  if (typeof legacy === "boolean") return legacy ? "remove" : "vanilla";
+  return DEFAULT_CONFIG.readOnDisabledModels ?? "vanilla";
 }
 
 export function normalizeAutoReadAllIgnoreEntry(entry: string): string {
@@ -96,7 +105,8 @@ function parseConfig(content: string): Config {
   const diffContextLines = parsed.diffContextLines;
   const autoReadAllIgnore = parsed.autoReadAllIgnore;
   const disableOnModels = parsed.disableOnModels;
-  const disableReadOnModels = parsed.disableReadOnModels;
+  const readOnDisabledModels = parsed.readOnDisabledModels;
+  const legacyDisableReadOnModels = parsed.disableReadOnModels;
   return {
     autoRead: typeof autoRead === "boolean" ? autoRead : DEFAULT_CONFIG.autoRead,
     anchorGrepEnabled: typeof anchorGrepEnabled === "boolean" ? anchorGrepEnabled : DEFAULT_CONFIG.anchorGrepEnabled,
@@ -108,7 +118,7 @@ function parseConfig(content: string): Config {
     diffContextLines: normalizeDiffContextLines(diffContextLines),
     autoReadAllIgnore: parseAutoReadAllIgnore(autoReadAllIgnore),
     disableOnModels: parseDisableOnModels(disableOnModels),
-    disableReadOnModels: typeof disableReadOnModels === "boolean" ? disableReadOnModels : DEFAULT_CONFIG.disableReadOnModels,
+    readOnDisabledModels: parseReadOnDisabledModels(readOnDisabledModels, legacyDisableReadOnModels),
   };
 }
 
@@ -216,7 +226,7 @@ export async function writeConfig(config: Config): Promise<void> {
 }
 
 
-type ToggleKey = "autoRead" | "anchorGrepEnabled" | "copyMoveEnabled" | "replaceMatchEnabled" | "requirePath" | "strictInput" | "disableReadOnModels";
+type ToggleKey = "autoRead" | "anchorGrepEnabled" | "copyMoveEnabled" | "replaceMatchEnabled" | "requirePath" | "strictInput";
 
 async function toggleFlag(key: ToggleKey): Promise<boolean> {
   const config = await updateConfig((c) => { c[key] = !(c[key] === true); });
@@ -226,7 +236,15 @@ export const toggleAutoRead = (): Promise<boolean> => toggleFlag("autoRead");
 export const toggleAnchorGrep = (): Promise<boolean> => toggleFlag("anchorGrepEnabled");
 export const toggleCopyMove = (): Promise<boolean> => toggleFlag("copyMoveEnabled");
 export const toggleReplaceMatch = (): Promise<boolean> => toggleFlag("replaceMatchEnabled");
-export const toggleDisableReadOnModels = (): Promise<boolean> => toggleFlag("disableReadOnModels");
+export async function cycleReadOnDisabledModels(): Promise<ReadOnDisabledModels> {
+  let next: ReadOnDisabledModels = "vanilla";
+  await updateConfig((c) => {
+    const current = c.readOnDisabledModels ?? "vanilla";
+    next = READ_ON_DISABLED_MODELS[(READ_ON_DISABLED_MODELS.indexOf(current) + 1) % READ_ON_DISABLED_MODELS.length] ?? "remove";
+    c.readOnDisabledModels = next;
+  });
+  return next;
+}
 export async function cycleAutoReadAllMode(): Promise<AutoReadAllMode> {
   let next: AutoReadAllMode = "off";
   await updateConfig((c) => {

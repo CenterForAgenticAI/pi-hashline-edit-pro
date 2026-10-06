@@ -2,7 +2,7 @@ import { Key, matchesKey, visibleWidth } from "@earendil-works/pi-tui";
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import { readConfig, type Config } from "./config";
 
-export type ConfigToggleKey = "autoRead" | "autoReadAll" | "autoReadAllIgnore" | "anchorGrepEnabled" | "copyMoveEnabled" | "replaceMatchEnabled" | "requirePath" | "strictInput" | "diffContextLines" | "disableOnModels" | "disableReadOnModels";
+export type ConfigToggleKey = "autoRead" | "autoReadAll" | "autoReadAllIgnore" | "anchorGrepEnabled" | "copyMoveEnabled" | "replaceMatchEnabled" | "requirePath" | "strictInput" | "diffContextLines" | "disableOnModels" | "readOnDisabledModels";
 
 export interface ConfigRow {
   key: ConfigToggleKey;
@@ -28,7 +28,7 @@ export function configRows(config: Config): ConfigRow[] {
     { key: "strictInput", label: "Strict input", hint: "Reject auto-fixable slips instead of warnings", enabled: config.strictInput === true },
     { key: "replaceMatchEnabled", label: "Replace match", hint: "replace_match tool (off while disabled)", enabled: config.replaceMatchEnabled !== false },
     { key: "disableOnModels", label: "Disable on models", hint: "Model globs (provider/id, model id, or api) that turn off the anchored edit tools (comma-separated)", enabled: (config.disableOnModels ?? []).length > 0, entries: config.disableOnModels ?? [] },
-    { key: "disableReadOnModels", label: "Disable read on models", hint: "Also turn off read for models matched by Disable on models (off keeps read active)", enabled: config.disableReadOnModels !== false },
+    { key: "readOnDisabledModels", label: "Read on disabled models", hint: "Read for models matched by Disable on models: vanilla (plain pi read), or remove it", enabled: (config.readOnDisabledModels ?? "vanilla") !== "remove", mode: config.readOnDisabledModels ?? "vanilla", cycle: ["remove", "vanilla"] },
   ];
 }
 
