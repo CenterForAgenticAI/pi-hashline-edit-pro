@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
+import { join } from "node:path";
+import { realpath, symlink, writeFile } from "node:fs/promises";
 import { fmtRegion } from "../../src/hashline";
 import { fmtReadPreview } from "../../src/read";
-import { useTestHome, withTempFile, setupIntegrationTest, makeFakePiRegistry } from "../support/fixtures";
+import { cacheSnapshot, snapshotCache } from "../../src/hash-store/cache";
+import { useTestHome, withTempFile, withTempDir, setupIntegrationTest, makeFakePiRegistry } from "../support/fixtures";
 import register from "../../index";
 
 const home = useTestHome();
@@ -107,10 +110,10 @@ describe("read tool - call rendering", () => {
   };
   const context = { lastComponent: undefined, expanded: false, isError: false, cwd: process.cwd() };
 
-  function renderCall(args: unknown): string {
+  function renderCall(args: unknown, cwd: string = process.cwd()): string {
     const { pi, getTool } = makeFakePiRegistry();
     register(pi);
-    return (getTool("read").renderCall(args, theme, context) as unknown as { text: string }).text;
+    return (getTool("read").renderCall(args, theme, { ...context, cwd }) as unknown as { text: string }).text;
   }
 
   it("renders a numeric-string offset and limit as a line range", () => {
@@ -128,6 +131,51 @@ describe("read tool - call rendering", () => {
     const text = renderCall({ path: "sample.ts", offset: "RKhl", limit: "520" });
     expect(text).toContain(":RKhl +520");
     expect(text).not.toContain("NaN");
+  });
+
+  it("shows the anchor's resolved line before the limit suffix", () => {
+    const absolute = join(process.cwd(), "anchor-line-sample.ts");
+    cacheSnapshot(absolute, "checksum", 3, ["Aaaa", "RKhl", "Bbbb"]);
+    try {
+      const text = renderCall({ path: "anchor-line-sample.ts", offset: "RKhl", limit: 520 });
+      expect(text).toContain(":RKhl (2) +520");
+    } finally {
+      snapshotCache.delete(absolute);
+    }
+  });
+
+  it("shows the anchor's resolved line without a limit", () => {
+    const absolute = join(process.cwd(), "anchor-line-sample.ts");
+    cacheSnapshot(absolute, "checksum", 3, ["Aaaa", "RKhl", "Bbbb"]);
+    try {
+      const text = renderCall({ path: "anchor-line-sample.ts", offset: "RKhl" });
+      expect(text).toContain(":RKhl (2)");
+    } finally {
+      snapshotCache.delete(absolute);
+    }
+  });
+
+  it("leaves the anchor without a line when no snapshot is cached", () => {
+    const text = renderCall({ path: "anchor-line-uncached.ts", offset: "RKhl", limit: 520 });
+    expect(text).toContain(":RKhl +520");
+    expect(text).not.toMatch(/\(\d+\)/);
+    expect(renderCall({ path: "anchor-line-uncached.ts", offset: "RKhl", limit: 0 })).toContain(":RKhl");
+  });
+
+  it.skipIf(process.platform === "win32")("resolves the line through a symlinked path", async () => {
+    await withTempDir("read-call-symlink-", async (dir) => {
+      const real = join(dir, "real.ts");
+      await writeFile(real, "alpha\nbeta\n", "utf-8");
+      await symlink(real, join(dir, "link.ts"));
+      const seeded = await realpath(real);
+      cacheSnapshot(seeded, "checksum", 2, ["Aaaa", "RKhl"]);
+      try {
+        const text = renderCall({ path: "link.ts", offset: "RKhl", limit: 5 }, dir);
+        expect(text).toContain(":RKhl (2) +5");
+      } finally {
+        snapshotCache.delete(seeded);
+      }
+    });
   });
 
   it("leaves an anchor offset without a limit unsuffixed", () => {

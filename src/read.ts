@@ -1,3 +1,4 @@
+import { realpathSync } from "node:fs";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import {
 	createReadTool,
@@ -20,6 +21,7 @@ import { withReadPrompts, DEFAULT_EDIT_FLAGS, type EditToolFlags } from "./edit-
 import { valAccess } from "./validation";
 import { withAnchorSession, adoptAnchors, ownerOf, ownersDifferingOnlyByCase, formatAnchorReclaimNotice, takeReclaimedPaths } from "./anchor-registry";
 import { serveRows } from "./served";
+import { snapshotCache } from "./hash-store/cache";
 import { Text } from "@earendil-works/pi-tui";
 import { anchoredLine, readResultSchema, withStructuredErrors, type AnchoredLine, type ReadResult } from "./structured";
 const R_DESC = loadP("../tool-prompts/read.md");
@@ -233,24 +235,47 @@ function normalizeReadCallArgs(args: unknown): unknown {
 	return normalized;
 }
 
-function anchorLimitOf(args: unknown): { anchor: string; limit: number } | undefined {
+function anchorRefOf(args: unknown): { anchor: string; limit: number | undefined; path: string | undefined } | undefined {
 	if (!isRec(args)) return undefined;
-	const { offset, limit } = args;
+	const { offset, limit, path } = args;
 	if (typeof offset !== "string" || offset.length === 0 || /^\d+$/.test(offset)) return undefined;
-	if (typeof limit !== "number" || !Number.isInteger(limit) || limit < 1) return undefined;
-	return { anchor: offset, limit };
+	const validLimit = typeof limit === "number" && Number.isInteger(limit) && limit >= 1 ? limit : undefined;
+	if (limit !== undefined && validLimit === undefined) return undefined;
+	return { anchor: offset, limit: validLimit, path: typeof path === "string" ? path : undefined };
+}
+
+function cachedHashes(path: string): string[] | undefined {
+	const cached = snapshotCache.get(path);
+	if (cached !== undefined) return cached.hashes;
+	try {
+		return snapshotCache.get(realpathSync(path))?.hashes;
+	} catch {
+		return undefined;
+	}
+}
+
+function anchorLineOf(anchor: string, path: string | undefined, cwd: unknown): number | undefined {
+	if (path === undefined || typeof cwd !== "string") return undefined;
+	const hashes = cachedHashes(toCwd(path, cwd));
+	if (hashes === undefined) return undefined;
+	const index = hashes.indexOf(anchor);
+	return index < 0 ? undefined : index + 1;
 }
 
 function renderReadCall(args: unknown, theme: any, context: any): Text {
 	const normalized = normalizeReadCallArgs(args);
 	const rendered = builtinReadRenderCall(normalized, theme, context);
-	const anchorLimit = anchorLimitOf(normalized);
-	if (anchorLimit === undefined) return rendered;
-	const marker = `:${anchorLimit.anchor}`;
+	const ref = anchorRefOf(normalized);
+	if (ref === undefined) return rendered;
+	const marker = `:${ref.anchor}`;
 	const text = (rendered as unknown as { text: string }).text;
 	const index = text.lastIndexOf(marker);
 	if (index < 0) return rendered;
-	const suffix = theme.fg("warning", ` +${anchorLimit.limit}`);
+	const line = anchorLineOf(ref.anchor, ref.path, context?.cwd);
+	if (line === undefined && ref.limit === undefined) return rendered;
+	const lineLabel = line === undefined ? "" : ` (${line})`;
+	const limitLabel = ref.limit === undefined ? "" : ` +${ref.limit}`;
+	const suffix = theme.fg("warning", `${lineLabel}${limitLabel}`);
 	rendered.setText(`${text.slice(0, index + marker.length)}${suffix}${text.slice(index + marker.length)}`);
 	return rendered;
 }
