@@ -8,39 +8,39 @@ import { regRead } from "../../src/read";
 import { makeFakePiRegistry } from "../support/fixtures";
 
 const replaceBase = {
-  description: loadP("../prompts/replace.md"),
-  snippet: loadP("../prompts/replace-snippet.md"),
-  guidelines: loadGuide("../prompts/replace-guidelines.md"),
+  description: loadP("../tool-prompts/replace.md"),
+  snippet: loadP("../tool-prompts/replace-snippet.md"),
+  guidelines: loadGuide("../tool-prompts/replace-guidelines.md"),
 };
 
 const insertBase = {
-  description: loadP("../prompts/insert.md"),
-  snippet: loadP("../prompts/insert-snippet.md"),
-  guidelines: loadGuide("../prompts/insert-guidelines.md"),
+  description: loadP("../tool-prompts/insert.md"),
+  snippet: loadP("../tool-prompts/insert-snippet.md"),
+  guidelines: loadGuide("../tool-prompts/insert-guidelines.md"),
 };
 
 const readBase = {
-  description: loadP("../prompts/read.md"),
-  snippet: loadP("../prompts/read-snippet.md"),
-  guidelines: loadGuide("../prompts/read-guidelines.md"),
+  description: loadP("../tool-prompts/read.md"),
+  snippet: loadP("../tool-prompts/read-snippet.md"),
+  guidelines: loadGuide("../tool-prompts/read-guidelines.md"),
 };
 
 const undoBase = {
-  description: loadP("../prompts/undo-last-change.md"),
-  snippet: loadP("../prompts/undo-last-change-snippet.md"),
-  guidelines: loadGuide("../prompts/undo-last-change-guidelines.md"),
+  description: loadP("../tool-prompts/undo-last-change.md"),
+  snippet: loadP("../tool-prompts/undo-last-change-snippet.md"),
+  guidelines: loadGuide("../tool-prompts/undo-last-change-guidelines.md"),
 };
 
 const withinBase = {
-  description: loadP("../prompts/replace-match.md"),
-  snippet: loadP("../prompts/replace-match-snippet.md"),
-  guidelines: loadGuide("../prompts/replace-match-guidelines.md"),
+  description: loadP("../tool-prompts/replace-match.md"),
+  snippet: loadP("../tool-prompts/replace-match-snippet.md"),
+  guidelines: loadGuide("../tool-prompts/replace-match-guidelines.md"),
 };
 
 const grepBase = {
-  description: loadP("../prompts/grep.md"),
-  snippet: loadP("../prompts/grep-snippet.md"),
-  guidelines: loadGuide("../prompts/grep-guidelines.md"),
+  description: loadP("../tool-prompts/grep.md"),
+  snippet: loadP("../tool-prompts/grep-snippet.md"),
+  guidelines: loadGuide("../tool-prompts/grep-guidelines.md"),
 };
 
 function collectTsFiles(dir: string): string[] {
@@ -54,22 +54,22 @@ function collectTsFiles(dir: string): string[] {
 }
 
 const replacePrompt = readFileSync(
-  new URL("../../prompts/replace.md", import.meta.url),
+  new URL("../../tool-prompts/replace.md", import.meta.url),
   "utf-8",
 );
 
-describe("prompts/replace.md (model-facing contract)", () => {
+describe("tool-prompts/replace.md (model-facing contract)", () => {
   it("declares the tool purpose", () => {
     expect(replacePrompt).toMatch(/Replace a range of lines \(or a single line\) in a text file.*anchors/);
   });
 });
 
 const readPrompt = readFileSync(
-  new URL("../../prompts/read.md", import.meta.url),
+  new URL("../../tool-prompts/read.md", import.meta.url),
   "utf-8",
 );
 
-describe("prompts/read.md (model-facing contract)", () => {
+describe("tool-prompts/read.md (model-facing contract)", () => {
   it("declares the HASH|content output format", () => {
     expect(readPrompt).toMatch(/anchor│content/);
     expect(readPrompt).toMatch(/4-character/);
@@ -94,7 +94,7 @@ describe("prompts/read.md (model-facing contract)", () => {
 describe("prompt guidelines", () => {
   it("replace-guidelines.md loads without template variables", () => {
     const content = readFileSync(
-      new URL("../../prompts/replace-guidelines.md", import.meta.url),
+      new URL("../../tool-prompts/replace-guidelines.md", import.meta.url),
       "utf-8",
     );
     expect(content).toContain("remove_from");
@@ -106,14 +106,14 @@ describe("prompt guidelines", () => {
   });
 
   it("loadGuide returns an array of guidelines", () => {
-    const guidelines = loadGuide("../prompts/replace-guidelines.md");
+    const guidelines = loadGuide("../tool-prompts/replace-guidelines.md");
     expect(Array.isArray(guidelines)).toBe(true);
     expect(guidelines.length).toBeGreaterThan(0);
   });
 
   it("read-guidelines.md keeps the re-read note inline", () => {
     const content = readFileSync(
-      new URL("../../prompts/read-guidelines.md", import.meta.url),
+      new URL("../../tool-prompts/read-guidelines.md", import.meta.url),
       "utf-8",
     );
     expect(content).toContain("call again after an edit");
@@ -121,7 +121,7 @@ describe("prompt guidelines", () => {
   });
   it("undo-last-change-guidelines.md loads without template variables", () => {
     const content = readFileSync(
-      new URL("../../prompts/undo-last-change-guidelines.md", import.meta.url),
+      new URL("../../tool-prompts/undo-last-change-guidelines.md", import.meta.url),
       "utf-8",
     );
     expect(content).not.toContain("{{");
@@ -150,14 +150,15 @@ describe("prompt file packaging", () => {
     const pkg = JSON.parse(
       readFileSync(new URL("../../package.json", import.meta.url), "utf-8"),
     ) as { files: string[] };
-    expect(pkg.files).toContain("prompts");
+    expect(pkg.files).toContain("tool-prompts");
     expect(pkg.files).toContain("src");
+    expect(pkg.files).not.toContain("prompts");
 
     const srcDir = fileURLToPath(new URL("../../src", import.meta.url));
     let refs = 0;
     for (const file of collectTsFiles(srcDir)) {
       const content = readFileSync(file, "utf-8");
-      for (const match of content.matchAll(/load(?:P|Guide)\("((?:\.\.\/)+prompts\/[^"]+)"\)/g)) {
+      for (const match of content.matchAll(/load(?:P|Guide)\("((?:\.\.\/)+tool-prompts\/[^"]+)"\)/g)) {
         refs++;
         const promptPath = match[1]!;
         expect(existsSync(resolve(dirname(file), promptPath))).toBe(true);
@@ -167,8 +168,8 @@ describe("prompt file packaging", () => {
     const copyMoveSource = readFileSync(resolve(srcDir, "copy-move.ts"), "utf-8");
     for (const kind of ["copy", "move"]) {
       for (const suffix of [".md", "-snippet.md", "-guidelines.md"]) {
-        expect(copyMoveSource).toContain("../prompts/${kind}" + suffix);
-        expect(existsSync(resolve(srcDir, "..", "prompts", `${kind}${suffix}`))).toBe(true);
+        expect(copyMoveSource).toContain("../tool-prompts/${kind}" + suffix);
+        expect(existsSync(resolve(srcDir, "..", "tool-prompts", `${kind}${suffix}`))).toBe(true);
       }
     }
   });
@@ -284,18 +285,18 @@ describe("edit prompt flag variants", () => {
     expect(shared).toContain("`replace`/`replace_match`/`insert`: JSON decoding happens once");
     expect(shared).toContain("`replace`/`replace_match`/`insert`/`copy`/`move`/`undo_last_change`: in the post-edit diff, `-anchor│` rows are dead anchors");
     const transfer = withTransferPrompts({
-      description: loadP("../prompts/copy.md"),
-      snippet: loadP("../prompts/copy-snippet.md"),
-      guidelines: loadGuide("../prompts/copy-guidelines.md"),
+      description: loadP("../tool-prompts/copy.md"),
+      snippet: loadP("../tool-prompts/copy-snippet.md"),
+      guidelines: loadGuide("../tool-prompts/copy-guidelines.md"),
     }, DEFAULT_EDIT_FLAGS);
     expect(transfer.guidelines.some((g) => g.includes("JSON decoding"))).toBe(false);
   });
 
   it("keeps tool descriptions free of examples and moves the fragment guidance into the replace_match guideline", () => {
     for (const file of ["replace.md", "replace-match.md", "insert.md", "copy.md", "move.md", "read.md", "grep.md", "undo-last-change.md"]) {
-      expect(loadP(`../prompts/${file}`)).not.toContain("Example:");
+      expect(loadP(`../tool-prompts/${file}`)).not.toContain("Example:");
     }
-    expect(loadGuide("../prompts/replace-match-guidelines.md").some((g) => g.includes("fragment of the line"))).toBe(true);
+    expect(loadGuide("../tool-prompts/replace-match-guidelines.md").some((g) => g.includes("fragment of the line"))).toBe(true);
   });
 
   it("withGrepPrompts drops copy and move when Copy/move is off", () => {
@@ -344,9 +345,9 @@ describe("edit prompt flag variants", () => {
 
   it("withTransferPrompts keeps the anchor-only contract by default", () => {
     const base = {
-      description: loadP("../prompts/copy.md"),
-      snippet: loadP("../prompts/copy-snippet.md"),
-      guidelines: loadGuide("../prompts/copy-guidelines.md"),
+      description: loadP("../tool-prompts/copy.md"),
+      snippet: loadP("../tool-prompts/copy-snippet.md"),
+      guidelines: loadGuide("../tool-prompts/copy-guidelines.md"),
     };
     const result = withTransferPrompts(base, DEFAULT_EDIT_FLAGS);
     expect(result.guidelines.some((g) => g.includes("path resolution is anchor-only; do not pass `path`."))).toBe(true);
@@ -354,9 +355,9 @@ describe("edit prompt flag variants", () => {
 
   it("withTransferPrompts adds the require-path and strict-input notices", () => {
     const base = {
-      description: loadP("../prompts/move.md"),
-      snippet: loadP("../prompts/move-snippet.md"),
-      guidelines: loadGuide("../prompts/move-guidelines.md"),
+      description: loadP("../tool-prompts/move.md"),
+      snippet: loadP("../tool-prompts/move-snippet.md"),
+      guidelines: loadGuide("../tool-prompts/move-guidelines.md"),
     };
     const result = withTransferPrompts(base, { ...DEFAULT_EDIT_FLAGS, requirePath: true, strictInput: true });
     expect(result.guidelines.some((g) => g.includes("pass `path` matching the file the anchors were served for"))).toBe(true);
@@ -390,9 +391,9 @@ describe("codemode prompt variants", () => {
 
   it("adds the script transfer and undo notes only when codemode is active", () => {
     const transferBase = {
-      description: loadP("../prompts/copy.md"),
-      snippet: loadP("../prompts/copy-snippet.md"),
-      guidelines: loadGuide("../prompts/copy-guidelines.md"),
+      description: loadP("../tool-prompts/copy.md"),
+      snippet: loadP("../tool-prompts/copy-snippet.md"),
+      guidelines: loadGuide("../tool-prompts/copy-guidelines.md"),
     };
     const transferOff = withTransferPrompts(transferBase, DEFAULT_EDIT_FLAGS);
     const transferOn = withTransferPrompts(transferBase, { ...DEFAULT_EDIT_FLAGS, codemode: true });

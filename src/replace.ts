@@ -269,9 +269,9 @@ type ToolDef = ToolDefinition<
 
 export function buildToolDef(flags: EditToolFlags = DEFAULT_EDIT_FLAGS): ToolDef {
   const prompted = withReplacePrompts({
-    description: loadP("../prompts/replace.md"),
-    snippet: loadP("../prompts/replace-snippet.md"),
-    guidelines: loadGuide("../prompts/replace-guidelines.md"),
+    description: loadP("../tool-prompts/replace.md"),
+    snippet: loadP("../tool-prompts/replace-snippet.md"),
+    guidelines: loadGuide("../tool-prompts/replace-guidelines.md"),
   }, flags);
   const parameters = buildEditToolSchema(flags.requirePath);
   return {

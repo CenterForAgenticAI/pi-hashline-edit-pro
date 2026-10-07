@@ -29,7 +29,7 @@
   "files": [
     "index.ts",
     "src",
-    "prompts",
+    "tool-prompts",
     "README.md",
     "LICENSE"
   ],

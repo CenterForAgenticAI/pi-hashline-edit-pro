@@ -159,9 +159,9 @@ type InsertToolDef = ToolDefinition<any, ReplaceDetails, RRState> & { renderShel
 
 export function buildInsertToolDef(flags: EditToolFlags = DEFAULT_EDIT_FLAGS): InsertToolDef {
   const prompted = withInsertPrompts({
-    description: loadP("../prompts/insert.md"),
-    snippet: loadP("../prompts/insert-snippet.md"),
-    guidelines: loadGuide("../prompts/insert-guidelines.md"),
+    description: loadP("../tool-prompts/insert.md"),
+    snippet: loadP("../tool-prompts/insert-snippet.md"),
+    guidelines: loadGuide("../tool-prompts/insert-guidelines.md"),
   }, flags);
   return {
     name: "insert",

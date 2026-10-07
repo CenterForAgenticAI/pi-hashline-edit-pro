@@ -45,12 +45,12 @@ const srcCodes = collectCodes(join(root, "src"));
 for (const code of collectFileCodes(join(root, "index.ts"))) {
   srcCodes.add(code);
 }
-for (const code of collectMarkdownCodes(join(root, "prompts"))) {
+for (const code of collectMarkdownCodes(join(root, "tool-prompts"))) {
   srcCodes.add(code);
 }
 
 describe("error code contract", () => {
-  it("documents every error code emitted by src or cited in prompts in the README", () => {
+  it("documents every error code emitted by src or cited in tool prompts in the README", () => {
     const undocumented = [...srcCodes].filter((code) => !readmeCodes.has(code)).sort();
     expect(undocumented).toEqual([]);
   });

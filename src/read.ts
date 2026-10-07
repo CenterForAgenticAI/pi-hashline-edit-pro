@@ -22,10 +22,10 @@ import { withAnchorSession, adoptAnchors, ownerOf, ownersDifferingOnlyByCase, fo
 import { serveRows } from "./served";
 import { Text } from "@earendil-works/pi-tui";
 import { anchoredLine, readResultSchema, withStructuredErrors, type AnchoredLine, type ReadResult } from "./structured";
-const R_DESC = loadP("../prompts/read.md");
-const R_SNIPPET = loadP("../prompts/read-snippet.md");
+const R_DESC = loadP("../tool-prompts/read.md");
+const R_SNIPPET = loadP("../tool-prompts/read-snippet.md");
 function readGuide(): string[] {
-  return loadGuide("../prompts/read-guidelines.md");
+  return loadGuide("../tool-prompts/read-guidelines.md");
 }
 function normPosInt(
 	value: number | undefined,

@@ -113,9 +113,9 @@ function fallbackFileMode(): number {
 
 export function regUndo(pi: ExtensionAPI, flags: EditToolFlags = DEFAULT_EDIT_FLAGS): void {
   const prompted = withUndoPrompts({
-    description: loadP("../prompts/undo-last-change.md"),
-    snippet: loadP("../prompts/undo-last-change-snippet.md"),
-    guidelines: loadGuide("../prompts/undo-last-change-guidelines.md"),
+    description: loadP("../tool-prompts/undo-last-change.md"),
+    snippet: loadP("../tool-prompts/undo-last-change-snippet.md"),
+    guidelines: loadGuide("../tool-prompts/undo-last-change-guidelines.md"),
   }, flags);
   pi.registerTool({
     name: "undo_last_change",

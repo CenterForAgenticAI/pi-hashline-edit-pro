@@ -148,9 +148,9 @@ type ReplaceMatchToolDef = ToolDefinition<any, ReplaceDetails, RRState> & { rend
 
 export function buildReplaceMatchToolDef(flags: EditToolFlags = DEFAULT_EDIT_FLAGS): ReplaceMatchToolDef {
   const prompted = withReplaceMatchPrompts({
-    description: loadP("../prompts/replace-match.md"),
-    snippet: loadP("../prompts/replace-match-snippet.md"),
-    guidelines: loadGuide("../prompts/replace-match-guidelines.md"),
+    description: loadP("../tool-prompts/replace-match.md"),
+    snippet: loadP("../tool-prompts/replace-match-snippet.md"),
+    guidelines: loadGuide("../tool-prompts/replace-match-guidelines.md"),
   }, flags);
   return {
     name: "replace_match",

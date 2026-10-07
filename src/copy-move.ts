@@ -900,11 +900,11 @@ type TransferToolDef = ToolDefinition<any, ReplaceDetails, RRState> & { renderSh
 export function buildTransferToolDef(kind: TransferKind, flags: EditToolFlags = DEFAULT_EDIT_FLAGS): TransferToolDef {
   const prompted = withTransferPrompts(
     {
-      description: loadP(`../prompts/${kind}.md`),
-      snippet: loadP(`../prompts/${kind}-snippet.md`),
+      description: loadP(`../tool-prompts/${kind}.md`),
+      snippet: loadP(`../tool-prompts/${kind}-snippet.md`),
       guidelines: [
-        ...loadGuide(`../prompts/${kind}-guidelines.md`),
-        ...loadGuide("../prompts/transfer-guidelines.md"),
+        ...loadGuide(`../tool-prompts/${kind}-guidelines.md`),
+        ...loadGuide("../tool-prompts/transfer-guidelines.md"),
       ],
     },
     flags,

@@ -535,9 +535,9 @@ export function renderGrepResult(result: { content?: Array<{ type: string; text?
 }
 export function regGrep(pi: ExtensionAPI, flags: EditToolFlags = DEFAULT_EDIT_FLAGS): void {
   const prompted = withGrepPrompts({
-    description: loadP("../prompts/grep.md"),
-    snippet: loadP("../prompts/grep-snippet.md"),
-    guidelines: loadGuide("../prompts/grep-guidelines.md"),
+    description: loadP("../tool-prompts/grep.md"),
+    snippet: loadP("../tool-prompts/grep-snippet.md"),
+    guidelines: loadGuide("../tool-prompts/grep-guidelines.md"),
   }, flags);
   pi.registerTool({
     name: "anchor_grep",

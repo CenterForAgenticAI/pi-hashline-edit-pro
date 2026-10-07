@@ -34,8 +34,8 @@ describe("tool prompt file references", () => {
       new URL("../../src/replace.ts", import.meta.url),
       "utf-8",
     );
-    expect(source).toContain("../prompts/replace.md");
-    expect(source).toContain("../prompts/replace-snippet.md");
-    expect(source).toContain("../prompts/replace-guidelines.md");
+    expect(source).toContain("../tool-prompts/replace.md");
+    expect(source).toContain("../tool-prompts/replace-snippet.md");
+    expect(source).toContain("../tool-prompts/replace-guidelines.md");
   });
 });
