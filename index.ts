@@ -206,7 +206,7 @@ export default function (pi: ExtensionAPI): void {
   }));
 
   pi.registerCommand("hashline-config", {
-    description: "Open the hashline settings window (auto-read, auto-read all, git repos only, ignore folders/files, disable on models, diff context, grep, copy/move, replace_match, path, strict input)",
+    description: "Open the hashline settings window (auto-read, diff context, auto-read all, git repos only, ignore folders/files, grep, copy/move, replace_match, path, strict input, disable on models, read on disabled models)",
     handler: async (_args, ctx) => {
       if (!ctx.hasUI) {
         ctx.ui.notify("/hashline-config requires interactive mode", "error");
@@ -215,15 +215,16 @@ export default function (pi: ExtensionAPI): void {
       await ctx.ui.custom<void>(async (tui, theme, _keybindings, done) => {
         const overlay = new HashlineConfigOverlay({
           tui,
+          maxHeight: () => tui.terminal ? Math.max(6, Math.floor(tui.terminal.rows * 0.9)) : undefined,
           theme,
           done,
           onToggle: async (key, delta, value) => {
             if (key === "autoRead") autoRead = await toggleAutoRead();
-            else if (key === "autoReadAll") { autoReadAll = await cycleAutoReadAllMode(); autoReadAllInjected = false; }
+            else if (key === "autoReadAll") { autoReadAll = await cycleAutoReadAllMode(delta); autoReadAllInjected = false; }
             else if (key === "autoReadAllRequireGit") autoReadAllRequireGit = await toggleAutoReadAllRequireGit();
             else if (key === "autoReadAllIgnore") autoReadAllIgnore = await setAutoReadAllIgnoreFromText(value ?? "");
             else if (key === "disableOnModels") disableOnModels = await setDisableOnModelsFromText(value ?? "");
-            else if (key === "readOnDisabledModels") readOnDisabledModels = await cycleReadOnDisabledModels();
+            else if (key === "readOnDisabledModels") readOnDisabledModels = await cycleReadOnDisabledModels(delta);
             else if (key === "diffContextLines") await adjustDiffContextLines(delta ?? 1);
             else if (key === "anchorGrepEnabled") {
               const enabled = await toggleAnchorGrep();

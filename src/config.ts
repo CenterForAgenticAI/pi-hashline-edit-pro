@@ -250,20 +250,24 @@ export const toggleAutoReadAllRequireGit = (): Promise<boolean> => toggleFlag("a
 export const toggleAnchorGrep = (): Promise<boolean> => toggleFlag("anchorGrepEnabled");
 export const toggleCopyMove = (): Promise<boolean> => toggleFlag("copyMoveEnabled");
 export const toggleReplaceMatch = (): Promise<boolean> => toggleFlag("replaceMatchEnabled");
-export async function cycleReadOnDisabledModels(): Promise<ReadOnDisabledModels> {
+function steppedIndex(length: number, index: number, delta: number): number {
+  return ((index + delta) % length + length) % length;
+}
+
+export async function cycleReadOnDisabledModels(delta = 1): Promise<ReadOnDisabledModels> {
   let next: ReadOnDisabledModels = "vanilla";
   await updateConfig((c) => {
     const current = c.readOnDisabledModels ?? "vanilla";
-    next = READ_ON_DISABLED_MODELS[(READ_ON_DISABLED_MODELS.indexOf(current) + 1) % READ_ON_DISABLED_MODELS.length] ?? "remove";
+    next = READ_ON_DISABLED_MODELS[steppedIndex(READ_ON_DISABLED_MODELS.length, READ_ON_DISABLED_MODELS.indexOf(current), delta)] ?? "remove";
     c.readOnDisabledModels = next;
   });
   return next;
 }
-export async function cycleAutoReadAllMode(): Promise<AutoReadAllMode> {
+export async function cycleAutoReadAllMode(delta = 1): Promise<AutoReadAllMode> {
   let next: AutoReadAllMode = "off";
   await updateConfig((c) => {
     const current = c.autoReadAll ?? "off";
-    next = AUTO_READ_ALL_MODES[(AUTO_READ_ALL_MODES.indexOf(current) + 1) % AUTO_READ_ALL_MODES.length] ?? "off";
+    next = AUTO_READ_ALL_MODES[steppedIndex(AUTO_READ_ALL_MODES.length, AUTO_READ_ALL_MODES.indexOf(current), delta)] ?? "off";
     c.autoReadAll = next;
   });
   return next;

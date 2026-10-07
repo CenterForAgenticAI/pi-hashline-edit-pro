@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { discoverAutoReadAllFiles, buildAutoReadAllInjection, normalizeAutoReadAllIgnoreList, isExcludedByCustomIgnore } from "../../src/auto-read-all";
 import { parseAutoReadAllIgnore, setAutoReadAllIgnore, setAutoReadAllIgnoreFromText, setDisableOnModels, readConfig } from "../../src/config";
 import { configRows, HashlineConfigOverlay } from "../../src/config-ui";
-import { makeTempDir, rmRetry, withTempDir } from "../support/fixtures";
+import { makeConfigOverlay, makeTempDir, rmRetry, withTempDir } from "../support/fixtures";
 
 function initGitRepo(cwd: string): void {
   execFileSync("git", ["init", "-q"], { cwd });
@@ -201,8 +201,7 @@ describe("configRows ignore folders", () => {
 });
 
 function makeOverlay(onToggle: (key: string, delta?: number, value?: string) => Promise<void>): HashlineConfigOverlay {
-  const theme = { fg: (_area: string, text: string) => text, bold: (text: string) => text } as never;
-  return new HashlineConfigOverlay({ tui: { requestRender() {} }, theme, done() {}, onToggle: onToggle as never });
+  return makeConfigOverlay({ onToggle });
 }
 
 describe("HashlineConfigOverlay ignore editing", () => {
@@ -214,6 +213,7 @@ describe("HashlineConfigOverlay ignore editing", () => {
         seen.push({ key, value });
       });
       await overlay.load();
+      overlay.handleInput("j");
       overlay.handleInput("j");
       overlay.handleInput("j");
       overlay.handleInput("j");
@@ -240,6 +240,7 @@ describe("HashlineConfigOverlay ignore editing", () => {
       overlay.handleInput("j");
       overlay.handleInput("j");
       overlay.handleInput("j");
+      overlay.handleInput("j");
       overlay.handleInput("e");
       overlay.handleInput("x");
       overlay.handleInput("\x1b");
@@ -257,6 +258,7 @@ describe("HashlineConfigOverlay ignore editing", () => {
         seen.push(value ?? "");
       });
       await overlay.load();
+      overlay.handleInput("j");
       overlay.handleInput("j");
       overlay.handleInput("j");
       overlay.handleInput("j");

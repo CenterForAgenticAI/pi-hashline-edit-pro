@@ -1,4 +1,4 @@
-import { Key, matchesKey, visibleWidth } from "@earendil-works/pi-tui";
+import { Key, matchesKey, truncateToWidth, visibleWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import { readConfig, type Config } from "./config";
 
@@ -8,7 +8,11 @@ export interface ConfigRow {
   key: ConfigToggleKey;
   label: string;
   hint: string;
+  group: string;
+  depth: number;
   enabled: boolean;
+  dependsOn?: ConfigToggleKey;
+  gated?: boolean;
   mode?: string;
   cycle?: string[];
   value?: number;
@@ -16,54 +20,79 @@ export interface ConfigRow {
   disabled?: boolean;
 }
 
+function rowActive(row: ConfigRow): boolean {
+  if (row.entries !== undefined) return row.entries.length > 0;
+  if (row.mode !== undefined) return row.mode !== "off";
+  return row.enabled;
+}
+
 export function configRows(config: Config): ConfigRow[] {
-  return [
-    { key: "autoRead", label: "Auto-read", hint: "Anchors after write + post-edit diffs", enabled: config.autoRead !== false },
-    { key: "autoReadAll", label: "Auto-read all", hint: "Attach on the first turn: off, outline (structure map), full (full content)", enabled: (config.autoReadAll ?? "off") !== "off", mode: config.autoReadAll ?? "off", cycle: ["off", "outline", "full"] },
-    { key: "autoReadAllRequireGit", label: "Git repos only", hint: "Attach only inside a git repository", enabled: config.autoReadAllRequireGit !== false, disabled: (config.autoReadAll ?? "off") === "off" },
-    { key: "autoReadAllIgnore", label: "Ignore folders/files", hint: "Extra folders, files, or globs skipped by auto-read all (comma-separated)", enabled: (config.autoReadAllIgnore ?? []).length > 0, entries: config.autoReadAllIgnore ?? [] },
-    { key: "diffContextLines", label: "Diff context", hint: "Surrounding lines in post-edit diffs (needs Auto-read)", enabled: config.autoRead !== false, value: config.diffContextLines ?? 1, disabled: config.autoRead === false },
-    { key: "anchorGrepEnabled", label: "Anchor grep", hint: "anchor_grep tool (builtin grep off while on)", enabled: config.anchorGrepEnabled === true },
-    { key: "copyMoveEnabled", label: "Copy/move", hint: "copy and move tools (both off while disabled)", enabled: config.copyMoveEnabled !== false },
-    { key: "requirePath", label: "Require path", hint: "replace, insert, copy, move need path (RPC visibility)", enabled: config.requirePath === true },
-    { key: "strictInput", label: "Strict input", hint: "Reject auto-fixable slips instead of warnings", enabled: config.strictInput === true },
-    { key: "replaceMatchEnabled", label: "Replace match", hint: "replace_match tool (off while disabled)", enabled: config.replaceMatchEnabled !== false },
-    { key: "disableOnModels", label: "Disable on models", hint: "Model globs (provider/id, model id, or api) that turn off the anchored edit tools (comma-separated)", enabled: (config.disableOnModels ?? []).length > 0, entries: config.disableOnModels ?? [] },
-    { key: "readOnDisabledModels", label: "Read on disabled models", hint: "Read for models matched by Disable on models: vanilla (plain pi read), or remove it", enabled: (config.readOnDisabledModels ?? "vanilla") !== "remove", mode: config.readOnDisabledModels ?? "vanilla", cycle: ["remove", "vanilla"] },
+  const rows: ConfigRow[] = [
+    { key: "autoRead", group: "Auto-read", depth: 0, label: "Auto-read", hint: "Anchors after write + post-edit diffs", enabled: config.autoRead !== false },
+    { key: "diffContextLines", group: "Auto-read", depth: 1, dependsOn: "autoRead", gated: true, label: "Diff context", hint: "Surrounding lines in post-edit diffs", enabled: config.autoRead !== false, value: config.diffContextLines ?? 1 },
+    { key: "autoReadAll", group: "Auto-read all", depth: 0, label: "Auto-read all", hint: "Attach on the first turn: off, outline (structure map), full (full content)", enabled: (config.autoReadAll ?? "off") !== "off", mode: config.autoReadAll ?? "off", cycle: ["off", "outline", "full"] },
+    { key: "autoReadAllRequireGit", group: "Auto-read all", depth: 1, dependsOn: "autoReadAll", gated: true, label: "Git repos only", hint: "Attach only inside a git repository", enabled: config.autoReadAllRequireGit !== false },
+    { key: "autoReadAllIgnore", group: "Auto-read all", depth: 1, dependsOn: "autoReadAll", label: "Ignore folders/files", hint: "Extra folders, files, or globs skipped by auto-read all (comma-separated)", enabled: (config.autoReadAllIgnore ?? []).length > 0, entries: config.autoReadAllIgnore ?? [] },
+    { key: "anchorGrepEnabled", group: "Tools", depth: 0, label: "Anchor grep", hint: "anchor_grep tool (builtin grep off while on)", enabled: config.anchorGrepEnabled === true },
+    { key: "copyMoveEnabled", group: "Tools", depth: 0, label: "Copy/move", hint: "copy and move tools (both off while disabled)", enabled: config.copyMoveEnabled !== false },
+    { key: "replaceMatchEnabled", group: "Tools", depth: 0, label: "Replace match", hint: "replace_match tool (off while disabled)", enabled: config.replaceMatchEnabled !== false },
+    { key: "requirePath", group: "Edit behavior", depth: 0, label: "Require path", hint: "replace, insert, copy, move need path (RPC visibility)", enabled: config.requirePath === true },
+    { key: "strictInput", group: "Edit behavior", depth: 0, label: "Strict input", hint: "Reject auto-fixable slips instead of warnings", enabled: config.strictInput === true },
+    { key: "disableOnModels", group: "Model gating", depth: 0, label: "Disable on models", hint: "Model globs (provider/id, model id, or api) that turn off the anchored edit tools (comma-separated)", enabled: (config.disableOnModels ?? []).length > 0, entries: config.disableOnModels ?? [] },
+    { key: "readOnDisabledModels", group: "Model gating", depth: 1, dependsOn: "disableOnModels", gated: true, label: "Read on disabled models", hint: "Read for models matched by Disable on models: vanilla (plain pi read), or remove it", enabled: (config.readOnDisabledModels ?? "vanilla") !== "remove", mode: config.readOnDisabledModels ?? "vanilla", cycle: ["remove", "vanilla"] },
   ];
+  for (const row of rows) {
+    if (row.gated !== true || row.dependsOn === undefined) continue;
+    const parent = rows.find((candidate) => candidate.key === row.dependsOn);
+    row.disabled = parent !== undefined && !rowActive(parent);
+  }
+  return rows;
 }
 
 function padRow(theme: Theme, innerWidth: number, content: string): string {
-  const padded = content + " ".repeat(Math.max(0, innerWidth - visibleWidth(content)));
+  const clipped = visibleWidth(content) > innerWidth ? truncateToWidth(content, innerWidth) : content;
+  const padded = clipped + " ".repeat(Math.max(0, innerWidth - visibleWidth(clipped)));
   return theme.fg("border", "│") + padded + theme.fg("border", "│");
 }
 
-function modeBox(theme: Theme, mode: string): string {
-  if (mode === "off") return theme.fg("dim", `[${mode}]`);
+function modeBox(theme: Theme, mode: string, disabled?: boolean): string {
+  if (disabled === true || mode === "off") return theme.fg("dim", `[${mode}]`);
   if (mode === "strict") return theme.fg("accent", `[${mode}]`);
   return theme.fg("success", `[${mode}]`);
 }
 
 function numberBox(theme: Theme, value: number, disabled?: boolean): string {
-  if (disabled) return theme.fg("dim", `[${value}]`);
+  if (disabled === true) return theme.fg("dim", `[${value}]`);
   return theme.fg("accent", `[${value}]`);
 }
-function listBox(theme: Theme, entries: string[]): string {
+
+function listBox(theme: Theme, entries: string[], disabled?: boolean): string {
+  if (disabled === true) return theme.fg("dim", `[${entries.length}]`);
   return theme.fg("accent", `[${entries.length}]`);
 }
-function formatList(entries: string[]): string {
-  if (entries.length === 0) return "(empty)";
-  const joined = entries.join(", ");
-  return joined.length > 40 ? `${joined.slice(0, 37)}...` : joined;
+
+function rowBox(theme: Theme, row: ConfigRow): string {
+  if (row.entries !== undefined) return listBox(theme, row.entries, row.disabled);
+  if (row.value !== undefined) return numberBox(theme, row.value, row.disabled);
+  if (row.mode !== undefined) return modeBox(theme, row.mode, row.disabled);
+  if (row.disabled === true) return theme.fg("dim", row.enabled ? "[x]" : "[ ]");
+  return row.enabled ? theme.fg("success", "[x]") : theme.fg("dim", "[ ]");
+}
+
+function rowDetail(row: ConfigRow): string {
+  if (row.entries === undefined) return row.hint;
+  const joined = row.entries.length > 0 ? row.entries.join(", ") : "(empty)";
+  return `${row.hint}: ${joined}`;
 }
 
 export class HashlineConfigOverlay {
   private rows: ConfigRow[];
   private selected = 0;
+  private scrollTop = 0;
   private editingList = false;
   private editBuffer = "";
 
-  constructor(private readonly opts: { tui: { requestRender(force?: boolean): void }; theme: Theme; done: () => void; onToggle: (key: ConfigToggleKey, delta?: number, value?: string) => Promise<void> }) {
+  constructor(private readonly opts: { tui: { requestRender(force?: boolean): void }; theme: Theme; done: () => void; maxHeight?: () => number | undefined; onToggle: (key: ConfigToggleKey, delta?: number, value?: string) => Promise<void> }) {
     this.rows = [];
   }
 
@@ -101,6 +130,16 @@ export class HashlineConfigOverlay {
     this.opts.tui.requestRender(true);
   }
 
+  private applyCycle(row: ConfigRow, step: number): void {
+    if (row.cycle === undefined || row.mode === undefined) return;
+    const index = row.cycle.indexOf(row.mode);
+    const next = row.cycle[(index + step + row.cycle.length) % row.cycle.length];
+    if (next === undefined) return;
+    row.mode = next;
+    row.enabled = next !== "off";
+    this.runToggle(row, step);
+  }
+
   private toggleSelected(): void {
     const row = this.rows[this.selected];
     if (!row || row.disabled) return;
@@ -113,22 +152,31 @@ export class HashlineConfigOverlay {
       this.runToggle(row, 1);
       return;
     }
-    if (row.cycle && row.mode !== undefined) {
-      const next = row.cycle[(row.cycle.indexOf(row.mode) + 1) % row.cycle.length] ?? row.cycle[0];
-      if (next === undefined) return;
-      row.mode = next;
-      row.enabled = next !== "off";
-    } else {
-      row.enabled = !row.enabled;
+    if (row.cycle !== undefined && row.mode !== undefined) {
+      this.applyCycle(row, 1);
+      return;
     }
+    row.enabled = !row.enabled;
     this.runToggle(row);
   }
 
   private adjustSelected(delta: number): void {
     const row = this.rows[this.selected];
-    if (!row || row.disabled || row.value === undefined) return;
-    row.value += delta;
-    this.runToggle(row, delta);
+    if (!row || row.disabled) return;
+    if (row.value !== undefined) {
+      row.value += delta;
+      this.runToggle(row, delta);
+      return;
+    }
+    if (row.cycle !== undefined && row.mode !== undefined) {
+      this.applyCycle(row, delta > 0 ? 1 : -1);
+      return;
+    }
+    if (row.entries !== undefined) return;
+    const wanted = delta > 0;
+    if (row.enabled === wanted) return;
+    row.enabled = wanted;
+    this.runToggle(row);
   }
 
   handleInput(data: string): void {
@@ -194,24 +242,60 @@ export class HashlineConfigOverlay {
   render(width: number): string[] {
     const theme = this.opts.theme;
     const innerWidth = width - 2;
-    const lines: string[] = [];
-    lines.push(theme.fg("border", `╭${"─".repeat(innerWidth)}╮`));
-    lines.push(padRow(theme, innerWidth, ` ${theme.fg("accent", theme.bold("Hashline Config"))}`));
-    lines.push(theme.fg("border", `├${"─".repeat(innerWidth)}┤`));
+    const body: string[] = [];
+    const spans: Array<{ start: number; end: number }> = [];
+    let group = "";
     this.rows.forEach((row, index) => {
-      const cursor = index === this.selected ? theme.fg("accent", "> ") : "  ";
-      const box = row.entries !== undefined ? listBox(theme, row.entries) : row.value !== undefined ? numberBox(theme, row.value, row.disabled) : row.mode !== undefined ? modeBox(theme, row.mode) : row.enabled ? theme.fg("success", "[x]") : theme.fg("dim", "[ ]");
-      const label = row.disabled ? theme.fg("dim", row.label) : index === this.selected ? theme.fg("accent", theme.bold(row.label)) : row.label;
-      const suffix = row.entries !== undefined ? ` — ${row.hint}: ${formatList(row.entries)}` : ` — ${row.hint}`;
-      lines.push(padRow(theme, innerWidth, `${cursor}${box} ${label} ${theme.fg("dim", suffix)}`));
-      if (row.entries !== undefined && index === this.selected && this.editingList) {
-        lines.push(padRow(theme, innerWidth, `  ${theme.fg("accent", "edit:")} ${this.editBuffer}█ ${theme.fg("dim", "(Enter save · Esc cancel · Ctrl-U clear)")}`));
+      if (row.group !== group) {
+        group = row.group;
+        body.push(padRow(theme, innerWidth, theme.fg("dim", theme.bold(` ${group}`))));
       }
+      const start = body.length;
+      const selected = index === this.selected;
+      const indent = "  ".repeat(row.depth);
+      const cursor = selected ? theme.fg("accent", "> ") : "  ";
+      const box = rowBox(theme, row);
+      const label = row.disabled === true ? theme.fg("dim", row.label) : selected ? theme.fg("accent", theme.bold(row.label)) : row.label;
+      const headWidth = 2 + indent.length + visibleWidth(box) + 1;
+      const contentWidth = Math.max(1, innerWidth - headWidth);
+      wrapTextWithAnsi(label, contentWidth).forEach((segment, part) => {
+        body.push(padRow(theme, innerWidth, (part === 0 ? `${cursor}${indent}${box} ` : " ".repeat(headWidth)) + segment));
+      });
+      for (const segment of wrapTextWithAnsi(theme.fg("dim", rowDetail(row)), contentWidth)) {
+        body.push(padRow(theme, innerWidth, " ".repeat(headWidth) + segment));
+      }
+      if (row.entries !== undefined && selected && this.editingList) {
+        const edit = `${theme.fg("accent", "edit:")} ${this.editBuffer}█ ${theme.fg("dim", "(Enter save · Esc cancel · Ctrl-U clear)")}`;
+        for (const segment of wrapTextWithAnsi(edit, Math.max(1, innerWidth - 2))) {
+          body.push(padRow(theme, innerWidth, `  ${segment}`));
+        }
+      }
+      spans.push({ start, end: body.length - 1 });
     });
-    lines.push(theme.fg("border", `├${"─".repeat(innerWidth)}┤`));
+    const head = [
+      theme.fg("border", `╭${"─".repeat(innerWidth)}╮`),
+      padRow(theme, innerWidth, ` ${theme.fg("accent", theme.bold("Hashline Config"))}`),
+      theme.fg("border", `├${"─".repeat(innerWidth)}┤`),
+    ];
     const footer = this.editingList ? " type to edit · Enter save · Esc cancel" : " ↑↓ navigate · space toggle · ←/→ or -/+ adjust · e edit list · q close";
-    lines.push(padRow(theme, innerWidth, theme.fg("dim", footer)));
-    lines.push(theme.fg("border", `╰${"─".repeat(innerWidth)}╯`));
-    return lines;
+    const tail = [
+      theme.fg("border", `├${"─".repeat(innerWidth)}┤`),
+      padRow(theme, innerWidth, theme.fg("dim", footer)),
+      theme.fg("border", `╰${"─".repeat(innerWidth)}╯`),
+    ];
+    const limit = this.opts.maxHeight?.();
+    if (limit === undefined || body.length + head.length + tail.length <= limit) {
+      this.scrollTop = 0;
+      return [...head, ...body, ...tail];
+    }
+    const viewport = Math.max(1, limit - head.length - tail.length);
+    const span = spans[this.selected] ?? { start: 0, end: 0 };
+    let top = this.scrollTop;
+    if (span.end - span.start + 1 > viewport) top = span.start;
+    else if (span.start < top) top = span.start;
+    else if (span.end >= top + viewport) top = span.end - viewport + 1;
+    top = Math.max(0, Math.min(top, Math.max(0, body.length - viewport)));
+    this.scrollTop = top;
+    return [...head, ...body.slice(top, top + viewport), ...tail];
   }
 }

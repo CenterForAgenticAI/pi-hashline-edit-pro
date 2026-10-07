@@ -386,7 +386,7 @@ describe("replace_match default", () => {
         await sessionStart({}, { cwd: dir, ui: { notify: vi.fn() } });
         expect(getActive()).toContain("replace_match");
         const overlay = await openConfigOverlay(commands, dir);
-        for (let step = 0; step < 9; step++) overlay.handleInput("j");
+        for (let step = 0; step < 7; step++) overlay.handleInput("j");
         overlay.handleInput(" ");
         await waitForConfig(async () => (await readConfig()).replaceMatchEnabled === false && !getActive().includes("replace_match"));
         expect(getActive()).not.toContain("replace_match");
@@ -433,7 +433,7 @@ describe("hashline-config overlay rendering", () => {
         overlay.handleInput("k");
         expect(overlay.render(60).find((line) => line.includes("Read on disabled models"))!).toContain("> ");
         overlay.handleInput("j");
-        expect(overlay.render(60).find((line) => line.includes("Auto-read"))!).toContain("> ");
+        expect(overlay.render(60).find((line) => line.includes("[x] Auto-read"))!).toContain("> ");
         overlay.invalidate();
         overlay.handleInput("q");
         expect(closed).toBe(true);
@@ -463,10 +463,10 @@ describe("hashline-config overlay rendering", () => {
         await waitForConfig(async () => (await readConfig()).autoRead === false);
 
         overlay.handleInput("j");
+        overlay.handleInput("j");
         overlay.handleInput(" ");
         await waitForConfig(async () => (await readConfig()).autoReadAll === "outline");
 
-        overlay.handleInput("j");
         overlay.handleInput("j");
         overlay.handleInput("j");
         overlay.handleInput("j");
@@ -477,6 +477,7 @@ describe("hashline-config overlay rendering", () => {
         overlay.handleInput(" ");
         await waitForConfig(async () => (await readConfig()).copyMoveEnabled === false);
 
+        overlay.handleInput("j");
         overlay.handleInput("j");
         overlay.handleInput(" ");
         await waitForConfig(async () => (await readConfig()).requirePath === true);
@@ -518,24 +519,15 @@ describe("hashline-config overlay rendering", () => {
         const overlay = await openConfigOverlay(commands, dir);
 
         overlay.handleInput("j");
-        overlay.handleInput("j");
-        overlay.handleInput("j");
-        overlay.handleInput("j");
         overlay.handleInput("+");
         await waitForConfig(async () => (await readConfig()).diffContextLines === 2);
         overlay.handleInput("-");
         await waitForConfig(async () => (await readConfig()).diffContextLines === 1);
 
         overlay.handleInput("k");
-        overlay.handleInput("k");
-        overlay.handleInput("k");
-        overlay.handleInput("k");
         overlay.handleInput(" ");
         await waitForConfig(async () => (await readConfig()).autoRead === false);
         await new Promise((resolve) => setTimeout(resolve, 250));
-        overlay.handleInput("j");
-        overlay.handleInput("j");
-        overlay.handleInput("j");
         overlay.handleInput("j");
         overlay.handleInput("+");
         overlay.handleInput("-");
