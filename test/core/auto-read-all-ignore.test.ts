@@ -229,7 +229,7 @@ describe("HashlineConfigOverlay ignore editing", () => {
       expect(seen[0]!.value).toBe("docs");
     });
   });
-  it("starts editing with e and cancels with escape", async () => {
+  it("starts editing with space and cancels with escape", async () => {
     await withTempDir("ignore-overlay-cancel-", async () => {
       await setAutoReadAllIgnore(["keep"]);
       let calls = 0;
@@ -241,7 +241,7 @@ describe("HashlineConfigOverlay ignore editing", () => {
       overlay.handleInput("j");
       overlay.handleInput("j");
       overlay.handleInput("j");
-      overlay.handleInput("e");
+      overlay.handleInput(" ");
       overlay.handleInput("x");
       overlay.handleInput("\x1b");
       await new Promise((resolve) => setTimeout(resolve, 50));

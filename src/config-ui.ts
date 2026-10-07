@@ -226,11 +226,6 @@ export class HashlineConfigOverlay {
       this.toggleSelected();
       return;
     }
-    const row = this.rows[this.selected];
-    if ((data === "e" || data === "E") && row && row.entries !== undefined && !row.disabled) {
-      this.startListEdit(row);
-      return;
-    }
     if (matchesKey(data, Key.escape) || data === "q") {
       this.opts.done();
     }
@@ -277,7 +272,7 @@ export class HashlineConfigOverlay {
       padRow(theme, innerWidth, ` ${theme.fg("accent", theme.bold("Hashline Config"))}`),
       theme.fg("border", `├${"─".repeat(innerWidth)}┤`),
     ];
-    const footer = this.editingList ? " type to edit · Enter save · Esc cancel" : " ↑↓ navigate · space toggle · ←/→ or -/+ adjust · e edit list · q close";
+    const footer = this.editingList ? " type to edit · Enter save · Esc cancel" : " ↑↓ navigate · space toggle/edit · ←/→ or -/+ adjust · q close";
     const tail = [
       theme.fg("border", `├${"─".repeat(innerWidth)}┤`),
       padRow(theme, innerWidth, theme.fg("dim", footer)),
