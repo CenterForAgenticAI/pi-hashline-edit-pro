@@ -128,7 +128,7 @@ describe("HashlineConfigOverlay viewport", () => {
       const lines = overlay.render(60);
       const labelIndex = lines.findIndex((line) => line.includes("[x] Auto-read"));
       expect(labelIndex).toBeGreaterThanOrEqual(0);
-      expect(lines[labelIndex + 1]).toContain("Anchors after write + post-edit diffs");
+      expect(lines[labelIndex + 1]).toContain("Show fresh anchors after write and post-edit diffs");
       expect(lines.every((line) => visibleWidth(line) <= 60)).toBe(true);
     });
   });

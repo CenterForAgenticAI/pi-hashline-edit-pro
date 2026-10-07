@@ -28,18 +28,18 @@ function rowActive(row: ConfigRow): boolean {
 
 export function configRows(config: Config): ConfigRow[] {
   const rows: ConfigRow[] = [
-    { key: "autoRead", group: "Auto-read", depth: 0, label: "Auto-read", hint: "Anchors after write + post-edit diffs", enabled: config.autoRead !== false },
-    { key: "diffContextLines", group: "Auto-read", depth: 1, dependsOn: "autoRead", gated: true, label: "Diff context", hint: "Surrounding lines in post-edit diffs", enabled: config.autoRead !== false, value: config.diffContextLines ?? 1 },
-    { key: "autoReadAll", group: "Auto-read all", depth: 0, label: "Auto-read all", hint: "Attach on the first turn: off, outline (structure map), full (full content)", enabled: (config.autoReadAll ?? "off") !== "off", mode: config.autoReadAll ?? "off", cycle: ["off", "outline", "full"] },
+    { key: "autoRead", group: "Auto-read", depth: 0, label: "Auto-read", hint: "Show fresh anchors after write and post-edit diffs", enabled: config.autoRead !== false },
+    { key: "diffContextLines", group: "Auto-read", depth: 1, dependsOn: "autoRead", gated: true, label: "Diff context", hint: "Context lines around each change in post-edit diffs", enabled: config.autoRead !== false, value: config.diffContextLines ?? 1 },
+    { key: "autoReadAll", group: "Auto-read all", depth: 0, label: "Auto-read all", hint: "Attach project files when a session starts", enabled: (config.autoReadAll ?? "off") !== "off", mode: config.autoReadAll ?? "off", cycle: ["off", "outline", "full"] },
     { key: "autoReadAllRequireGit", group: "Auto-read all", depth: 1, dependsOn: "autoReadAll", gated: true, label: "Git repos only", hint: "Attach only inside a git repository", enabled: config.autoReadAllRequireGit !== false },
-    { key: "autoReadAllIgnore", group: "Auto-read all", depth: 1, dependsOn: "autoReadAll", label: "Ignore folders/files", hint: "Extra folders, files, or globs skipped by auto-read all (comma-separated)", enabled: (config.autoReadAllIgnore ?? []).length > 0, entries: config.autoReadAllIgnore ?? [] },
-    { key: "anchorGrepEnabled", group: "Tools", depth: 0, label: "Anchor grep", hint: "anchor_grep tool (builtin grep off while on)", enabled: config.anchorGrepEnabled === true },
-    { key: "copyMoveEnabled", group: "Tools", depth: 0, label: "Copy/move", hint: "copy and move tools (both off while disabled)", enabled: config.copyMoveEnabled !== false },
-    { key: "replaceMatchEnabled", group: "Tools", depth: 0, label: "Replace match", hint: "replace_match tool (off while disabled)", enabled: config.replaceMatchEnabled !== false },
-    { key: "requirePath", group: "Edit behavior", depth: 0, label: "Require path", hint: "replace, insert, copy, move need path (RPC visibility)", enabled: config.requirePath === true },
+    { key: "autoReadAllIgnore", group: "Auto-read all", depth: 1, dependsOn: "autoReadAll", label: "Ignore folders/files", hint: "Folders, files, or globs that auto-read all skips (comma-separated)", enabled: (config.autoReadAllIgnore ?? []).length > 0, entries: config.autoReadAllIgnore ?? [] },
+    { key: "anchorGrepEnabled", group: "Tools", depth: 0, label: "Anchor grep", hint: "Use anchor_grep instead of the built-in grep", enabled: config.anchorGrepEnabled === true },
+    { key: "copyMoveEnabled", group: "Tools", depth: 0, label: "Copy/move", hint: "Enable the copy and move tools", enabled: config.copyMoveEnabled !== false },
+    { key: "replaceMatchEnabled", group: "Tools", depth: 0, label: "Replace match", hint: "Enable the replace_match tool", enabled: config.replaceMatchEnabled !== false },
+    { key: "requirePath", group: "Edit behavior", depth: 0, label: "Require path", hint: "Edit tools must also send a matching path", enabled: config.requirePath === true },
     { key: "strictInput", group: "Edit behavior", depth: 0, label: "Strict input", hint: "Reject auto-fixable slips instead of warnings", enabled: config.strictInput === true },
-    { key: "disableOnModels", group: "Model gating", depth: 0, label: "Disable on models", hint: "Model globs (provider/id, model id, or api) that turn off the anchored edit tools (comma-separated)", enabled: (config.disableOnModels ?? []).length > 0, entries: config.disableOnModels ?? [] },
-    { key: "readOnDisabledModels", group: "Model gating", depth: 1, dependsOn: "disableOnModels", gated: true, label: "Read on disabled models", hint: "Read for models matched by Disable on models: vanilla (plain pi read), or remove it", enabled: (config.readOnDisabledModels ?? "vanilla") !== "remove", mode: config.readOnDisabledModels ?? "vanilla", cycle: ["remove", "vanilla"] },
+    { key: "disableOnModels", group: "Model gating", depth: 0, label: "Disable on models", hint: "Model globs that turn off anchored tools (comma-separated)", enabled: (config.disableOnModels ?? []).length > 0, entries: config.disableOnModels ?? [] },
+    { key: "readOnDisabledModels", group: "Model gating", depth: 1, dependsOn: "disableOnModels", gated: true, label: "Read on disabled models", hint: "Keep read available for models disabled above", enabled: (config.readOnDisabledModels ?? "vanilla") !== "remove", mode: config.readOnDisabledModels ?? "vanilla", cycle: ["remove", "vanilla"] },
   ];
   for (const row of rows) {
     if (row.gated !== true || row.dependsOn === undefined) continue;
