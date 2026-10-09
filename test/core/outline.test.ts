@@ -30,6 +30,7 @@ describe("renderSymbolOutline", () => {
 			languageName: "TypeScript",
 			totalLines: 5,
 			hashes: HASHES,
+			lines: ["", "export class App {", "  run(speed: number) {", "    return speed;", "  }"],
 			symbols,
 		});
 		expect(result.text).toContain("=== src/app.ts (TypeScript) — 5 lines ===");
@@ -46,7 +47,7 @@ describe("renderSymbolOutline", () => {
 			startLine: index + 1,
 			endLine: index + 1,
 		}));
-		const result = renderSymbolOutline({ displayPath: "a.ts", totalLines: 5, hashes: HASHES, symbols, maxRows: 2 });
+		const result = renderSymbolOutline({ displayPath: "a.ts", totalLines: 5, hashes: HASHES, lines: ["fn0", "fn1", "fn2", "fn3", "fn4"], symbols, maxRows: 2 });
 		expect(result.rows).toHaveLength(2);
 		expect(result.truncated).toBe(true);
 		expect(result.text).toContain("... (3 more symbols)");
@@ -60,7 +61,7 @@ describe("renderSymbolOutline", () => {
 			endLine: 3,
 			children: [{ name: "inner", type: "function", startLine: 2, endLine: 2 }],
 		};
-		const result = renderSymbolOutline({ displayPath: "a.ts", totalLines: 3, hashes: HASHES, symbols: [parent], maxDepth: 0 });
+		const result = renderSymbolOutline({ displayPath: "a.ts", totalLines: 3, hashes: HASHES, lines: ["class outer {", "  inner()", "}"], symbols: [parent], maxDepth: 0 });
 		expect(result.text).toContain("(1 nested items)");
 		expect(result.servedHashes).toEqual(["Aaaa"]);
 	});
@@ -70,6 +71,7 @@ describe("renderSymbolOutline", () => {
 			displayPath: "a.ts",
 			totalLines: 5,
 			hashes: HASHES,
+			lines: [],
 			symbols: [{ name: "gone", type: "function", startLine: 99, endLine: 99 }],
 		});
 		expect(result.rows).toHaveLength(0);
@@ -142,7 +144,15 @@ describe("buildFileOutline", () => {
 		const result = await buildFileOutline({ displayPath: "entry.ts", content, hashes: HASHES });
 		expect(result.text).toContain("Aaaa│function default (pi) [limit 3]");
 		expect(result.text).toContain("Dddd│class default (1 children) [limit 3]");
-		expect(result.text).toContain("Eeee│  method run () [limit 1]");
+		expect(result.text).toContain("Eeee│  run() {}");
+	});
+
+	it("shows single-line symbols as their content without a limit marker", async () => {
+		const content = ["const value = 1;", "export function run() {", "  return value;", "}", ""].join("\n");
+		const result = await buildFileOutline({ displayPath: "app.ts", content, hashes: anchorsFor(content) });
+		expect(result.text).toContain("Aaaa│const value = 1;");
+		expect(result.text).not.toContain("[limit 1]");
+		expect(result.text).toContain("Baaa│function run () [limit 3]");
 	});
 
 	it("outlines function expressions and variable declarators", async () => {
@@ -162,7 +172,7 @@ describe("buildFileOutline", () => {
 		const result = await buildFileOutline({ displayPath: "math.test.ts", content, hashes: HASHES });
 		expect(result.text).toContain("Aaaa│describe math (2 children) [limit 6]");
 		expect(result.text).toContain("Bbbb│  it adds [limit 3]");
-		expect(result.text).toContain("Eeee│  test subtracts [limit 1]");
+		expect(result.text).toContain('Eeee│  test("subtracts", () => {});');
 	});
 
 	it("falls back to a preview for unsupported files", async () => {
@@ -205,8 +215,8 @@ describe("buildFileOutline", () => {
 		const result = await buildFileOutline({ displayPath: "app/UserController.php", content, hashes: anchorsFor(content) });
 		expect(result.text).toContain("=== app/UserController.php (PHP) — 17 lines ===");
 		expect(result.text).toContain("Gaaa│class UserController abstract extends Base implements Repository (3 children) [limit 11]");
-		expect(result.text).toContain("Jaaa│  property $name protected string [limit 1]");
-		expect(result.text).toContain("Kaaa│  const VERSION public = '1.0' [limit 1]");
+		expect(result.text).toContain("Jaaa│    protected string $name;");
+		expect(result.text).toContain("Kaaa│    public const VERSION = '1.0';");
 		expect(result.text).toContain("Maaa│  method index public (): array [limit 4]");
 		expect(result.servedHashes).toEqual(["Gaaa", "Jaaa", "Kaaa", "Maaa"]);
 	});
@@ -238,15 +248,15 @@ describe("buildFileOutline", () => {
 		].join("\n");
 		const result = await buildFileOutline({ displayPath: "app/Domain.php", content, hashes: anchorsFor(content) });
 		expect(result.text).toContain("Caaa│interface Repository extends Countable, Iterator (1 children) [limit 4]");
-		expect(result.text).toContain("Eaaa│  method all public (): array [limit 1]");
+		expect(result.text).toContain("Eaaa│    public function all(): array;");
 		expect(result.text).toContain("Haaa│trait Logs (1 children) [limit 4]");
-		expect(result.text).toContain("Jaaa│  method log public (string $message): void [limit 1]");
+		expect(result.text).toContain("Jaaa│    public function log(string $message): void {}");
 		expect(result.text).toContain("Maaa│enum Suit : string implements HasColor (2 children) [limit 5]");
-		expect(result.text).toContain("Oaaa│  case Hearts = 'H' [limit 1]");
-		expect(result.text).toContain("Paaa│  method color public (): string [limit 1]");
-		expect(result.text).toContain("Saaa│const TOP = 1 [limit 1]");
-		expect(result.text).toContain("Taaa│function $closure (int $x): int [limit 1]");
-		expect(result.text).toContain("Uaaa│arrow_function $arrow (): string [limit 1]");
+		expect(result.text).toContain("Oaaa│    case Hearts = 'H';");
+		expect(result.text).toContain("Paaa│    public function color(): string { return 'red'; }");
+		expect(result.text).toContain("Saaa│const TOP = 1;");
+		expect(result.text).toContain("Taaa│$closure = static function (int $x): int { return $x; };");
+		expect(result.text).toContain("Uaaa│$arrow = static fn (): string => 'x';");
 		expect(result.servedHashes).toEqual(["Caaa", "Eaaa", "Haaa", "Jaaa", "Maaa", "Oaaa", "Paaa", "Saaa", "Taaa", "Uaaa"]);
 	});
 
@@ -278,12 +288,12 @@ describe("buildFileOutline", () => {
 		].join("\n");
 		const result = await buildFileOutline({ displayPath: "resources/views/home.blade.php", content, hashes: anchorsFor(content) });
 		expect(result.text).toContain("=== resources/views/home.blade.php (Blade) — 22 lines ===");
-		expect(result.text).toContain("Aaaa│extends layouts.app [limit 1]");
+		expect(result.text).toContain("Aaaa│@extends('layouts.app')");
 		expect(result.text).toContain("Caaa│section content (4 children) [limit 8]");
-		expect(result.text).toContain("Eaaa│  component x-alert [limit 1]");
-		expect(result.text).toContain("Faaa│  livewire user-table [limit 1]");
-		expect(result.text).toContain("Gaaa│  livewire user-table [limit 1]");
-		expect(result.text).toContain("Haaa│  include partials.footer [limit 1]");
+		expect(result.text).toContain('Eaaa│    <x-alert type="warning" :message="$warning" />');
+		expect(result.text).toContain("Faaa│    @livewire('user-table')");
+		expect(result.text).toContain('Gaaa│    <livewire:user-table :users="$users" />');
+		expect(result.text).toContain("Haaa│    @include('partials.footer')");
 		expect(result.text).toContain("Laaa│stack scripts [limit 3]");
 		expect(result.text).toContain("Paaa│php [limit 3]");
 		expect(result.text).toContain("Taaa│component x-slot:header [limit 3]");
@@ -320,11 +330,11 @@ describe("buildFileOutline", () => {
 		].join("\n");
 		const result = await buildFileOutline({ displayPath: "tests/Feature/UserTest.php", content, hashes: anchorsFor(content) });
 		expect(result.text).toContain("Caaa│test users can register (1 children) [limit 4]");
-		expect(result.text).toContain("Eaaa│  test nested [limit 1]");
+		expect(result.text).toContain("Eaaa│    test('nested', function () {});");
 		expect(result.text).toContain("Haaa│it lists users [limit 3]");
 		expect(result.text).toContain("Laaa│describe math (1 children) [limit 3]");
-		expect(result.text).toContain("Maaa│  test adds [limit 1]");
-		expect(result.text).toContain("Paaa│test grouped [limit 1]");
+		expect(result.text).toContain("Maaa│    test('adds', function () {});");
+		expect(result.text).toContain("Paaa│test('grouped', function () {})->group('slow');");
 		expect(result.servedHashes).toEqual(["Caaa", "Eaaa", "Haaa", "Laaa", "Maaa", "Paaa"]);
 	});
 });

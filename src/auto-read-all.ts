@@ -30,7 +30,7 @@ const HEADER =
   "[hashline auto-read-all] Every non-ignored project file is attached below as `=== path ===` then `anchor│content` rows with live anchors.\nEdit directly from the attachment with replace and insert; do not call read for attached files.\nFiles listed as not attached can be read normally.\nAnchors are case-sensitive and stay valid until their line is edited.";
 
 const OUTLINE_HEADER =
-  "[hashline auto-read-all] Every non-ignored project file is outlined below as `=== path (language) — lines ===` then `anchor│symbol` rows with live anchors.\nEdit a row's anchor with replace or insert, or read from it with `offset` set to that anchor and the row's `limit`; do not call read for attached files.\nFiles listed as not attached can be read normally.\nAnchors are case-sensitive and stay valid until their line is edited.";
+  "[hashline auto-read-all] Every non-ignored project file is outlined below as `=== path (language) — lines ===` then `anchor│...` rows with live anchors: multi-line symbols show a label with `[limit N]`, the span to request when reading from the anchor, and single-line symbols show the line content.\nEdit a row's anchor with replace or insert, or read from it with `offset` set to that anchor and the row's `limit`; do not call read for attached files.\nFiles listed as not attached can be read normally.\nAnchors are case-sensitive and stay valid until their line is edited.";
 
 const IMAGE_EXTENSIONS = new Set([
   ".avif",

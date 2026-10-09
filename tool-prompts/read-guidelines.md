@@ -1,3 +1,3 @@
 - `read`: call again after an edit when you need anchors you lack — post-edit diff `+anchor│`/` anchor│` rows and any served `anchor│content` rows already carry fresh anchors for the changed range.
-- `read`: pass a served anchor as `offset` with `limit` to read from it without line-number math; an outline row's `[limit N]` is the span to request.
-- `read`: an outline row shows a symbol label, not the file line; edit by anchor, and read the anchor (or copy `old_string` from a served row) before `replace_match`.
+- `read`: pass a served anchor as `offset` with `limit` to read from it without line-number math; an outline row's `[limit N]` is the span to request, and a row without one is a single line shown as its content.
+- `read`: an outline row shows a symbol label, or the line content for a single-line symbol; edit by anchor, and read the anchor (or copy `old_string` from a served row) before `replace_match`.

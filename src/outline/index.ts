@@ -23,6 +23,7 @@ export async function buildFileOutline(input: FileOutlineInput): Promise<Outline
 			languageName: parsed.languageName,
 			totalLines: lines.length,
 			hashes: input.hashes,
+			lines,
 			symbols: parsed.symbols,
 			...(input.maxRows !== undefined ? { maxRows: input.maxRows } : {}),
 			...(input.maxDepth !== undefined ? { maxDepth: input.maxDepth } : {}),

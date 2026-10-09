@@ -27,6 +27,7 @@ export interface SymbolOutlineInput {
 	languageName?: string;
 	totalLines: number;
 	hashes: string[];
+	lines: string[];
 	symbols: OutlineSymbol[];
 	maxRows?: number;
 	maxDepth?: number;
@@ -62,7 +63,8 @@ function symbolLabel(symbol: OutlineSymbol, depth: number): string {
 		? ` ${symbol.detail.length > MAX_DETAIL_CHARS ? `${symbol.detail.slice(0, MAX_DETAIL_CHARS - 3)}...` : symbol.detail}`
 		: "";
 	const children = symbol.children !== undefined && symbol.children.length > 0 ? ` (${symbol.children.length} children)` : "";
-	return `${indent}${symbol.type}${name}${detail}${children} [limit ${symbol.endLine - symbol.startLine + 1}]`;
+	const span = symbol.endLine - symbol.startLine + 1;
+	return `${indent}${symbol.type}${name}${detail}${children}${span > 1 ? ` [limit ${span}]` : ""}`;
 }
 
 export function renderSymbolOutline(input: SymbolOutlineInput): OutlineRender {
@@ -92,7 +94,9 @@ export function renderSymbolOutline(input: SymbolOutlineInput): OutlineRender {
 
 	const walk = (symbols: OutlineSymbol[], depth: number): boolean => {
 		for (const symbol of symbols) {
-			if (!addRow(symbol.startLine, symbolLabel(symbol, depth))) return false;
+			const contentLine = symbol.endLine === symbol.startLine ? input.lines[symbol.startLine - 1] : undefined;
+			const text = contentLine === undefined ? symbolLabel(symbol, depth) : clipLine(contentLine, PREVIEW_LINE_CHARS);
+			if (!addRow(symbol.startLine, text)) return false;
 			const children = symbol.children ?? [];
 			if (children.length === 0) continue;
 			if (depth >= maxDepth) {
