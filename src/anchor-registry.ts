@@ -7,7 +7,7 @@ import { sessionClaimsDir } from "./paths";
 import { contentChecksum } from "./hashline/hasher";
 import { ANCHOR_COUNT, anchorAt } from "./hashline/alphabet";
 import { HASH_PROBE_STRIDE } from "./hashline/hash";
-import { errCode, splitLines } from "./utils";
+import { errCode, isRec, splitLines } from "./utils";
 import * as Diff from "diff";
 import { lineChecksum } from "./hashline";
 import { getAllocatedState, persistSnapshot, type HashStore } from "./hash-store";
@@ -197,6 +197,7 @@ function seedServedFromOwned(state: SessionState): void {
 export function foldRegistryEvents(events: RegistryEvent[], seed?: string): SessionState {
   const state = newSessionState(seed);
   for (const event of events) {
+    if (!isRegistryEvent(event)) continue;
     if (event.kind === "clear") {
       state.owned.clear();
       state.lastUsedAt.clear();
@@ -232,15 +233,31 @@ export function foldRegistryEvents(events: RegistryEvent[], seed?: string): Sess
   return state;
 }
 
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((entry) => typeof entry === "string");
+}
+
+function isRegistryEvent(value: unknown): value is RegistryEvent {
+  if (!isRec(value) || typeof value.kind !== "string") return false;
+  if (value.kind === "session") return typeof value.sessionFile === "string";
+  if (value.kind === "clear") return true;
+  if (value.kind === "allocate") {
+    return typeof value.path === "string"
+      && Array.isArray(value.rows)
+      && value.rows.every((row) => Array.isArray(row) && row.length === 2 && typeof row[0] === "string" && typeof row[1] === "string");
+  }
+  if (value.kind === "free") return typeof value.path === "string" && (value.anchors === undefined || isStringArray(value.anchors));
+  if (value.kind === "minted") return isStringArray(value.anchors);
+  return false;
+}
+
 export function parseRegistryLog(raw: string): RegistryEvent[] {
   const events: RegistryEvent[] = [];
   for (const line of raw.split("\n")) {
     if (!line.trim()) continue;
     try {
-      const parsed = JSON.parse(line) as RegistryEvent;
-      if (parsed && (parsed.kind === "allocate" || parsed.kind === "free" || parsed.kind === "clear" || parsed.kind === "session" || parsed.kind === "minted")) {
-        events.push(parsed);
-      }
+      const parsed: unknown = JSON.parse(line);
+      if (isRegistryEvent(parsed)) events.push(parsed);
     } catch {
       continue;
     }

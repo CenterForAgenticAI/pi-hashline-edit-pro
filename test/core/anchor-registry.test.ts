@@ -280,6 +280,19 @@ describe("anchor registry", () => {
     expect(state.owned.size).toBe(0);
   });
 
+  it("skips malformed sidecar events instead of crashing", () => {
+    const events = parseRegistryLog([
+      '{"kind":"allocate","path":"a.ts"}',
+      '{"kind":"free","path":"a.ts","anchors":5}',
+      '{"kind":"minted"}',
+      '{"kind":"allocate","path":"a.ts","rows":[["AAAA","ck1"]]}',
+    ].join("\n"));
+    expect(events).toEqual([{ kind: "allocate", path: "a.ts", rows: [["AAAA", "ck1"]] }]);
+    expect(foldRegistryEvents(events).owned.get("AAAA")).toEqual({ path: "a.ts", checksum: "ck1" });
+    expect(() => foldRegistryEvents([{ kind: "allocate", path: "a.ts" } as never])).not.toThrow();
+    expect(() => foldRegistryEvents([{ kind: "free", path: "a.ts", anchors: 5 } as never])).not.toThrow();
+  });
+
   it("restores ownership and served state from a sidecar log", async () => {
     const sessionFile = join(sessionClaimsDir(), "session.jsonl");
     await mkdir(sessionClaimsDir(), { recursive: true });

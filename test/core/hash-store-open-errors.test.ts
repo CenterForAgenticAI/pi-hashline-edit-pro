@@ -8,6 +8,7 @@ const state = vi.hoisted(() => ({
   busyOnce: null as Error | null,
   persistentBusy: false,
   runCalls: 0,
+  alterError: null as Error | null,
   rename: vi.fn(async () => undefined),
   mkdir: vi.fn(async () => undefined),
   chmod: vi.fn(async () => undefined),
@@ -33,7 +34,9 @@ vi.mock("node:sqlite", () => ({
     get isOpen() {
       return true;
     }
-    exec() {}
+    exec(sql: string) {
+      if (state.alterError && sql.includes("ALTER TABLE")) throw state.alterError;
+    }
     prepare(sql: string) {
       if (sql.includes("SELECT value FROM meta WHERE key = 'version'")) {
         return { get: () => ({ value: "4" }) };
@@ -90,6 +93,7 @@ beforeEach(() => {
   state.busyOnce = null;
   state.persistentBusy = false;
   state.runCalls = 0;
+  state.alterError = null;
   vi.clearAllMocks();
 });
 
@@ -161,6 +165,20 @@ describe("hash store open error handling", () => {
       state.chmod.mockReset();
       state.chmod.mockResolvedValue(undefined);
     }
+  });
+
+  it("rethrows a migration failure that is not a duplicate column", async () => {
+    state.alterError = new Error("disk I/O error");
+    const { loadHashStore, shutdownHashStore } = await import("../../src/hash-store");
+    shutdownHashStore();
+    await expect(loadHashStore()).rejects.toThrow("disk I/O error");
+  });
+
+  it("tolerates adding a column that already exists", async () => {
+    state.alterError = new Error("duplicate column name: line_checksums");
+    const { loadHashStore, shutdownHashStore } = await import("../../src/hash-store");
+    shutdownHashStore();
+    await expect(loadHashStore()).resolves.toBeDefined();
   });
 });
 

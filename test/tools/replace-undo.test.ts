@@ -83,6 +83,33 @@ describe("undo_last_change", () => {
     });
   });
 
+  it("does not persist the pre-undo content while preparing the undo diff", async () => {
+    await withTempFile("sample.ts", "aaa\nbbb\nccc\n", async ({ cwd }) => {
+      const { getTool, ctx } = setupIntegrationTest(cwd);
+      const editTool = getTool("replace");
+      const undo = getTool("undo_last_change");
+      const hashes = await servedAnchors(getTool, ctx, "sample.ts");
+
+      await editTool.execute(
+        "e1",
+        { remove_from: hashes[1]!, remove_to: hashes[1]!, text: ["BBB"] },
+        undefined,
+        undefined,
+        ctx,
+      );
+
+      const spy = vi.spyOn(hashStoreModule, "persistSnapshot");
+      try {
+        const undoResult = await undo.execute("u1", { path: "sample.ts" }, undefined, undefined, ctx);
+        expect(undoResult.isError).toBeFalsy();
+        expect(spy).toHaveBeenCalledTimes(1);
+        expect(spy.mock.calls[0]![2]).toBe("aaa\nbbb\nccc\n");
+      } finally {
+        spy.mockRestore();
+      }
+    });
+  });
+
   it("rejects the file_path alias for undo", async () => {
     await withTempFile("sample.ts", "aaa\nbbb\nccc\n", async ({ cwd }) => {
       const { getTool, ctx } = setupIntegrationTest(cwd);

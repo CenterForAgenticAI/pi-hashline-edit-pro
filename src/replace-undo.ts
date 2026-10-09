@@ -184,7 +184,7 @@ export function regUndo(pi: ExtensionAPI, flags: EditToolFlags = DEFAULT_EDIT_FL
           );
 
           const currentNormalized = currentRaw === undefined ? "" : toLF(stripBOM(currentRaw).text);
-          const currentHashes = await lineHashes(currentNormalized, mutationTargetPath);
+          const currentHashes = await lineHashes(currentNormalized, mutationTargetPath, undefined, undefined, false, true);
           const diffResult = genDiff(undo.content, undo.resultContent, 0, undefined, undo.hashes, { unlimited: true });
           const linesAddedByReplace = cntDiff(diffResult.diff, "+");
           const linesRemovedByReplace = cntDiff(diffResult.diff, "-");

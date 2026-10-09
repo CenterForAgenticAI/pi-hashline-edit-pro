@@ -161,6 +161,15 @@ function openDb(storePath: string): { db: RawDb; stmts: Prepared } {
   }
 }
 
+function addColumnIfMissing(db: RawDb, statement: string): void {
+  try {
+    db.exec(statement);
+  } catch (error) {
+    if (error instanceof Error && /duplicate column/i.test(error.message)) return;
+    throw error;
+  }
+}
+
 function buildStore(db: RawDb): { db: RawDb; stmts: Prepared } {
   db.exec("PRAGMA journal_mode = WAL");
   db.exec("PRAGMA synchronous = NORMAL");
@@ -192,18 +201,10 @@ function buildStore(db: RawDb): { db: RawDb; stmts: Prepared } {
       "updated_at INTEGER NOT NULL" +
     ")"
   );
-  try {
-    db.exec("ALTER TABLE snapshots ADD COLUMN line_checksums TEXT");
-  } catch {}
-  try {
-    db.exec("ALTER TABLE undo ADD COLUMN mode INTEGER");
-  } catch {}
-  try {
-    db.exec("ALTER TABLE undo ADD COLUMN separators TEXT");
-  } catch {}
-  try {
-    db.exec("ALTER TABLE undo ADD COLUMN result_separators TEXT");
-  } catch {}
+  addColumnIfMissing(db, "ALTER TABLE snapshots ADD COLUMN line_checksums TEXT");
+  addColumnIfMissing(db, "ALTER TABLE undo ADD COLUMN mode INTEGER");
+  addColumnIfMissing(db, "ALTER TABLE undo ADD COLUMN separators TEXT");
+  addColumnIfMissing(db, "ALTER TABLE undo ADD COLUMN result_separators TEXT");
   const versionRow = db.prepare("SELECT value FROM meta WHERE key = 'version'").get() as { value?: string } | undefined;
   if (versionRow && versionRow.value !== String(HASH_STORE_VERSION)) {
     db.exec("DELETE FROM snapshots");
