@@ -46,7 +46,7 @@ describe("batched replace_match", () => {
     });
   });
 
-  it("aborts the whole batch when a replace_match substring is missing", async () => {
+  it("demotes a missing replace_match substring and applies the valid sibling", async () => {
     await withTempFile("sample.txt", "alpha\nbeta\ngamma\n", async ({ cwd, path }) => {
       const { handlers, getTool, ctx } = setupIntegrationTest(cwd);
       const read = getTool("read");
@@ -62,10 +62,12 @@ describe("batched replace_match", () => {
       await handlers.get("message_end")!({ type: "message_end", message }, ctx);
 
       const first = await replace.execute("m1", replaceArgs, undefined, undefined, ctx);
-      expect(getText(first)).toBe("In batch 1 (queued)");
+      expect(getText(first)).toContain("Batch 1: 1 edit applied");
 
-      expect(await toolError(() => match.execute("m2", matchArgs, undefined, undefined, ctx))).toContain("[E_SUBSTRING_NOT_FOUND]");
-      expect(await readFile(path, "utf-8")).toBe("alpha\nbeta\ngamma\n");
+      const failure = await toolError(() => match.execute("m2", matchArgs, undefined, undefined, ctx));
+      expect(failure).toContain("[E_SUBSTRING_NOT_FOUND]");
+      expect(failure).not.toContain("Aborts batch");
+      expect(await readFile(path, "utf-8")).toBe("alpha\nBETA\ngamma\n");
     });
   });
 });
@@ -174,7 +176,7 @@ describe("batched same-file copy and move", () => {
     });
   });
 
-  it("aborts a batched copy when the base read frees a source boundary anchor", async () => {
+  it("demotes a batched copy when the base read frees a source boundary anchor", async () => {
     await withTempFile("sample.txt", "alpha\nbeta\ngamma\ndelta\n", async ({ cwd, path }) => {
       const { handlers, getTool, ctx } = setupIntegrationTest(cwd);
       const read = getTool("read");
@@ -193,10 +195,12 @@ describe("batched same-file copy and move", () => {
       await handlers.get("message_end")!({ type: "message_end", message }, ctx);
 
       const first = await replace.execute("s1", replaceArgs, undefined, undefined, ctx);
-      expect(getText(first)).toBe("In batch 1 (queued)");
+      expect(getText(first)).toContain("Batch 1: 1 edit applied");
 
-      expect(await toolError(() => copy.execute("s2", copyArgs, undefined, undefined, ctx))).toContain("[E_STALE_ANCHOR]");
-      expect(await readFile(path, "utf-8")).toBe("alpha\nbeta\nGAMMA\ndelta\n");
+      const failure = await toolError(() => copy.execute("s2", copyArgs, undefined, undefined, ctx));
+      expect(failure).toContain("[E_STALE_ANCHOR]");
+      expect(failure).not.toContain("Aborts batch");
+      expect(await readFile(path, "utf-8")).toBe("ALPHA\nbeta\nGAMMA\ndelta\n");
     });
   });
 });

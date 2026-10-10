@@ -16,6 +16,7 @@ import { loadP, loadGuide } from "./prompts";
 import { type FileIdentity } from "./fs-write";
 import { applyEdit,
   lineHashes,
+  planEdit,
   resEdit,
   preserveDeletionSeparators,
   MAX_HASH_LINES,
@@ -36,7 +37,7 @@ import { resolveTarget } from "./fs-write";
 import { toCwd, toDisplayPath } from "./paths";
 import { queuedEdit, editToolBase, editRenderCallWrapper, editRenderResultWrapper, resolveEditTargetWithRequirement, throwIfStrictInput, withReplacePrompts, DEFAULT_EDIT_FLAGS, type EditToolFlags } from "./edit-common";
 import { commitEdit } from "./commit";
-import { batchMemberFor, executeBatchMember, noteBatchFailure } from "./batch";
+import { batchMemberFor, executeBatchMember, noteBatchFailure, registerBatchPlanner, type BatchMemberPlan, type BatchPlannerInput } from "./batch";
 
 export { editToolSchema, type ReqParams, assertReq };
 
@@ -129,6 +130,28 @@ export function buildReplaceHEdit(params: RawReqParams): { edit: HEdit; warnings
   const edit = resEdit({ ...anchors, text: params.text }, editWarnings);
   return { edit, warnings: editWarnings };
 }
+
+function planReplaceBatchMember(input: BatchPlannerInput): BatchMemberPlan {
+  const req = normReq(input.member.args, "remove");
+  assertReq(req);
+  const literalEscapes = literalEscapeHints([req.text], "text");
+  const built = buildReplaceHEdit(req);
+  const effectiveHedit = preserveDeletionSeparators(built.edit, input.base.baseLines, input.base.hashes);
+  const planned = planEdit(input.base.content, effectiveHedit, input.base.hashes, {
+    filePath: input.displayPath,
+    servedHashes: input.served,
+    signal: input.signal,
+    baseFileLines: input.base.baseLines,
+  });
+  return {
+    hedit: built.edit,
+    warnings: [...literalEscapes, ...built.warnings],
+    planned,
+    foldedLines: 0,
+  };
+}
+
+registerBatchPlanner("replace", planReplaceBatchMember);
 
 function withEndingOverrides(edit: HEdit, overrides: (LineEnding | undefined)[] | undefined): HEdit {
   if (overrides === undefined) return edit;
@@ -290,18 +313,18 @@ export function buildToolDef(flags: EditToolFlags = DEFAULT_EDIT_FLAGS): ToolDef
         assertReq(canonical);
         const normalizedParams = canonical;
         const literalEscapes = literalEscapeHints([normalizedParams.text], "text");
+        const member = batchMemberFor(_toolCallId);
         const targetPath = await resolveEditTargetWithRequirement({
           removeFrom: normalizedParams.remove_from,
           removeTo: normalizedParams.remove_to,
           providedPath: normalizedParams.path,
           cwd: ctx.cwd,
+          anchorTarget: member?.target,
         }).catch((error: unknown) => {
-          const member = batchMemberFor(_toolCallId);
           if (member) noteBatchFailure(member, error);
           throw error;
         });
         return queuedEdit(targetPath, ctx.cwd, signal, async (absolutePath, mutationTargetPath) => {
-          const member = batchMemberFor(_toolCallId);
           if (!member) {
             const pipe = await execPipeline(
               targetPath,
@@ -318,22 +341,12 @@ export function buildToolDef(flags: EditToolFlags = DEFAULT_EDIT_FLAGS): ToolDef
               signal,
             });
           }
-          let built: { edit: HEdit; warnings: string[] };
-          try {
-            built = buildReplaceHEdit(normalizedParams);
-          } catch (error) {
-            noteBatchFailure(member, error);
-            throw error;
-          }
           return executeBatchMember({
-            kind: "replace",
             member,
             targetPath,
             mutationTargetPath,
             cwd: ctx.cwd,
             signal,
-            hedit: built.edit,
-            extraWarnings: [...literalEscapes, ...built.warnings],
           });
         });
       }));

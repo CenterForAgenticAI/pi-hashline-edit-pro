@@ -586,7 +586,7 @@ describe("same-turn edit batches", () => {
     });
   });
 
-  it("fails fast on later calls after the first call fails", async () => {
+  it("demotes a call with an invalid request and applies the siblings", async () => {
     await withTempFile("sample.txt", "a\nb\nc\n", async ({ cwd, path }) => {
       const { getTool, handlers, ctx } = await setupBatchTools(cwd);
       const readTool = getTool("read");
@@ -611,17 +611,17 @@ describe("same-turn edit batches", () => {
         ctx,
       ));
       expect(firstFailure).toContain("[E_BAD_SHAPE]");
+      expect(firstFailure).not.toContain("Aborts batch");
 
-      const secondFailure = await toolError(() => editTool.execute(
+      const second = await editTool.execute(
         "g2",
         { remove_from: bRef, remove_to: bRef, text: ["B"] },
         undefined,
         undefined,
         ctx,
-      ));
-      expect(secondFailure).toContain("[E_OP_ABORTED]");
-      expect(secondFailure).toContain("[E_BAD_SHAPE]");
-      expect(await readFile(path, "utf-8")).toBe("a\nb\nc\n");
+      );
+      expect(second.content[0].text).toContain("Batch 1: 1 edit applied");
+      expect(await readFile(path, "utf-8")).toBe("a\nB\nc\n");
 
       await (handlers.get("turn_end")!(
         { type: "turn_end", turnIndex: 0, message, toolResults: [{ toolCallId: "g1" }, { toolCallId: "g2" }] },
@@ -675,7 +675,7 @@ describe("same-turn edit batches", () => {
     });
   });
 
-  it("rejects the whole batch in strict-input mode", async () => {
+  it("demotes the offending call in strict-input mode", async () => {
     await withTempFile("sample.txt", "aaa\nbbb\n", async ({ cwd, path }) => {
       await mkdir(join(cwd, ".config", "pi-hashline-edit-pro"), { recursive: true });
       await writeFile(
@@ -698,24 +698,25 @@ describe("same-turn edit batches", () => {
       ]);
       await (handlers.get("message_end")!({ type: "message_end", message }, ctx) as Promise<unknown>);
 
-      const first = await editTool.execute(
+      const firstFailure = await toolError(() => editTool.execute(
         "s1",
         { remove_from: aaaRef, remove_to: aaaRef, text: [`${aaaRef}│AAA`] },
         undefined,
         undefined,
         ctx,
-      );
-      expect(first.content[0].text).toBe("In batch 1 (queued)");
+      ));
+      expect(firstFailure).toContain("Strict-input mode");
+      expect(firstFailure).not.toContain("Aborts batch");
 
-      const failure = await toolError(() => editTool.execute(
+      const second = await editTool.execute(
         "s2",
         { remove_from: bbbRef, remove_to: bbbRef, text: ["BBB"] },
         undefined,
         undefined,
         ctx,
-      ));
-      expect(failure).toContain("Strict-input mode");
-      expect(await readFile(path, "utf-8")).toBe("aaa\nbbb\n");
+      );
+      expect(second.content[0].text).toContain("Batch 1: 1 edit applied");
+      expect(await readFile(path, "utf-8")).toBe("aaa\nBBB\n");
 
       await (handlers.get("turn_end")!(
         { type: "turn_end", turnIndex: 0, message, toolResults: [{ toolCallId: "s1" }, { toolCallId: "s2" }] },
@@ -764,7 +765,7 @@ describe("same-turn edit batches", () => {
     });
   });
 
-  it("fails later calls fast after an earlier call fails", async () => {
+  it("demotes a stale call and applies the valid siblings", async () => {
     await withTempFile("sample.txt", "a\nb\nc\nd\n", async ({ cwd, path }) => {
       const { getTool, handlers, ctx } = await setupBatchTools(cwd);
       const readTool = getTool("read");
@@ -784,20 +785,17 @@ describe("same-turn edit batches", () => {
       ]);
       await (handlers.get("message_end")!({ type: "message_end", message }, ctx) as Promise<unknown>);
 
-      const runCall = async (id: string, ref: string, line: string): Promise<string> => {
-        const result = await editTool.execute(
-          id,
-          { remove_from: ref, remove_to: ref, text: [line] },
-          undefined,
-          undefined,
-          ctx,
-        );
-        return result.isError ? (result.content[0]?.text ?? "") : "";
-      };
-      expect(await runCall("t1", aRef, "A")).toContain("[E_STALE_ANCHOR]");
-      expect(await runCall("t2", cRef, "C")).toContain("[E_OP_ABORTED]");
-      expect(await runCall("t3", dRef, "D")).toContain("[E_OP_ABORTED]");
-      expect(await readFile(path, "utf-8")).toBe("A2\nb\nc\nd\n");
+      const first = await editTool.execute("t1", { remove_from: aRef, remove_to: aRef, text: ["A"] }, undefined, undefined, ctx);
+      expect(first.isError).toBe(true);
+      expect((first.content[0] as { text: string }).text).toContain("[E_STALE_ANCHOR]");
+      expect((first.content[0] as { text: string }).text).not.toContain("Aborts batch");
+
+      const second = await editTool.execute("t2", { remove_from: cRef, remove_to: cRef, text: ["C"] }, undefined, undefined, ctx);
+      expect(second.content[0].text).toBe("In batch 1 (queued)");
+
+      const third = await editTool.execute("t3", { remove_from: dRef, remove_to: dRef, text: ["D"] }, undefined, undefined, ctx);
+      expect(third.content[0].text).toContain("Batch 1: 2 edits applied");
+      expect(await readFile(path, "utf-8")).toBe("A2\nb\nC\nD\n");
 
       await (handlers.get("turn_end")!(
         { type: "turn_end", turnIndex: 0, message, toolResults: [{ toolCallId: "t1" }, { toolCallId: "t2" }, { toolCallId: "t3" }] },
@@ -887,7 +885,7 @@ describe("same-turn edit batches", () => {
     });
   });
 
-  it("names the planned member that never executed and its error code", async () => {
+  it("demotes a never-executed member with invalid args and commits the rest", async () => {
     await withTempFile("sample.txt", "a\nb\nc\n", async ({ cwd, path }) => {
       const { getTool, handlers, ctx } = await setupBatchTools(cwd);
       const readTool = getTool("read");
@@ -910,14 +908,13 @@ describe("same-turn edit batches", () => {
       const first = await editTool.execute("x1", firstArgs, undefined, undefined, ctx);
       expect(first.content[0].text).toBe("In batch 1 (queued)");
 
-      const failure = await toolError(() => editTool.execute("x3", lastArgs, undefined, undefined, ctx));
-      expect(failure).toBe("[E_OP_ABORTED] Batch 1 aborted: [insert] Call Nr 2 errored [E_BAD_SHAPE]. Nothing was written; the whole batch was discarded.");
-      expect(first.details.batch).toMatchObject({ aborted: true, abortMessage: failure });
-      expect(await readFile(path, "utf-8")).toBe("a\nb\nc\n");
+      const last = await editTool.execute("x3", lastArgs, undefined, undefined, ctx);
+      expect(last.content[0].text).toContain("Batch 1: 2 edits applied");
+      expect(await readFile(path, "utf-8")).toBe("A\nb\nC\n");
     });
   });
 
-  it("aborts siblings with the failing call and code when a member's anchors went stale", async () => {
+  it("demotes a stale sibling and applies the valid one", async () => {
     await withTempFile("sample.txt", "alpha\nbeta\ngamma\n", async ({ cwd, path }) => {
       const { getTool, handlers, ctx } = await setupBatchTools(cwd);
       const readTool = getTool("read");
@@ -938,12 +935,11 @@ describe("same-turn edit batches", () => {
 
       const firstFailure = await toolError(() => editTool.execute("g1", firstArgs, undefined, undefined, ctx));
       expect(firstFailure).toMatch(/^\[E_STALE_ANCHOR\]/);
-      expect(firstFailure).toContain("Aborts batch 1.");
-      expect(firstFailure).toContain("Nothing was written");
+      expect(firstFailure).not.toContain("Aborts batch");
 
-      const secondFailure = await toolError(() => editTool.execute("g2", secondArgs, undefined, undefined, ctx));
-      expect(secondFailure).toBe("[E_OP_ABORTED] Batch 1 aborted: [replace] Call Nr 1 errored [E_STALE_ANCHOR]. Nothing was written; the whole batch was discarded.");
-      expect(await readFile(path, "utf-8")).toBe("alpha\nBETA\ngamma\n");
+      const second = await editTool.execute("g2", secondArgs, undefined, undefined, ctx);
+      expect(second.content[0].text).toContain("Batch 1: 1 edit applied");
+      expect(await readFile(path, "utf-8")).toBe("alpha\nBETA\nG\n");
     });
   });
 
@@ -987,7 +983,7 @@ describe("same-turn edit batches", () => {
     });
   });
 
-  it("names the failing call and its error code in the abort message", async () => {
+  it("demotes a range-stale sibling and applies the valid one", async () => {
     await withTempFile("sample.txt", "a\nb\nc\n", async ({ cwd, path }) => {
       const { getTool, handlers, ctx } = await setupBatchTools(cwd);
       const readTool = getTool("read");
@@ -1008,12 +1004,11 @@ describe("same-turn edit batches", () => {
 
       const firstFailure = await toolError(() => editTool.execute("s1", firstArgs, undefined, undefined, ctx));
       expect(firstFailure).toContain("Current range with fresh anchors");
-      expect(firstFailure).toContain("Nothing was written");
+      expect(firstFailure).not.toContain("Aborts batch");
 
-      const secondFailure = await toolError(() => editTool.execute("s2", lastArgs, undefined, undefined, ctx));
-      expect(secondFailure).toBe("[E_OP_ABORTED] Batch 1 aborted: [replace] Call Nr 1 errored [E_RANGE_STALE]. Nothing was written; the whole batch was discarded.");
-      expect(secondFailure).not.toContain("Current range with fresh anchors");
-      expect(await readFile(path, "utf-8")).toBe("a\nB\nc\n");
+      const second = await editTool.execute("s2", lastArgs, undefined, undefined, ctx);
+      expect(second.content[0].text).toContain("Batch 1: 1 edit applied");
+      expect(await readFile(path, "utf-8")).toBe("a\nB\nC\n");
 
       await (handlers.get("turn_end")!(
         { type: "turn_end", turnIndex: 0, message, toolResults: [{ toolCallId: "s1" }, { toolCallId: "s2" }] },

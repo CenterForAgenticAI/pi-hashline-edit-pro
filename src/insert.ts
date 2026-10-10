@@ -3,9 +3,9 @@ import { Type } from "typebox";
 import { constants } from "node:fs";
 import { execPipeline, type ReplaceDetails, previewFromPipe, previewError } from "./replace";
 import { commitEdit } from "./commit";
-import { batchMemberFor, ensureBatchBase, executeBatchMember, noteBatchFailure } from "./batch";
+import { batchMemberFor, executeBatchMember, noteBatchFailure, registerBatchPlanner, type BatchMemberPlan, type BatchPlannerInput } from "./batch";
 import { readNormFile, type NormFile } from "./file-reader";
-import { MAX_HASH_LINES, parseHashRef, parsePayloadText, resEdit, resolveAnchorLine, type Anchor, type HEdit, type HTEdit, type StripWarningLocation } from "./hashline";
+import { MAX_HASH_LINES, parseHashRef, parsePayloadText, planEdit, preserveDeletionSeparators, resEdit, resolveAnchorLine, type Anchor, type HTEdit, type StripWarningLocation } from "./hashline";
 import type { LineEnding } from "./normalize";
 import { stripAnchorRow } from "./hashline/resolve";
 import { withAnchorSession } from "./anchor-registry";
@@ -97,6 +97,37 @@ function insertStripWarning(anchorLine: string | undefined, direction: "before" 
   return { label: "text", indexOffset: anchorLine !== undefined && direction === "after" ? -1 : 0 };
 }
 
+function planInsertBatchMember(input: BatchPlannerInput): BatchMemberPlan {
+  const req = normReq(input.member.args);
+  assertInsertReq(req);
+  const insertWarnings = literalEscapeHints([req.text], "text");
+  const { ref, warnings: anchorWarnings } = parseInsertAnchor(req.anchor);
+  const basePreload = { normalized: input.base.content, fileHashes: input.base.hashes } as NormFile;
+  const built = buildInsertEdit(req, basePreload, ref, input.displayPath);
+  const resWarnings: string[] = [];
+  const hedit = resEdit(built.editParams, resWarnings);
+  const stripWarning = insertStripWarning(built.anchorLine, req.direction);
+  const effectiveHedit = preserveDeletionSeparators(hedit, input.base.baseLines, input.base.hashes);
+  const planned = planEdit(input.base.content, effectiveHedit, input.base.hashes, {
+    filePath: input.displayPath,
+    servedHashes: input.served,
+    signal: input.signal,
+    baseFileLines: input.base.baseLines,
+    stripWarning,
+  });
+  return {
+    hedit,
+    warnings: [...anchorWarnings, ...insertWarnings, ...resWarnings],
+    planned,
+    foldedLines: built.anchorLine === undefined ? 0 : 1,
+    direction: req.direction,
+    stripWarning,
+    contentSeparators: built.contentSeparators,
+  };
+}
+
+registerBatchPlanner("insert", planInsertBatchMember);
+
 export async function insertPreview(request: unknown, cwd: string, signal?: AbortSignal): Promise<RPreview> {
   try {
     const normalized = normReq(request);
@@ -180,12 +211,13 @@ export function buildInsertToolDef(flags: EditToolFlags = DEFAULT_EDIT_FLAGS): I
         assertInsertReq(canonical);
         const req = canonical;
         const insertWarnings: string[] = [...literalEscapeHints([req.text], "text")];
+        const member = batchMemberFor(_toolCallId);
         const targetPath = await resolveEditTargetWithRequirement({
           anchor: req.anchor,
           providedPath: req.path,
           cwd: ctx.cwd,
+          anchorTarget: member?.target,
         }).catch((error: unknown) => {
-          const member = batchMemberFor(_toolCallId);
           if (member) noteBatchFailure(member, error);
           throw error;
         });
@@ -193,40 +225,14 @@ export function buildInsertToolDef(flags: EditToolFlags = DEFAULT_EDIT_FLAGS): I
         let anchorWarnings: string[];
         try {
           ({ ref, warnings: anchorWarnings } = parseInsertAnchor(req.anchor));
-          await throwIfStrictInput([...anchorWarnings, ...insertWarnings]);
+          if (member === undefined) await throwIfStrictInput([...anchorWarnings, ...insertWarnings]);
         } catch (error) {
-          const member = batchMemberFor(_toolCallId);
           if (member) noteBatchFailure(member, error);
           throw error;
         }
         return queuedEdit(targetPath, ctx.cwd, signal, async (absolutePath, mutationTargetPath) => {
-          const member = batchMemberFor(_toolCallId);
           if (member) {
-            const base = await ensureBatchBase({ member, targetPath, mutationTargetPath, cwd: ctx.cwd, signal });
-            const basePreload = { normalized: base.content, fileHashes: base.hashes } as NormFile;
-            const built = buildInsertEdit(req, basePreload, ref, targetPath);
-            let hedit: HEdit;
-            const resWarnings: string[] = [];
-            try {
-              hedit = resEdit(built.editParams, resWarnings);
-            } catch (error) {
-              noteBatchFailure(member, error);
-              throw error;
-            }
-            return executeBatchMember({
-              kind: "insert",
-              direction: req.direction,
-              member,
-              targetPath,
-              mutationTargetPath,
-              cwd: ctx.cwd,
-              signal,
-              hedit,
-              extraWarnings: [...anchorWarnings, ...insertWarnings, ...resWarnings],
-              foldedLines: built.anchorLine === undefined ? 0 : 1,
-              stripWarning: insertStripWarning(built.anchorLine, req.direction),
-              contentSeparators: built.contentSeparators,
-            });
+            return executeBatchMember({ member, targetPath, mutationTargetPath, cwd: ctx.cwd, signal });
           }
           const preload = await readNormFile(targetPath, ctx.cwd, {
             signal,

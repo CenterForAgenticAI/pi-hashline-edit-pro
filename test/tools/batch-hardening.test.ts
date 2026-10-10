@@ -108,7 +108,7 @@ describe("batch hardening", () => {
     });
   });
 
-  it("requirePath stale call joins batch through path hint and aborts", async () => {
+  it("requirePath stale call demotes to solo and the valid sibling applies", async () => {
     await withTempFile("sample.txt", "alpha\nbeta\ngamma\n", async ({ cwd, path }) => {
       await mkdir(join(cwd, ".config", "pi-hashline-edit-pro"), { recursive: true });
       await writeFile(join(cwd, ".config", "pi-hashline-edit-pro", "config.json"), JSON.stringify({ autoRead: true, requirePath: true }), "utf-8");
@@ -125,12 +125,14 @@ describe("batch hardening", () => {
       expect(batchMemberFor("s1")).toBeDefined();
       expect(batchMemberFor("v1")?.batchKey).toBe(batchMemberFor("s1")?.batchKey);
       await editTool.execute("v1", { path: "sample.txt", remove_from: betaRef, remove_to: betaRef, text: ["BETA"] }, undefined, undefined, ctx);
-      expect(await toolError(() => editTool.execute("s1", { path: "sample.txt", remove_from: "ZZZZ", remove_to: "ZZZZ", text: ["STALE"] }, undefined, undefined, ctx))).toMatch(/E_OP_ABORTED|E_STALE_ANCHOR/);
-      expect(await readFile(path, "utf-8")).toBe("alpha\nbeta\ngamma\n");
+      const failure = await toolError(() => editTool.execute("s1", { path: "sample.txt", remove_from: "ZZZZ", remove_to: "ZZZZ", text: ["STALE"] }, undefined, undefined, ctx));
+      expect(failure).toMatch(/^\[E_STALE_ANCHOR\]/);
+      expect(failure).not.toContain("Aborts batch");
+      expect(await readFile(path, "utf-8")).toBe("alpha\nBETA\ngamma\n");
     });
   });
 
-  it("replace with one valid co-anchor joins batch and aborts", async () => {
+  it("replace with one valid co-anchor joins the batch and demotes to solo", async () => {
     await withTempFile("sample.txt", "alpha\nbeta\ngamma\n", async ({ cwd, path }) => {
       const { getTool, handlers, ctx } = await setupTools(cwd);
       const readTool = getTool("read");
@@ -146,8 +148,10 @@ describe("batch hardening", () => {
       expect(batchMemberFor("m1")).toBeDefined();
       expect(batchMemberFor("v1")?.batchKey).toBe(batchMemberFor("m1")?.batchKey);
       await editTool.execute("v1", { remove_from: gammaRef, remove_to: gammaRef, text: ["GAMMA"] }, undefined, undefined, ctx);
-      expect(await toolError(() => editTool.execute("m1", { remove_from: betaRef, remove_to: "ZZZZ", text: ["MIXED"] }, undefined, undefined, ctx))).toMatch(/Aborts batch 1\./);
-      expect(await readFile(path, "utf-8")).toBe("alpha\nbeta\ngamma\n");
+      const failure = await toolError(() => editTool.execute("m1", { remove_from: betaRef, remove_to: "ZZZZ", text: ["MIXED"] }, undefined, undefined, ctx));
+      expect(failure).toMatch(/^\[E_STALE_ANCHOR\]/);
+      expect(failure).not.toContain("Aborts batch");
+      expect(await readFile(path, "utf-8")).toBe("alpha\nbeta\nGAMMA\n");
     });
   });
 
@@ -278,11 +282,13 @@ describe("batch hardening", () => {
       const second = getText(await readTool.execute("r2", { path: "sample.txt" }, undefined, undefined, ctx));
       const valid = anchorFor(second, "aaa");
       await (handlers.get("message_end")!({ type: "message_end", message: assistantMessage([
-        toolCall("s1", "replace", { remove_from: valid, remove_to: "ZZZZ", text: ["XXX"] }),
+        toolCall("s1", "replace", { remove_from: valid, remove_to: valid, text: ["XXX"] }),
         toolCall("v1", "replace", { remove_from: valid, remove_to: valid, text: ["AAA"] }),
       ]) }, ctx) as Promise<unknown>);
-      expect(await toolError(() => editTool.execute("s1", { remove_from: valid, remove_to: "ZZZZ", text: ["XXX"] }, undefined, undefined, ctx))).toMatch(/Aborts batch 1\./);
-      expect(await toolError(() => editTool.execute("v1", { remove_from: valid, remove_to: valid, text: ["AAA"] }, undefined, undefined, ctx))).toMatch(/\[E_OP_ABORTED\]/);
+      const queued = await editTool.execute("s1", { remove_from: valid, remove_to: valid, text: ["XXX"] }, undefined, undefined, ctx);
+      expect(getText(queued)).toBe("In batch 1 (queued)");
+      const failure = await toolError(() => editTool.execute("v1", { remove_from: valid, remove_to: valid, text: ["AAA"] }, undefined, undefined, ctx));
+      expect(failure).toContain("[E_BATCH_OVERLAP]");
       expect(await readFile(path, "utf-8")).toBe("aaa\nBBB\nccc\n");
       await undoTool.execute("u1", { path: "sample.txt" }, undefined, undefined, ctx);
       expect(await readFile(path, "utf-8")).toBe("aaa\nbbb\nccc\n");

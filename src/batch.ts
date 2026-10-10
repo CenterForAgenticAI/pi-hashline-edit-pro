@@ -41,6 +41,8 @@ export interface PlannedMember {
   order: number;
   size: number;
   last: boolean;
+  plan?: BatchMemberPlan;
+  demoted?: Error;
 }
 
 export type BatchKind = "replace" | "insert" | "replace_match" | "copy" | "move";
@@ -62,6 +64,36 @@ export interface BatchSourceMove {
   displayPath: string;
   mutationTargetPath: string;
   pipe: PipelineResult;
+}
+
+export interface BatchMemberPlan {
+  hedit: HEdit;
+  warnings: string[];
+  planned?: PlannedEdit;
+  foldedLines: number;
+  direction?: "before" | "after";
+  stripWarning?: StripWarningLocation;
+  contentSeparators?: (LineEnding | undefined)[];
+  carryIndex?: number;
+  servedOverride?: ReadonlyMap<string, string>;
+  sourceMove?: BatchSourceMove;
+}
+
+export interface BatchPlannerInput {
+  member: PlannedMember;
+  base: BatchBase;
+  displayPath: string;
+  served?: ReadonlyMap<string, string>;
+  cwd: string;
+  signal?: AbortSignal;
+}
+
+export type BatchMemberPlanner = (input: BatchPlannerInput) => BatchMemberPlan | undefined | Promise<BatchMemberPlan | undefined>;
+
+const batchPlanners = new Map<BatchKind, BatchMemberPlanner>();
+
+export function registerBatchPlanner(kind: BatchKind, planner: BatchMemberPlanner): void {
+  batchPlanners.set(kind, planner);
 }
 
 interface SourcePreparation {
@@ -88,21 +120,12 @@ export interface BatchPiece {
 }
 
 export interface BatchMemberInput {
-  kind: BatchKind;
-  direction?: "before" | "after";
   member: PlannedMember;
   targetPath: string;
   mutationTargetPath: string;
   cwd: string;
   signal?: AbortSignal;
-  hedit: HEdit;
-  extraWarnings: string[];
-  foldedLines?: number;
-  stripWarning?: StripWarningLocation;
-  contentSeparators?: (LineEnding | undefined)[];
-  carryIndex?: number;
-  servedOverride?: ReadonlyMap<string, string>;
-  sourceMove?: BatchSourceMove;
+  plan?: BatchMemberPlan;
 }
 
 interface BatchFailure {
@@ -115,7 +138,9 @@ interface BatchState {
   display: number;
   target: string;
   memberIds: string[];
+  allMemberIds: string[];
   stale: boolean;
+  preflighted?: boolean;
   base?: BatchBase;
   paths?: { absolutePath: string; mutationTargetPath: string; displayPath: string };
   served?: ReadonlyMap<string, string>;
@@ -335,7 +360,7 @@ function enforceCap(): void {
     const state = batches.get(oldest);
     batches.delete(oldest);
     if (state) {
-      for (const id of state.memberIds) {
+      for (const id of state.allMemberIds) {
         plan.delete(id);
         placeholderResults.delete(id);
       }
@@ -397,6 +422,7 @@ export async function planAssistantMessage(message: unknown, cwd: string): Promi
       display,
       target: group[0]!.target,
       memberIds: group.map((item) => item.id),
+      allMemberIds: group.map((item) => item.id),
       stale: false,
       pieces: [],
       sources: [],
@@ -565,6 +591,49 @@ function batchAbortedError(runtime: BatchState): Error {
   discardBatchState(runtime);
   return new Error(abortedBatchMessage(runtime));
 }
+
+const ATTRIBUTABLE_BATCH_CODES = new Set(["E_BAD_SHAPE", "E_BAD_REF", "E_STALE_ANCHOR", "E_RANGE_STALE", "E_SUBSTRING_NOT_FOUND"]);
+
+function isAttributableBatchError(error: unknown): boolean {
+  const code = errorCodeOf(error);
+  return code !== undefined && ATTRIBUTABLE_BATCH_CODES.has(code);
+}
+
+async function preflightBatch(runtime: BatchState, base: BatchBase, cwd: string, signal?: AbortSignal): Promise<void> {
+  if (runtime.preflighted) return;
+  runtime.preflighted = true;
+  if (runtime.failed) return;
+  const displayPath = runtime.paths?.displayPath ?? runtime.target;
+  for (const id of [...runtime.memberIds]) {
+    const member = plan.get(id);
+    if (!member || member.demoted) continue;
+    const planner = batchPlanners.get(member.kind);
+    if (!planner) continue;
+    try {
+      const memberPlan = await planner({ member, base, displayPath, served: runtime.served, cwd, signal });
+      if (memberPlan === undefined) continue;
+      await throwIfStrictInput([...memberPlan.warnings, ...(memberPlan.planned?.warnings ?? [])]);
+      member.plan = memberPlan;
+    } catch (error) {
+      if (!isAttributableBatchError(error)) {
+        noteBatchFailure(member, error);
+        throw error;
+      }
+      if (error instanceof RangeStaleError) adoptAnchors(base.absolutePath, error.rangeServedMap);
+      else if (error instanceof AnchorMismatchError) adoptAnchors(base.absolutePath, error.feedbackMap);
+      member.demoted = error instanceof Error ? error : new Error(String(error));
+      runtime.memberIds = runtime.memberIds.filter((candidate) => candidate !== id);
+    }
+  }
+  const survivors = runtime.memberIds
+    .map((id) => plan.get(id))
+    .filter((member): member is PlannedMember => member !== undefined);
+  survivors.forEach((member, index) => {
+    member.size = survivors.length;
+    member.last = index === survivors.length - 1;
+  });
+}
+
 function discardBatchState(runtime: BatchState): void {
   markBatchMembersAborted(runtime);
 }
@@ -578,7 +647,10 @@ export async function ensureBatchBase(input: {
 }): Promise<BatchBase> {
   const runtime = batches.get(input.member.batchKey);
   if (!runtime) throw new Error(`[E_STALE_ANCHOR] Batch ${input.member.display} is no longer tracked. Call read for fresh anchors.`);
-  if (runtime.base) return runtime.base;
+  if (runtime.base) {
+    await preflightBatch(runtime, runtime.base, input.cwd, input.signal);
+    return runtime.base;
+  }
   abortIf(input.signal);
   const file = await readNormFile(input.targetPath, input.cwd, {
     signal: input.signal,
@@ -606,6 +678,7 @@ export async function ensureBatchBase(input: {
     mutationTargetPath: input.mutationTargetPath,
     displayPath: toDisplayPath(input.cwd, file.absolutePath, input.targetPath),
   };
+  await preflightBatch(runtime, base, input.cwd, input.signal);
   return base;
 }
 
@@ -627,29 +700,42 @@ export async function executeBatchMember(input: BatchMemberInput): Promise<TResu
     discardBatchState(runtime);
     throw error;
   }
+  if (runtime.failed) throw batchAbortedError(runtime);
+  if (input.member.demoted) throw input.member.demoted;
+  const memberPlan = input.plan ?? input.member.plan;
+  if (memberPlan === undefined) {
+    const error = new Error(`[E_OP_ABORTED] Batch ${runtime.display} aborted: no plan for [${input.member.kind}] Call Nr ${input.member.order}. ${BATCH_DISCARDED_NOTE}`);
+    noteBatchFailure(input.member, error);
+    throw batchAbortedError(runtime);
+  }
   if (input.mutationTargetPath !== input.member.target) {
-    const error = new Error(`[E_STALE_ANCHOR] "${input.hedit.hash_bounds[0].hash}" is no longer owned by ${input.member.target}. Call read for fresh anchors.`);
+    const error = new Error(`[E_STALE_ANCHOR] "${memberPlan.hedit.hash_bounds[0].hash}" is no longer owned by ${input.member.target}. Call read for fresh anchors.`);
     noteBatchFailure(input.member, error);
     discardBatchState(runtime);
     throw error;
   }
+  const kind = input.member.kind;
   const displayPath = runtime.paths?.displayPath ?? input.targetPath;
-  const effectiveHedit = preserveDeletionSeparators(input.hedit, base.baseLines, base.hashes);
+  const effectiveHedit = preserveDeletionSeparators(memberPlan.hedit, base.baseLines, base.hashes);
   let planned: PlannedEdit;
-  try {
-    planned = planEdit(base.content, effectiveHedit, base.hashes, {
-      filePath: displayPath,
-      servedHashes: input.servedOverride ?? runtime.served,
-      signal: input.signal,
-      baseFileLines: base.baseLines,
-      stripWarning: input.stripWarning,
-    });
-  } catch (error) {
-    if (error instanceof RangeStaleError) adoptAnchors(base.absolutePath, error.rangeServedMap);
-    else if (error instanceof AnchorMismatchError) adoptAnchors(base.absolutePath, error.feedbackMap);
-    noteBatchFailure(input.member, error);
-    discardBatchState(runtime);
-    throw error;
+  if (memberPlan.planned !== undefined) {
+    planned = memberPlan.planned;
+  } else {
+    try {
+      planned = planEdit(base.content, effectiveHedit, base.hashes, {
+        filePath: displayPath,
+        servedHashes: memberPlan.servedOverride ?? runtime.served,
+        signal: input.signal,
+        baseFileLines: base.baseLines,
+        stripWarning: memberPlan.stripWarning,
+      });
+    } catch (error) {
+      if (error instanceof RangeStaleError) adoptAnchors(base.absolutePath, error.rangeServedMap);
+      else if (error instanceof AnchorMismatchError) adoptAnchors(base.absolutePath, error.feedbackMap);
+      noteBatchFailure(input.member, error);
+      discardBatchState(runtime);
+      throw error;
+    }
   }
   const start = planned.resolved.hash_bounds[0].line;
   const end = planned.resolved.hash_bounds[1].line;
@@ -657,20 +743,20 @@ export async function executeBatchMember(input: BatchMemberInput): Promise<TResu
   const baseLines = base.baseLines;
   const originalSlice = baseLines.slice(start - 1, end);
   const noop = originalSlice.length === newLines.length && originalSlice.every((line, index) => line === newLines[index]);
-  const foldedLines = input.foldedLines ?? 0;
-  const separators = input.contentSeparators ?? input.hedit.content_separators;
+  const foldedLines = memberPlan.foldedLines;
+  const separators = memberPlan.contentSeparators ?? memberPlan.hedit.content_separators;
   const carryIndex =
-    input.carryIndex !== undefined
-      ? input.carryIndex
-      : input.kind === "insert" && foldedLines > 0
-        ? input.direction === "after"
+    memberPlan.carryIndex !== undefined
+      ? memberPlan.carryIndex
+      : kind === "insert" && foldedLines > 0
+        ? memberPlan.direction === "after"
           ? 0
           : newLines.length - 1
         : undefined;
   const piece: BatchPiece = {
     order: input.member.order,
-    kind: input.kind,
-    ...(input.direction !== undefined ? { direction: input.direction } : {}),
+    kind,
+    ...(memberPlan.direction !== undefined ? { direction: memberPlan.direction } : {}),
     ...(carryIndex !== undefined ? { carryIndex } : {}),
     start,
     end,
@@ -678,7 +764,7 @@ export async function executeBatchMember(input: BatchMemberInput): Promise<TResu
     toHash: planned.resolved.hash_bounds[1].hash,
     newLines: [...newLines],
     ...(separators !== undefined ? { separators } : {}),
-    warnings: [...input.extraWarnings, ...planned.warnings],
+    warnings: [...memberPlan.warnings, ...planned.warnings],
     noop,
     foldedLines,
   };
@@ -686,7 +772,7 @@ export async function executeBatchMember(input: BatchMemberInput): Promise<TResu
   if (noop) runtime.noops += 1;
   else runtime.applied += 1;
   runtime.warnings.push(...piece.warnings);
-  if (input.sourceMove !== undefined) runtime.sources.push(input.sourceMove);
+  if (memberPlan.sourceMove !== undefined) runtime.sources.push(memberPlan.sourceMove);
   if (!input.member.last) {
     const placeholder = batchPlaceholder(input.member, piece, base.snapshotId);
     placeholderResults.set(input.member.id, placeholder);
@@ -1102,7 +1188,7 @@ export async function finalizeTurn(toolCallIds: string[]): Promise<void> {
   for (const key of keys) {
     const runtime = batches.get(key);
     if (!runtime) continue;
-    for (const id of runtime.memberIds) {
+    for (const id of runtime.allMemberIds) {
       plan.delete(id);
       placeholderResults.delete(id);
     }

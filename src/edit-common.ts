@@ -66,7 +66,7 @@ function batchGuideline(flags: EditToolFlags): string {
   const tools = operationNames(SHARED_EDIT_OPS, flags);
   const outcome = flags.autoRead ? "diff" : "result";
   const script = flags.codemode ? ` ${SCRIPT_BATCH_GUIDELINE}` : "";
-  return `${tools}: same-file calls in one message are grouped into one batch; earlier calls reply \`In batch N (queued)\` and the last call shows the combined ${outcome}, with one undo for the whole batch.${script}`;
+  return `${tools}: same-file calls in one message are grouped into one batch; earlier calls reply \`In batch N (queued)\` and the last applied call shows the combined ${outcome}, with one undo for the whole batch. A call whose own request is invalid (anchors, shape, or \`old_string\`) fails on its own and is left out of the batch; the rest still commits.${script}`;
 }
 
 function diffGuideline(flags: EditToolFlags): string {
@@ -233,6 +233,7 @@ export interface PathRequirementInput {
   anchor?: string;
   providedPath?: unknown;
   cwd: string;
+  anchorTarget?: string;
 }
 
 export async function resolveEditTargetWithRequirement(input: PathRequirementInput): Promise<string> {
@@ -243,9 +244,10 @@ export async function resolveEditTargetWithRequirement(input: PathRequirementInp
   if (requirePath && (typeof input.providedPath !== "string" || input.providedPath.length === 0)) {
     throw new Error('[E_BAD_SHAPE] Edit request requires a non-empty "path" string when require-path mode is on. Provide `path` matching the file the anchors were served for.');
   }
-  const anchorTarget = typeof input.anchor === "string"
-    ? resolveEditTarget(input.anchor)
-    : resolveEditTarget(input.removeFrom as string, input.removeTo);
+  const anchorTarget = input.anchorTarget
+    ?? (typeof input.anchor === "string"
+      ? resolveEditTarget(input.anchor)
+      : resolveEditTarget(input.removeFrom as string, input.removeTo));
   if (requirePath) {
     const { resolved } = await resolveInCwd(input.providedPath as string, input.cwd);
     if (resolved !== anchorTarget) {

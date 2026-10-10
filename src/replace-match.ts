@@ -3,9 +3,9 @@ import { constants } from "node:fs";
 import { execPipeline, noteAnchorError, previewFromPipe, previewError, type ReplaceDetails } from "./replace";
 import { commitEdit } from "./commit";
 import { readNormFile, type NormFile } from "./file-reader";
-import { fmtRegion, MAX_HASH_LINES, parseHashRef, resEdit, resolveAnchorLine, stripAnchorRow, type Anchor, type HEdit } from "./hashline";
+import { fmtRegion, MAX_HASH_LINES, parseHashRef, planEdit, preserveDeletionSeparators, resEdit, resolveAnchorLine, stripAnchorRow, type Anchor } from "./hashline";
 import { servedForPath, withAnchorSession } from "./anchor-registry";
-import { batchMemberFor, batchServedFor, ensureBatchBase, executeBatchMember, noteBatchFailure } from "./batch";
+import { batchMemberFor, executeBatchMember, noteBatchFailure, registerBatchPlanner, type BatchMemberPlan, type BatchPlannerInput } from "./batch";
 import { loadP, loadGuide } from "./prompts";
 import {
   assertReplaceMatchReq,
@@ -109,6 +109,33 @@ export function buildReplaceMatchEdit(
   };
 }
 
+function planReplaceMatchBatchMember(input: BatchPlannerInput): BatchMemberPlan {
+  const req = normReq(input.member.args, "replace");
+  assertReplaceMatchReq(req);
+  const { refs, warnings } = parseMatchAnchors(req);
+  const hints = [...literalEscapeHints([req.old_string], "old_string"), ...literalEscapeHints([req.new_string], "new_string")];
+  const preload = { normalized: input.base.content, fileHashes: input.base.hashes } as NormFile;
+  const matchPlan = buildReplaceMatchEdit(req, refs, preload, input.displayPath, input.served);
+  const resWarnings: string[] = [];
+  const hedit = resEdit(matchPlan.editParams, resWarnings);
+  const effectiveHedit = preserveDeletionSeparators(hedit, input.base.baseLines, input.base.hashes);
+  const planned = planEdit(input.base.content, effectiveHedit, input.base.hashes, {
+    filePath: input.displayPath,
+    servedHashes: matchPlan.servedOverride ?? input.served,
+    signal: input.signal,
+    baseFileLines: input.base.baseLines,
+  });
+  return {
+    hedit,
+    warnings: [...warnings, ...hints, ...resWarnings],
+    planned,
+    foldedLines: 0,
+    ...(matchPlan.servedOverride !== undefined ? { servedOverride: matchPlan.servedOverride } : {}),
+  };
+}
+
+registerBatchPlanner("replace_match", planReplaceMatchBatchMember);
+
 export async function replaceMatchPreview(request: unknown, cwd: string, signal?: AbortSignal): Promise<RPreview> {
   try {
     const normalized = normReq(request, "replace");
@@ -173,13 +200,13 @@ export function buildReplaceMatchToolDef(flags: EditToolFlags = DEFAULT_EDIT_FLA
         const normalized = normReq(params, "replace");
         assertReplaceMatchReq(normalized);
         const req = normalized;
+        const member = batchMemberFor(_toolCallId);
         let refs: MatchRefs;
         let warnings: string[];
         try {
           ({ refs, warnings } = parseMatchAnchors(req));
-          await throwIfStrictInput(warnings);
+          if (member === undefined) await throwIfStrictInput(warnings);
         } catch (error) {
-          const member = batchMemberFor(_toolCallId);
           if (member) noteBatchFailure(member, error);
           throw error;
         }
@@ -189,52 +216,26 @@ export function buildReplaceMatchToolDef(flags: EditToolFlags = DEFAULT_EDIT_FLA
           removeTo: req.replace_to,
           providedPath: req.path,
           cwd: ctx.cwd,
+          anchorTarget: member?.target,
         }).catch((error: unknown) => {
-          const member = batchMemberFor(_toolCallId);
           if (member) noteBatchFailure(member, error);
           throw error;
         });
         return queuedEdit(targetPath, ctx.cwd, signal, async (absolutePath, mutationTargetPath) => {
-          const member = batchMemberFor(_toolCallId);
-          let preload: NormFile;
           if (member) {
-            const base = await ensureBatchBase({ member, targetPath, mutationTargetPath, cwd: ctx.cwd, signal });
-            preload = { normalized: base.content, fileHashes: base.hashes } as NormFile;
-          } else {
-            preload = await readNormFile(targetPath, ctx.cwd, {
-              signal,
-              accessMode: constants.R_OK | constants.W_OK,
-              maxLines: MAX_HASH_LINES,
-            });
+            return executeBatchMember({ member, targetPath, mutationTargetPath, cwd: ctx.cwd, signal });
           }
+          const preload = await readNormFile(targetPath, ctx.cwd, {
+            signal,
+            accessMode: constants.R_OK | constants.W_OK,
+            maxLines: MAX_HASH_LINES,
+          });
           let plan: MatchPlan;
           try {
-            plan = buildReplaceMatchEdit(req, refs, preload, targetPath, member ? batchServedFor(member) : servedForPath(preload.absolutePath));
+            plan = buildReplaceMatchEdit(req, refs, preload, targetPath, servedForPath(preload.absolutePath));
           } catch (error) {
             await noteAnchorError(mutationTargetPath, error);
-            if (member) noteBatchFailure(member, error);
             throw error;
-          }
-          if (member) {
-            let hedit: HEdit;
-            const resWarnings: string[] = [];
-            try {
-              hedit = resEdit(plan.editParams, resWarnings);
-            } catch (error) {
-              noteBatchFailure(member, error);
-              throw error;
-            }
-            return executeBatchMember({
-              kind: "replace_match",
-              member,
-              targetPath,
-              mutationTargetPath,
-              cwd: ctx.cwd,
-              signal,
-              hedit,
-              extraWarnings: [...warnings, ...hints, ...resWarnings],
-              ...(plan.servedOverride !== undefined ? { servedOverride: plan.servedOverride } : {}),
-            });
           }
           const pipe = await execPipeline(targetPath, plan.editParams, ctx.cwd, {
             accessMode: constants.R_OK | constants.W_OK,

@@ -9,6 +9,8 @@ import {
   lineHashes,
   MAX_HASH_LINES,
   parseHashRef,
+  planEdit,
+  preserveDeletionSeparators,
   resEdit,
   resolveAnchorLine,
   stripAnchorRow,
@@ -17,7 +19,7 @@ import {
   type HTEdit,
 } from "./hashline";
 import { formatAnchorReclaimNotice, servedForPath, takeReclaimedPaths, withAnchorSession } from "./anchor-registry";
-import { batchMemberFor, batchServedFor, ensureBatchBase, executeBatchMember, noteBatchFailure, pendingBatchMemberFor, type BatchBase, type PlannedMember } from "./batch";
+import { batchMemberFor, batchServedFor, ensureBatchBase, executeBatchMember, noteBatchFailure, pendingBatchMemberFor, registerBatchPlanner, type BatchBase, type BatchMemberPlanner, type PlannedMember } from "./batch";
 import { loadP, loadGuide } from "./prompts";
 import { assertTransferReq, normReq, type TransferReq } from "./payload-contract";
 import { abortIf, assertByteLimit, isRec, splitLines } from "./utils";
@@ -600,49 +602,37 @@ function preloadFromBase(base: BatchBase): NormFile {
   };
 }
 
-async function executeBatchTransfer(
-  kind: TransferKind,
-  member: PlannedMember,
-  refs: TransferRefs,
-  warnings: string[],
-  targetPath: string,
-  mutationTargetPath: string,
-  cwd: string,
-  signal?: AbortSignal,
-): Promise<TResult> {
-  const base = await ensureBatchBase({ member, targetPath, mutationTargetPath, cwd, signal });
-  const displayPath = toDisplayPath(cwd, base.absolutePath, targetPath);
-  let plan: TransferPlan;
-  try {
-    plan = buildTransferEdit({ kind, refs, preload: preloadFromBase(base), displayPath, served: batchServedFor(member) });
-  } catch (error) {
-    await noteAnchorError(base.absolutePath, error);
-    noteBatchFailure(member, error);
-    throw error;
-  }
-  const resWarnings: string[] = [];
-  let hedit: HEdit;
-  try {
-    hedit = resEdit(plan.editParams, resWarnings);
-  } catch (error) {
-    noteBatchFailure(member, error);
-    throw error;
-  }
-  return executeBatchMember({
-    kind,
-    member,
-    targetPath,
-    mutationTargetPath,
-    cwd,
-    signal,
-    hedit,
-    extraWarnings: [...warnings, ...resWarnings],
-    foldedLines: plan.foldedAnchorLines,
-    ...(plan.anchorCarry !== undefined ? { carryIndex: plan.anchorCarry } : {}),
-    ...(plan.servedOverride !== undefined ? { servedOverride: plan.servedOverride } : {}),
-    ...(plan.endingOverrides !== undefined ? { contentSeparators: plan.endingOverrides } : {}),
-  });
+function planTransferBatchMember(kind: TransferKind): BatchMemberPlanner {
+  return (input) => {
+    if (input.member.sourceTarget !== undefined && input.member.sourceTarget !== input.member.target) return undefined;
+    const req = normReq(input.member.args);
+    assertTransferReq(req);
+    const { refs, warnings } = parseTransferAnchors(req);
+    const preload = preloadFromBase(input.base);
+    const transferPlan = buildTransferEdit({ kind, refs, preload, displayPath: input.displayPath, served: input.served });
+    const resWarnings: string[] = [];
+    const hedit = resEdit(transferPlan.editParams, resWarnings);
+    const effectiveHedit = preserveDeletionSeparators(hedit, input.base.baseLines, input.base.hashes);
+    const planned = planEdit(input.base.content, effectiveHedit, input.base.hashes, {
+      filePath: input.displayPath,
+      servedHashes: transferPlan.servedOverride ?? input.served,
+      signal: input.signal,
+      baseFileLines: input.base.baseLines,
+    });
+    return {
+      hedit,
+      warnings: [...warnings, ...resWarnings],
+      planned,
+      foldedLines: transferPlan.foldedAnchorLines,
+      ...(transferPlan.anchorCarry !== undefined ? { carryIndex: transferPlan.anchorCarry } : {}),
+      ...(transferPlan.servedOverride !== undefined ? { servedOverride: transferPlan.servedOverride } : {}),
+      ...(transferPlan.endingOverrides !== undefined ? { contentSeparators: transferPlan.endingOverrides } : {}),
+    };
+  };
 }
+
+registerBatchPlanner("copy", planTransferBatchMember("copy"));
+registerBatchPlanner("move", planTransferBatchMember("move"));
 
 async function executeBatchCrossCopy(
   member: PlannedMember,
@@ -687,17 +677,18 @@ async function executeBatchCrossCopy(
     throw error;
   }
   return executeBatchMember({
-    kind: "copy",
     member,
     targetPath: destinationPath,
     mutationTargetPath,
     cwd,
     signal,
-    hedit,
-    extraWarnings: [...warnings, ...resWarnings],
-    foldedLines: prepared.destinationFolded,
-    ...(prepared.destinationFolded === 1 ? { carryIndex: 0 } : {}),
-    contentSeparators: prepared.endingOverrides,
+    plan: {
+      hedit,
+      warnings: [...warnings, ...resWarnings],
+      foldedLines: prepared.destinationFolded,
+      ...(prepared.destinationFolded === 1 ? { carryIndex: 0 } : {}),
+      contentSeparators: prepared.endingOverrides,
+    },
   });
 }
 
@@ -751,21 +742,22 @@ async function executeBatchCrossMove(
     ...(sourcePipe.hadUtf8DecodeErrors ? ["Non-UTF-8 bytes were shown as U+FFFD; this edit rewrote the file as UTF-8."] : []),
   ];
   return executeBatchMember({
-    kind: "move",
     member,
     targetPath: destinationPath,
     mutationTargetPath,
     cwd,
     signal,
-    hedit,
-    extraWarnings: [...warnings, ...resWarnings, ...sourceWarnings],
-    foldedLines: prepared.destinationFolded,
-    ...(prepared.destinationFolded === 1 ? { carryIndex: 0 } : {}),
-    contentSeparators: prepared.endingOverrides,
-    sourceMove: {
-      displayPath: prepared.sourceDisplay,
-      mutationTargetPath: prepared.sourcePreload.absolutePath,
-      pipe: sourcePipe,
+    plan: {
+      hedit,
+      warnings: [...warnings, ...resWarnings, ...sourceWarnings],
+      foldedLines: prepared.destinationFolded,
+      ...(prepared.destinationFolded === 1 ? { carryIndex: 0 } : {}),
+      contentSeparators: prepared.endingOverrides,
+      sourceMove: {
+        displayPath: prepared.sourceDisplay,
+        mutationTargetPath: prepared.sourcePreload.absolutePath,
+        pipe: sourcePipe,
+      },
     },
   });
 }
@@ -932,20 +924,20 @@ export function buildTransferToolDef(kind: TransferKind, flags: EditToolFlags = 
         const canonical = normReq(params);
         assertTransferReq(canonical);
         const req = canonical;
+        const member = batchMemberFor(_toolCallId);
         let refs: TransferRefs;
         let warnings: string[];
         try {
           ({ refs, warnings } = parseTransferAnchors(req));
-          await throwIfStrictInput(warnings);
+          const sameFileMember = member !== undefined && (member.sourceTarget === undefined || member.sourceTarget === member.target);
+          if (!sameFileMember) await throwIfStrictInput(warnings);
         } catch (error) {
-          const member = batchMemberFor(_toolCallId);
           if (member) noteBatchFailure(member, error);
           throw error;
         }
         let sourcePath: string;
         let destinationPath: string;
         try {
-          const member = batchMemberFor(_toolCallId);
           if (member) {
             await assertTransferPathOption(req, ctx.cwd, member);
             sourcePath = member.sourceTarget ?? member.target;
@@ -954,15 +946,13 @@ export function buildTransferToolDef(kind: TransferKind, flags: EditToolFlags = 
             ({ sourcePath, destinationPath } = await resolveTransferTargets(req, ctx.cwd));
           }
         } catch (error) {
-          const member = batchMemberFor(_toolCallId);
           if (member) noteBatchFailure(member, error);
           throw error;
         }
         if (sourcePath === destinationPath) {
           return queuedEdit(sourcePath, ctx.cwd, signal, async (absolutePath, mutationTargetPath) => {
-            const member = batchMemberFor(_toolCallId);
             if (member) {
-              return executeBatchTransfer(kind, member, refs, warnings, sourcePath, mutationTargetPath, ctx.cwd, signal);
+              return executeBatchMember({ member, targetPath: sourcePath, mutationTargetPath, cwd: ctx.cwd, signal });
             }
             const preload = await readNormFile(sourcePath, ctx.cwd, {
               signal,
@@ -999,7 +989,6 @@ export function buildTransferToolDef(kind: TransferKind, flags: EditToolFlags = 
             });
           });
         }
-        const member = batchMemberFor(_toolCallId);
         if (member) {
           return queuedEdit(destinationPath, ctx.cwd, signal, async (_absolutePath, mutationTargetPath) => {
             return kind === "copy"
