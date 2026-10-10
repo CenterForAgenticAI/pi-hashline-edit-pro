@@ -273,11 +273,15 @@ function renderReadCall(args: unknown, theme: any, context: any): Text {
 	const index = text.lastIndexOf(marker);
 	if (index < 0) return rendered;
 	const line = anchorLineOf(ref.anchor, ref.path, context?.cwd);
-	if (line === undefined && ref.limit === undefined) return rendered;
-	const lineLabel = line === undefined ? "" : ` (${line})`;
-	const limitLabel = ref.limit === undefined ? "" : ` +${ref.limit}`;
-	const suffix = theme.fg("warning", `${lineLabel}${limitLabel}`);
-	rendered.setText(`${text.slice(0, index + marker.length)}${suffix}${text.slice(index + marker.length)}`);
+	if (line === undefined) {
+		if (ref.limit === undefined) return rendered;
+		const suffix = theme.fg("warning", ` +${ref.limit}`);
+		rendered.setText(`${text.slice(0, index + marker.length)}${suffix}${text.slice(index + marker.length)}`);
+		return rendered;
+	}
+	const range = ref.limit === undefined ? `${line}` : `${line}-${line + ref.limit - 1}`;
+	const replacement = theme.fg("warning", `:${range} (${ref.anchor})`);
+	rendered.setText(`${text.slice(0, index)}${replacement}${text.slice(index + marker.length)}`);
 	return rendered;
 }
 

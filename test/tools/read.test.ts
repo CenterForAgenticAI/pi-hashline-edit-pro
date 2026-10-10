@@ -127,35 +127,35 @@ describe("read tool - call rendering", () => {
     expect(renderCall({ path: "sample.ts", offset: 576, limit: 520 })).toContain(":576-1095");
   });
 
-  it("shows an anchor offset's limit as a +N suffix", () => {
+  it("falls back to the anchor with a +N suffix when its line is not cached", () => {
     const text = renderCall({ path: "sample.ts", offset: "RKhl", limit: "520" });
     expect(text).toContain(":RKhl +520");
     expect(text).not.toContain("NaN");
   });
 
-  it("shows the anchor's resolved line before the limit suffix", () => {
+  it("renders the resolved anchor line range with the anchor label", () => {
     const absolute = join(process.cwd(), "anchor-line-sample.ts");
     cacheSnapshot(absolute, "checksum", 3, ["Aaaa", "RKhl", "Bbbb"]);
     try {
       const text = renderCall({ path: "anchor-line-sample.ts", offset: "RKhl", limit: 520 });
-      expect(text).toContain(":RKhl (2) +520");
+      expect(text).toContain(":2-521 (RKhl)");
     } finally {
       snapshotCache.delete(absolute);
     }
   });
 
-  it("shows the anchor's resolved line without a limit", () => {
+  it("renders the resolved anchor line with the anchor label", () => {
     const absolute = join(process.cwd(), "anchor-line-sample.ts");
     cacheSnapshot(absolute, "checksum", 3, ["Aaaa", "RKhl", "Bbbb"]);
     try {
       const text = renderCall({ path: "anchor-line-sample.ts", offset: "RKhl" });
-      expect(text).toContain(":RKhl (2)");
+      expect(text).toContain(":2 (RKhl)");
     } finally {
       snapshotCache.delete(absolute);
     }
   });
 
-  it("leaves the anchor without a line when no snapshot is cached", () => {
+  it("falls back to the bare anchor when no snapshot is cached", () => {
     const text = renderCall({ path: "anchor-line-uncached.ts", offset: "RKhl", limit: 520 });
     expect(text).toContain(":RKhl +520");
     expect(text).not.toMatch(/\(\d+\)/);
@@ -171,14 +171,14 @@ describe("read tool - call rendering", () => {
       cacheSnapshot(seeded, "checksum", 2, ["Aaaa", "RKhl"]);
       try {
         const text = renderCall({ path: "link.ts", offset: "RKhl", limit: 5 }, dir);
-        expect(text).toContain(":RKhl (2) +5");
+        expect(text).toContain(":2-6 (RKhl)");
       } finally {
         snapshotCache.delete(seeded);
       }
     });
   });
 
-  it("leaves an anchor offset without a limit unsuffixed", () => {
+  it("leaves an unresolved anchor offset unsuffixed", () => {
     const text = renderCall({ path: "sample.ts", offset: "RKhl" });
     expect(text).toContain(":RKhl");
     expect(text).not.toContain(":RKhl +");
