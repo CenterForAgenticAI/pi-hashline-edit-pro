@@ -167,7 +167,7 @@ The extension registers eight tools: `read`, `replace`, `replace_match`, `insert
 | `offset` | Line number (1-indexed) or a served anchor to start reading from. |
 | `limit` | Maximum number of lines to return from `offset`. |
 
-Output is capped at 2000 lines and 50KB. Paged output ends with a continuation hint, for example `[Showing lines 1-50 of 120. Use offset=51 to continue.]`.
+Output is capped at 2000 lines and 50KB. Paged output ends with a continuation hint, for example `[Showing lines 1-50 of 120. Use offset=Emno to continue.]`.
 
 A line whose `anchor│content` row exceeds 50KB is replaced by a marker that keeps the line's anchor: `anchor│[Line N is 2.2MB, exceeds 50.0KB; content not shown. Use bash: sed -n 'Np' <path> | head -c 51200]`. The marker is served like a normal row, so the whole line can still be replaced through it.
 

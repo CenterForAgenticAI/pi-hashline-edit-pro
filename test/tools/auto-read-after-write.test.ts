@@ -309,7 +309,7 @@ describe("auto-read after write", () => {
 
       expect(autoReadText).toContain("line 1");
 
-      expect(autoReadText).toMatch(/offset=\d+/);
+      expect(autoReadText).toMatch(/offset=[A-Za-z]{4}/);
     } finally {
       await cleanupCwd(cwd);
     }

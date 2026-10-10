@@ -49,10 +49,11 @@ export function formatPaginationHint(
 	endLine: number,
 	totalLines: number,
 	nextOffset: number,
+	lastAnchor?: string,
 	byteLimit?: number,
 ): string {
 	const sizeSuffix = byteLimit !== undefined ? ` (${formatSize(byteLimit)} limit)` : "";
-	return `[Showing lines ${startLine}-${endLine} of ${totalLines}${sizeSuffix}. Use offset=${nextOffset} to continue.]`;
+	return `[Showing lines ${startLine}-${endLine} of ${totalLines}${sizeSuffix}. Use offset=${lastAnchor ?? nextOffset} to continue.]`;
 }
 
 export async function fmtReadPreview(
@@ -147,7 +148,7 @@ export async function fmtReadPreview(
 		let nextOffset: number | undefined;
 		if (shownRowCount > 0 && (skippedTruncation.truncated || lastShownLine < totalLines)) {
 			nextOffset = lastShownLine + 1;
-			preview += `\n\n${warning}\n${formatPaginationHint(startLine, lastShownLine, totalLines, nextOffset, skippedTruncation.truncated ? skippedTruncation.maxBytes : undefined)}`;
+			preview += `\n\n${warning}\n${formatPaginationHint(startLine, lastShownLine, totalLines, nextOffset, servedHashes.at(-1), skippedTruncation.truncated ? skippedTruncation.maxBytes : undefined)}`;
 		} else {
 			preview += `\n\n${warning}`;
 		}
@@ -175,13 +176,13 @@ export async function fmtReadPreview(
 		const endLineDisplay = startLine + truncation.outputLines - 1;
 		nextOffset = endLineDisplay + 1;
 		if (truncation.truncatedBy === "lines") {
-			preview += `\n\n${formatPaginationHint(startLine, endLineDisplay, totalLines, nextOffset)}`;
+			preview += `\n\n${formatPaginationHint(startLine, endLineDisplay, totalLines, nextOffset, servedHashes.at(-1))}`;
 		} else {
-			preview += `\n\n${formatPaginationHint(startLine, endLineDisplay, totalLines, nextOffset, truncation.maxBytes)}`;
+			preview += `\n\n${formatPaginationHint(startLine, endLineDisplay, totalLines, nextOffset, servedHashes.at(-1), truncation.maxBytes)}`;
 		}
 	} else if (endIdx < totalLines) {
 		nextOffset = endIdx + 1;
-		preview += `\n\n${formatPaginationHint(startLine, endIdx, totalLines, nextOffset)}`;
+		preview += `\n\n${formatPaginationHint(startLine, endIdx, totalLines, nextOffset, servedHashes.at(-1))}`;
 	}
 
 	return {

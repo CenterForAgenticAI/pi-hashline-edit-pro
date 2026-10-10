@@ -38,13 +38,13 @@ describe("fmtReadPreview", () => {
   });
 
   it("shows pagination hint when limit is less than total lines", async () => {
-    const result = await fmtReadPreview("a\nb\nc\n", { limit: 2 }, undefined, home.testPath);
-    expect(result.text).toContain("[Showing lines 1-2 of 3. Use offset=3 to continue.]");
+    const result = await fmtReadPreview("a\nb\nc\n", { limit: 2 }, ["ATIm", "BeSR", "DAfo"], home.testPath);
+    expect(result.text).toContain("[Showing lines 1-2 of 3. Use offset=BeSR to continue.]");
   });
 
   it("shows pagination hint when offset is beyond start", async () => {
-    const result = await fmtReadPreview("a\nb\nc\nd\n", { offset: 2, limit: 2 }, undefined, home.testPath);
-    expect(result.text).toContain("[Showing lines 2-3 of 4. Use offset=4 to continue.]");
+    const result = await fmtReadPreview("a\nb\nc\nd\n", { offset: 2, limit: 2 }, ["ATIm", "BeSR", "DAfo", "Emno"], home.testPath);
+    expect(result.text).toContain("[Showing lines 2-3 of 4. Use offset=DAfo to continue.]");
   });
 
   it("rejects non-positive offset", async () => {
@@ -94,13 +94,13 @@ describe("fmtReadPreview", () => {
   it("offers continuation past a skipped oversized line", async () => {
     const big = "W".repeat(210_000);
     const content = ["a", big, "b", "c", "d", "e"].join("\n");
-    const result = await fmtReadPreview(content, { limit: 3 }, undefined, home.testPath);
+    const result = await fmtReadPreview(content, { limit: 3 }, ["ATIm", "BeSR", "DAfo", "Emno", "HDtm", "Ifms"], home.testPath);
     expect(result.text).toContain("│a");
     expect(result.text).toContain("│b");
     expect(result.text).not.toContain("│W");
     expect(result.text).toContain("[Line 2 is");
     expect(result.nextOffset).toBe(4);
-    expect(result.text).toContain("[Showing lines 1-3 of 6. Use offset=4 to continue.]");
+    expect(result.text).toContain("[Showing lines 1-3 of 6. Use offset=DAfo to continue.]");
   });
 
   it("marks a 60KB line with a hash-anchored marker by default", async () => {
@@ -137,12 +137,12 @@ describe("fmtReadPreview - oversized marker truncation", () => {
     const content = `a\n${big1}\n${big2}\nb\n`;
     const budget = 130;
 
-    const first = await fmtReadPreview(content, {}, undefined, home.testPath, budget);
+    const first = await fmtReadPreview(content, {}, ["ATIm", "BeSR", "DAfo", "Emno"], home.testPath, budget);
     expect(first.text).toContain("│a");
     expect(first.text).toContain("[Line 2 is");
     expect(first.text).not.toContain("│b");
     expect(first.text).not.toContain("Line 3");
-    expect(first.text).toContain("Use offset=3 to continue");
+    expect(first.text).toContain("Use offset=BeSR to continue");
     expect(first.nextOffset).toBe(3);
 
     const second = await fmtReadPreview(content, { offset: 3 }, undefined, home.testPath, budget);
@@ -170,23 +170,23 @@ describe("fmtReadPreview - oversized warning cap", () => {
 describe("fmtReadPreview - maxTruncLines budget", () => {
   it("caps truncated output lines via maxTruncLines", async () => {
     const content = ["l1", "l2", "l3", "l4", "l5"].join("\n") + "\n";
-    const result = await fmtReadPreview(content, {}, undefined, home.testPath, undefined, 3);
+    const result = await fmtReadPreview(content, {}, ["ATIm", "BeSR", "DAfo", "Emno", "HDtm"], home.testPath, undefined, 3);
     expect(result.text).toContain("│l1");
     expect(result.text).toContain("│l3");
     expect(result.text).not.toContain("│l4");
-    expect(result.text).toContain("[Showing lines 1-3 of 5. Use offset=4 to continue.]");
+    expect(result.text).toContain("[Showing lines 1-3 of 5. Use offset=DAfo to continue.]");
     expect(result.nextOffset).toBe(4);
   });
 
   it("caps oversized-marker rows via maxTruncLines with continuation", async () => {
     const big = "X".repeat(60_000);
     const content = `${big}\n${big}\n${big}\nb\n`;
-    const result = await fmtReadPreview(content, {}, undefined, home.testPath, DEFAULT_MAX_BYTES, 2);
+    const result = await fmtReadPreview(content, {}, ["ATIm", "BeSR", "DAfo", "Emno"], home.testPath, DEFAULT_MAX_BYTES, 2);
     expect(result.text).toContain("[Line 1 is");
     expect(result.text).toContain("[Line 2 is");
     expect(result.text).not.toContain("[Line 3 is");
     expect(result.text).not.toContain("│b");
-    expect(result.text).toContain("[Showing lines 1-2 of 4 (50.0KB limit). Use offset=3 to continue.]");
+    expect(result.text).toContain("[Showing lines 1-2 of 4 (50.0KB limit). Use offset=BeSR to continue.]");
     expect(result.nextOffset).toBe(3);
   });
 });
