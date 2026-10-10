@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { withTempDir, makePiStub, toolError } from "../support/fixtures";
+import { withTempDir, makePiStub } from "../support/fixtures";
 import { mkdir } from "fs/promises";
 import { join } from "path";
 import { isValidHashList } from "../../src/hash-store/validation";
@@ -90,8 +90,8 @@ describe("hash-store incremental vacuum", () => {
   });
 });
 
-describe("grep huge quantifier guard", () => {
-  it("rejects z{1000000} as unsafe", async () => {
+describe("grep huge quantifier", () => {
+  it("accepts z{1000000} through ripgrep's linear engine", async () => {
     await withTempDir("startup-grep-", async dir => {
       const { setupIntegrationTest } = await import("../support/fixtures");
       const { getTool } = setupIntegrationTest(dir);
@@ -99,7 +99,8 @@ describe("grep huge quantifier guard", () => {
       const { default: register } = await import("../../index");
       register(pi);
       const grepTool = getTool("anchor_grep");
-      expect(await toolError(() => grepTool.execute("g1", { pattern: "z{1000000}", path: dir }, undefined, undefined, { cwd: dir, signal: undefined } as unknown as never))).toContain("[E_UNSAFE_REGEX]");
+      const result = await grepTool.execute("g1", { pattern: "z{1000000}", path: dir }, undefined, undefined, { cwd: dir, signal: undefined } as unknown as never);
+      expect(result.content[0]?.text).toBe("No matches found.");
     });
   });
 });

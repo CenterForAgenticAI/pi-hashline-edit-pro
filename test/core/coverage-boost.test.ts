@@ -5,7 +5,7 @@ import { initHasher, getH, xxh32, contentChecksum } from "../../src/hashline/has
 import { isValidHashList, parseHashList, parseStoredHashes, isValidSnapshot, isCorruptionError, isBusyError } from "../../src/hash-store/validation";
 import { canon, hashSource } from "../../src/hashline/hash";
 import { toCwd } from "../../src/paths";
-import { withTempDir, withTempFile, setupIntegrationTest, toolError } from "../support/fixtures";
+import { withTempDir, withTempFile, setupIntegrationTest } from "../support/fixtures";
 import { mkdir, writeFile } from "fs/promises";
 import { join } from "path";
 
@@ -187,14 +187,16 @@ describe("coverage boost validation", () => {
 });
 
 describe("coverage boost grep", () => {
-  it("rejects huge quantifier and other unsafe patterns", async () => {
-    await withTempFile("a.txt", "hello\n", async ({ cwd }) => {
+  it("accepts patterns a backtracking engine could stall on", async () => {
+    await withTempFile("a.txt", "hello 12.34\n", async ({ cwd }) => {
       const { ctx, getTool } = setupIntegrationTest(cwd);
       const grep = getTool("anchor_grep");
-      expect(await toolError(() => grep.execute("g1", { pattern: "a".repeat(5000), path: "a.txt" }, undefined, undefined, ctx))).toContain("[E_UNSAFE_REGEX]");
-      expect(await toolError(() => grep.execute("g1", { pattern: "(a+)+", path: "a.txt" }, undefined, undefined, ctx))).toContain("[E_UNSAFE_REGEX]");
-      expect(await toolError(() => grep.execute("g1", { pattern: "a{1001}", path: "a.txt" }, undefined, undefined, ctx))).toContain("[E_UNSAFE_REGEX]");
-      expect(await toolError(() => grep.execute("g1", { pattern: "z{2000}", path: "a.txt" }, undefined, undefined, ctx))).toContain("[E_UNSAFE_REGEX]");
+      const digits = await grep.execute("g1", { pattern: "\\d+\\.\\d+", path: "a.txt" }, undefined, undefined, ctx);
+      expect(digits.content[0].text).toContain("│hello 12.34");
+      const repeated = await grep.execute("g2", { pattern: ".*e.*o.*", path: "a.txt" }, undefined, undefined, ctx);
+      expect(repeated.content[0].text).toContain("│hello 12.34");
+      const nested = await grep.execute("g3", { pattern: "(a+)+", path: "a.txt" }, undefined, undefined, ctx);
+      expect(nested.content[0].text).toBe("No matches found.");
     });
   });
   it("handles glob and literal and ignoreCase", async () => {

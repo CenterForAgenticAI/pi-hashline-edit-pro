@@ -66,104 +66,22 @@ function compileGrepGlob(glob: string): RegExp {
   }
 }
 
-function buildRegex(pattern: string, literal: boolean, ignoreCase: boolean): RegExp {
-  if (!literal) assertSafeRegex(pattern);
-  const source = literal ? pattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") : pattern;
+function regexSource(pattern: string, literal: boolean): string {
+  return literal ? pattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") : pattern;
+}
+
+function assertPattern(pattern: string, literal: boolean, ignoreCase: boolean): void {
   try {
-    return new RegExp(source, ignoreCase ? "ui" : "u");
+    new RegExp(regexSource(pattern, literal), ignoreCase ? "ui" : "u");
   } catch {
     throw new Error(`[E_BAD_SHAPE] Invalid pattern: ${pattern}`);
   }
 }
 
-interface RegexGroupRisk {
-  hasQuantifier: boolean;
-  hasAlternation: boolean;
-}
-
-function unsafeRegex(pattern: string): never {
-  throw new Error(
-    `[E_UNSAFE_REGEX] Refusing potentially exponential regex: ${pattern}. Use literal: true or simplify the expression.`,
-  );
-}
-
-function assertSafeRegex(pattern: string): void {
-  if (pattern.length > 4096) unsafeRegex(pattern);
-  const groups: RegexGroupRisk[] = [];
-  let inClass = false;
-  let escaped = false;
-  let variableQuantifiers = 0;
-  let lastAtom: { groupRisky: boolean; quantified: boolean } | undefined;
-  for (let i = 0; i < pattern.length; i++) {
-    const ch = pattern[i]!;
-    if (escaped) {
-      if (!inClass && (/[1-9]/.test(ch) || (ch === "k" && pattern[i + 1] === "<"))) {
-        unsafeRegex(pattern);
-      }
-      escaped = false;
-      lastAtom = { groupRisky: false, quantified: false };
-      continue;
-    }
-    if (ch === "\\") {
-      escaped = true;
-      continue;
-    }
-    if (inClass) {
-      if (ch === "]") {
-        inClass = false;
-        lastAtom = { groupRisky: false, quantified: false };
-      }
-      continue;
-    }
-    if (ch === "[") {
-      inClass = true;
-      continue;
-    }
-    if (ch === "(") {
-      groups.push({ hasQuantifier: false, hasAlternation: false });
-      lastAtom = undefined;
-      continue;
-    }
-    if (ch === ")") {
-      const group = groups.pop();
-      if (group) {
-        lastAtom = {
-          groupRisky: group.hasQuantifier || group.hasAlternation,
-          quantified: false,
-        };
-      }
-      continue;
-    }
-    if (ch === "|") {
-      const group = groups.at(-1);
-      if (group) group.hasAlternation = true;
-      lastAtom = undefined;
-      continue;
-    }
-    let quantifierLength = 0;
-    if (ch === "*" || ch === "+" || ch === "?") {
-      quantifierLength = 1;
-    } else if (ch === "{") {
-      quantifierLength = /^\{\d+(?:,\d*)?\}/.exec(pattern.slice(i))?.[0].length ?? 0;
-    }
-    if (ch === "{" && quantifierLength > 0) {
-      const quant = pattern.slice(i, i + quantifierLength);
-      const m = /^\{(\d+)/.exec(quant);
-      if (m && Number(m[1]) > 1000) unsafeRegex(pattern);
-    }
-    if (quantifierLength > 0 && lastAtom) {
-      if (ch === "?" && lastAtom.quantified) continue;
-      const variable = ch !== "{" || pattern.slice(i, i + quantifierLength).includes(",");
-      if (variable && ++variableQuantifiers > 1) unsafeRegex(pattern);
-      if (lastAtom.groupRisky) unsafeRegex(pattern);
-      const group = groups.at(-1);
-      if (group) group.hasQuantifier = true;
-      lastAtom.quantified = true;
-      i += quantifierLength - 1;
-      continue;
-    }
-    lastAtom = { groupRisky: false, quantified: false };
-  }
+interface RgMatchLine {
+  line: number;
+  start: number;
+  end: number;
 }
 
 interface FileHit {
@@ -199,11 +117,23 @@ function snapCharBoundaries(line: string, start: number, end: number): [number, 
   return [s, e];
 }
 
-function grepMatchFragment(line: string, regex: RegExp): string {
-  const m = regex.exec(line);
-  const matchStart = m?.index ?? 0;
-  const matchLen = m?.[0].length ?? 0;
+function byteOffsetToCharIndex(line: string, byteOffset: number): number {
+  if (byteOffset <= 0) return 0;
+  let bytes = 0;
+  let index = 0;
+  for (const char of line) {
+    if (bytes >= byteOffset) return index;
+    const codePoint = char.codePointAt(0)!;
+    bytes += codePoint < 0x80 ? 1 : codePoint < 0x800 ? 2 : codePoint < 0x10000 ? 3 : 4;
+    index += char.length;
+  }
+  return index;
+}
+
+function grepMatchFragment(line: string, startByte: number, endByte: number): string {
   const budget = GREP_ROW_CONTENT_BYTES - 6;
+  const matchStart = byteOffsetToCharIndex(line, startByte);
+  const matchLen = Math.max(0, byteOffsetToCharIndex(line, endByte) - matchStart);
   const half = Math.floor((budget - Math.min(matchLen, budget)) / 2);
   const [start, end] = snapCharBoundaries(line, Math.max(0, matchStart - half), Math.min(line.length, matchStart + matchLen + half));
   const content = truncateToBytes(line.slice(start, end), budget);
@@ -220,20 +150,21 @@ function grepHeadFragment(line: string): string {
 function makeHitFromIndices(
   norm: { normalized: string; fileHashes: string[]; absolutePath: string; hadUtf8DecodeErrors: boolean },
   displayPath: string,
-  matchIndices: number[],
+  matches: RgMatchLine[],
   context: number,
-  regex: RegExp | undefined,
   totalMatchCount: number,
   keptMatchCount: number,
 ): FileHit {
   const lines = visLines(norm.normalized);
   const shown = new Set<number>();
-  const kept = matchIndices.slice(0, keptMatchCount);
-  for (const i of kept) {
-    for (let j = Math.max(0, i - context); j <= Math.min(lines.length - 1, i + context); j++) shown.add(j);
+  const kept = matches.slice(0, keptMatchCount);
+  for (const match of kept) {
+    const lineIndex = match.line - 1;
+    for (let j = Math.max(0, lineIndex - context); j <= Math.min(lines.length - 1, lineIndex + context); j++) shown.add(j);
   }
   const sorted = [...shown].sort((a, b) => a - b);
-  const matchSet = new Set(matchIndices);
+  const matchByLine = new Map<number, RgMatchLine>();
+  for (const match of matches) matchByLine.set(match.line - 1, match);
   const rows: string[] = [];
   const hashes: string[] = [];
   const lineNumbers: number[] = [];
@@ -244,7 +175,8 @@ function makeHitFromIndices(
     const line = lines[idx]!;
     const row = fmtRow(hash, line);
     if (Buffer.byteLength(row, "utf-8") > MAX_GREP_LINE_BYTES) {
-      const content = matchSet.has(idx) && regex ? grepMatchFragment(line, regex) : grepHeadFragment(line);
+      const match = matchByLine.get(idx);
+      const content = match !== undefined ? grepMatchFragment(line, match.start, match.end) : grepHeadFragment(line);
       rows.push(fmtRow(hash, content));
       hashes.push(hash);
       lineNumbers.push(idx + 1);
@@ -270,7 +202,7 @@ function makeHitFromIndices(
     totalMatchCount,
     fragmented,
     texts,
-    matchLines: kept.map((index) => index + 1),
+    matchLines: kept.map((match) => match.line),
     hadUtf8DecodeErrors: norm.hadUtf8DecodeErrors,
   };
 }
@@ -330,7 +262,7 @@ async function collectRgMatches(
   req: GrepReq,
   signal: AbortSignal | undefined,
   repoRooted: boolean,
-): Promise<Map<string, number[]>> {
+): Promise<Map<string, RgMatchLine[]>> {
   const args = ["--json", "--line-number", "--color=never", "--hidden", "--glob", "!.git"];
   if (!repoRooted) args.push("--no-require-git");
   const wanted = req.limit ?? 100;
@@ -342,8 +274,8 @@ async function collectRgMatches(
   if (req.ignoreCase) args.push("--ignore-case");
   if (req.literal) args.push("--fixed-strings");
   args.push("--", pattern, searchPath);
-  const result = new Map<string, number[]>();
-  return await new Promise<Map<string, number[]>>((resolve, reject) => {
+  const result = new Map<string, RgMatchLine[]>();
+  return await new Promise<Map<string, RgMatchLine[]>>((resolve, reject) => {
     const child = spawn(rgPath, args, { stdio: ["ignore", "pipe", "pipe"] });
     const rl = createInterface({ input: child.stdout });
     let stderr = "";
@@ -367,7 +299,7 @@ async function collectRgMatches(
     };
     rl.on("line", (line) => {
       if (!line.trim()) return;
-      let event: { type?: string; data?: { path?: { text?: string }; line_number?: number } };
+      let event: { type?: string; data?: { path?: { text?: string }; line_number?: number; submatches?: Array<{ start?: number; end?: number }> } };
       try {
         event = JSON.parse(line);
       } catch {
@@ -383,8 +315,11 @@ async function collectRgMatches(
           } catch {
             abs = filePath;
           }
+          const submatch = event.data?.submatches?.[0];
+          const start = typeof submatch?.start === "number" ? submatch.start : 0;
+          const end = typeof submatch?.end === "number" ? submatch.end : start;
           const list = result.get(abs) ?? [];
-          list.push(lineNumber);
+          list.push({ line: lineNumber, start, end });
           result.set(abs, list);
         }
       }
@@ -481,8 +416,7 @@ export function fmtGrepCall(args: { pattern?: unknown; path?: unknown; glob?: un
 function highlightRegex(args: unknown): RegExp | undefined {
   if (!isRec(args) || typeof args.pattern !== "string" || args.pattern.length === 0) return undefined;
   try {
-    const validated = buildRegex(args.pattern, args.literal === true, args.ignoreCase === true);
-    return new RegExp(validated.source, validated.flags.includes("i") ? "giu" : "gu");
+    return new RegExp(regexSource(args.pattern, args.literal === true), args.ignoreCase === true ? "giu" : "gu");
   } catch {
     return undefined;
   }
@@ -584,7 +518,7 @@ export function regGrep(pi: ExtensionAPI, flags: EditToolFlags = DEFAULT_EDIT_FL
           const globPath = toDisplayPath(globRoot, absPath);
           return globRegex.test(globPath) || globRegex.test(displayPath);
         };
-        const validatedRegex = buildRegex(req.pattern, req.literal === true, req.ignoreCase === true);
+        assertPattern(req.pattern, req.literal === true, req.ignoreCase === true);
         const rgPath = await resolveRgPath();
         const hits: FileHit[] = [];
         let matches = 0;
@@ -615,15 +549,13 @@ export function regGrep(pi: ExtensionAPI, flags: EditToolFlags = DEFAULT_EDIT_FL
         for (let f = 0; f < sortedFiles.length; f++) {
           abortIf(signal);
           const absPath = sortedFiles[f]!;
-          const allNums = rgMatches.get(absPath) ?? [];
-          const totalForFile = allNums.length;
-          const sortedNums = [...allNums].sort((a, b) => a - b);
-          const indices = sortedNums.map((n) => n - 1).filter((n) => n >= 0);
+          const fileMatches = [...(rgMatches.get(absPath) ?? [])].sort((a, b) => a.line - b.line);
+          const totalForFile = fileMatches.length;
           if (countOnly) {
             if (!matchesGlob(absPath)) continue;
             const norm = await readGrepFileShadow(absPath);
             if (!norm) continue;
-            const hit = makeHitFromIndices(norm, toDisplayPath(ctx.cwd, absPath), indices, context, validatedRegex, totalForFile, indices.length);
+            const hit = makeHitFromIndices(norm, toDisplayPath(ctx.cwd, absPath), fileMatches, context, totalForFile, fileMatches.length);
             const display = displayRowsForHit(hit);
             totalRows += display.length;
             for (const r of display) totalBytes += Buffer.byteLength(r, "utf-8") + 1;
@@ -645,7 +577,7 @@ export function regGrep(pi: ExtensionAPI, flags: EditToolFlags = DEFAULT_EDIT_FL
           if (!matchesGlob(absPath)) continue;
           const norm = await readGrepFile(absPath);
           if (!norm) continue;
-          const hit = makeHitFromIndices(norm, toDisplayPath(ctx.cwd, absPath), indices, context, validatedRegex, totalForFile, Math.min(totalForFile, remaining));
+          const hit = makeHitFromIndices(norm, toDisplayPath(ctx.cwd, absPath), fileMatches, context, totalForFile, Math.min(totalForFile, remaining));
           const display = displayRowsForHit(hit);
           const keptRows: string[] = [];
           const keptHashes: string[] = [];

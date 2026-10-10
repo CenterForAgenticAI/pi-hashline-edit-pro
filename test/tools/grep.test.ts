@@ -174,12 +174,15 @@ describe("grep tool", () => {
     });
   });
 
-  it("rejects nested quantified regexes before scanning files", async () => {
+  it("accepts nested quantified regexes through ripgrep's linear engine", async () => {
     await withTempFile("sample.ts", `${"a".repeat(10_000)}!\n`, async ({ cwd }) => {
       const { ctx, getTool } = setupIntegrationTest(cwd);
       const grepTool = getTool("anchor_grep");
 
-      expect(await toolError(() => grepTool.execute("g1", { pattern: "(a+)+$", path: "sample.ts" }, undefined, undefined, ctx))).toContain("[E_UNSAFE_REGEX]");
+      const result = await grepTool.execute("g1", { pattern: "(a+)+!", path: "sample.ts" }, undefined, undefined, ctx);
+      const metrics = (result as { details?: { metrics?: { matches?: number } } }).details?.metrics;
+      expect(metrics?.matches).toBe(1);
+      expect(getText(result)).toContain("truncated fragments");
     });
   });
 
@@ -188,7 +191,7 @@ describe("grep tool", () => {
       const { ctx, getTool } = setupIntegrationTest(cwd);
       const grepTool = getTool("anchor_grep");
 
-      expect(await toolError(() => grepTool.execute("g1", { pattern: "(a+)\\1", path: "sample.ts" }, undefined, undefined, ctx))).toContain("[E_UNSAFE_REGEX]");
+      expect(await toolError(() => grepTool.execute("g1", { pattern: "(a+)\\1", path: "sample.ts" }, undefined, undefined, ctx))).toContain("[E_GREP_FAILED]");
 
       const literalResult = await grepTool.execute(
         "g2",
@@ -199,12 +202,13 @@ describe("grep tool", () => {
     });
   });
 
-  it("rejects multiple variable quantifiers that can cause polynomial backtracking", async () => {
-    await withTempFile("sample.ts", "aaaa!\n", async ({ cwd }) => {
+  it("accepts multiple variable quantifiers that ripgrep evaluates in linear time", async () => {
+    await withTempFile("sample.ts", "aaab\n", async ({ cwd }) => {
       const { ctx, getTool } = setupIntegrationTest(cwd);
       const grepTool = getTool("anchor_grep");
 
-      expect(await toolError(() => grepTool.execute("g1", { pattern: "a*a*a*b", path: "sample.ts" }, undefined, undefined, ctx))).toContain("[E_UNSAFE_REGEX]");
+      const result = await grepTool.execute("g1", { pattern: "a*a*a*b", path: "sample.ts" }, undefined, undefined, ctx);
+      expect(getText(result)).toContain("│aaab");
     });
   });
 
@@ -687,11 +691,12 @@ async function withSystemTempDir(prefix: string, run: (dir: string) => Promise<v
       expect(text).not.toContain("z".repeat(1000));
     });
   });
-  it("rejects huge quantifiers that would cause pathological backtracking", async () => {
+  it("accepts huge quantifiers that ripgrep evaluates in linear time", async () => {
     await withTempFile("huge2.txt", "z\n", async ({ cwd }) => {
       const { ctx, getTool } = setupIntegrationTest(cwd);
       const grepTool = getTool("anchor_grep");
-      expect(await toolError(() => grepTool.execute("g1", { pattern: "z{1000000}", path: "huge2.txt" }, undefined, undefined, ctx))).toContain("[E_UNSAFE_REGEX]");
+      const result = await grepTool.execute("g1", { pattern: "z{1000000}", path: "huge2.txt" }, undefined, undefined, ctx);
+      expect(getText(result)).toBe("No matches found.");
     });
   });
 

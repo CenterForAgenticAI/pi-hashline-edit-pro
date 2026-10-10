@@ -287,8 +287,8 @@ describe("structuredContent for read and replace", () => {
 			for (const line of file.lines) {
 				expect(line.rendered).toBe(`${line.anchor}│${line.text}`);
 			}
-			const unsafe = await getTool("anchor_grep").execute("g2", { pattern: "(a+)+", path: "sample.ts" }, undefined, undefined, ctx);
-			expect(structured(unsafe).error!.code).toBe("E_UNSAFE_REGEX");
+			const unsupported = await getTool("anchor_grep").execute("g2", { pattern: "(\\w)\\1", path: "sample.ts" }, undefined, undefined, ctx);
+			expect(structured(unsupported).error!.code).toBe("E_GREP_FAILED");
 		});
 	});
 

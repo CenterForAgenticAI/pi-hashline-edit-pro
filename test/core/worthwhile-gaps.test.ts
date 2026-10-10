@@ -152,29 +152,31 @@ describe("grep glob question mark", () => {
   });
 });
 
-describe("grep unsafe regex vectors", () => {
-  it("rejects k-angle backreference", async () => {
+describe("grep regex compatibility", () => {
+  it("rejects an invalid k-angle backreference before scanning", async () => {
     await withTempDir("grep-kref-", async (dir) => {
       await writeFile(join(dir, "s.txt"), "hello\n", "utf-8");
       const { ctx, getTool } = setupIntegrationTest(dir);
       const grepTool = getTool("anchor_grep");
-      expect(await toolError(() => grepTool.execute("g1", { pattern: "\\k<foo>", path: "s.txt" }, undefined, undefined, ctx))).toContain("[E_UNSAFE_REGEX]");
+      expect(await toolError(() => grepTool.execute("g1", { pattern: "\\k<foo>", path: "s.txt" }, undefined, undefined, ctx))).toContain("[E_BAD_SHAPE]");
     });
   });
-  it("rejects quantified alternation", async () => {
+  it("accepts quantified alternation", async () => {
     await withTempDir("grep-alt-", async (dir) => {
       await writeFile(join(dir, "s.txt"), "ab\n", "utf-8");
       const { ctx, getTool } = setupIntegrationTest(dir);
       const grepTool = getTool("anchor_grep");
-      expect(await toolError(() => grepTool.execute("g1", { pattern: "(a|b)+", path: "s.txt" }, undefined, undefined, ctx))).toContain("[E_UNSAFE_REGEX]");
+      const result = await grepTool.execute("g1", { pattern: "(a|b)+", path: "s.txt" }, undefined, undefined, ctx);
+      expect(getText(result)).toContain("│ab");
     });
   });
-  it("rejects two variable quantifiers", async () => {
+  it("accepts two variable quantifiers", async () => {
     await withTempDir("grep-twoq-", async (dir) => {
       await writeFile(join(dir, "s.txt"), "aaabbb\n", "utf-8");
       const { ctx, getTool } = setupIntegrationTest(dir);
       const grepTool = getTool("anchor_grep");
-      expect(await toolError(() => grepTool.execute("g1", { pattern: "a{1,2}b{3,4}", path: "s.txt" }, undefined, undefined, ctx))).toContain("[E_UNSAFE_REGEX]");
+      const result = await grepTool.execute("g1", { pattern: "a{1,2}b{3,4}", path: "s.txt" }, undefined, undefined, ctx);
+      expect(getText(result)).toContain("│aaabbb");
     });
   });
   it("accepts a single variable quantifier", async () => {
@@ -215,12 +217,13 @@ describe("grep unsafe regex vectors", () => {
       expect(okMetrics?.matches).toBe(0);
     });
   });
-  it("rejects a thousand and one repetitions", async () => {
+  it("accepts a thousand and one repetitions", async () => {
     await withTempDir("grep-bound-bad-", async (dir) => {
       await writeFile(join(dir, "s.txt"), "aaa\n", "utf-8");
       const { ctx, getTool } = setupIntegrationTest(dir);
       const grepTool = getTool("anchor_grep");
-      expect(await toolError(() => grepTool.execute("g1", { pattern: "a{1001}", path: "s.txt" }, undefined, undefined, ctx))).toContain("[E_UNSAFE_REGEX]");
+      const result = await grepTool.execute("g1", { pattern: "a{1001}", path: "s.txt" }, undefined, undefined, ctx);
+      expect(getText(result)).toBe("No matches found.");
     });
   });
 });

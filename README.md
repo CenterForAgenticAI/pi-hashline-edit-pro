@@ -289,7 +289,7 @@ Every matching line, and each requested context line, is returned as `lineNumber
 
 Directory searches respect `.gitignore` (including parent directories); `.git` is always skipped, and hidden files are searched. `node_modules`, `.tmp`, and `coverage` are skipped only when a `.gitignore` lists them. Binary, image, and oversized files are skipped silently.
 
-Regexes with backreferences, nested quantifiers, quantified alternation, or multiple variable quantifiers are rejected with `[E_UNSAFE_REGEX]` before any files are scanned. Use `literal: true` when regex behavior is unnecessary.
+Patterns are evaluated by ripgrep's linear-time regex engine, so shapes that stall a backtracking engine (nested quantifiers, several `.*` terms, huge repetitions) are safe. Pattern syntax is ripgrep's Rust regex syntax; backreferences and look-around are rejected with `[E_GREP_FAILED]`. Use `literal: true` when regex behavior is unnecessary.
 
 Output is capped at `limit` matched lines, 2000 rows, and 50KB of text, whichever comes first, with a note naming the caps that cut the results (the exact one is in `details.truncation`). A matched line whose `anchor│content` row exceeds 500 bytes is shown as a fragment around the match, with `...` marking the truncated sides; a context row over 500 bytes is shown as its head with a trailing `...`. Fragments keep the line's anchor (long lines are hashed from their first 500 bytes) and are served like full rows, so a fragmented match is still editable, and `replace` always replaces the whole line.
 
@@ -482,8 +482,7 @@ Full reference:
 | `[E_PATH_CHANGED]` | A write target changed identity after it was read; the write was refused to avoid following a swapped symlink or overwriting a replacement file. |
 | `[E_BATCH_OVERLAP]` | Batched edit calls target overlapping ranges; the whole batch was refused. One `before` plus one `after` insert on the same anchor line is not an overlap. Retry with disjoint ranges. |
 | `[E_OP_ABORTED]` | An edit aborted (a same-message batch member failed, or the file changed or was deleted after the edit started). Nothing was written. Fix the sibling failure and retry the batch, otherwise call `read` for fresh anchors and retry. The abort names the failing call and its error code when one is known. |
-| `[E_UNSAFE_REGEX]` | A grep regex can trigger excessive backtracking; simplify it or search with `literal: true`. |
-| `[E_GREP_FAILED]` | `anchor_grep` could not start ripgrep or ripgrep exited with an error (for example a pattern valid in JavaScript but unsupported by ripgrep's regex engine); the message carries ripgrep's output. Retry with `literal: true` or simplify the pattern. |
+| `[E_GREP_FAILED]` | `anchor_grep` could not start ripgrep or ripgrep exited with an error (for example a pattern with backreferences or look-around, which ripgrep's regex engine does not support); the message carries ripgrep's output. Retry with `literal: true` or simplify the pattern. |
 | `[E_GREP_TIMEOUT]` | `anchor_grep` timed out after 10 seconds; narrow `path` or simplify `pattern` and retry. |
 
 ## Troubleshooting
