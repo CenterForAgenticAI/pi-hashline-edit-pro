@@ -1,3 +1,3 @@
 - `undo_last_change`: history is one slot per file, not a stack; a second undo returns `E_UNDO_NONE`.
-- `undo_last_change`: a `write` clears the history, so undo right after a bad diff — review the diff's `-anchor│` rows first to confirm what you're restoring.
+- `undo_last_change`: a `write` clears the history, so undo before any other edit or write; the undo diff's `+anchor│` rows are the restored lines.
 - `undo_last_change`: a cross-file `move` records one undo entry per file; undo both the source and the destination to revert the whole move, because undoing one side alone leaves the moved lines duplicated or missing.

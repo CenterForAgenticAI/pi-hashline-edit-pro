@@ -4,7 +4,7 @@ import { TEXT_NOT_STRING_MSG, NEW_CONTENT_NOT_STRING_MSG } from "./constants";
 
 const textSchema = Type.String({
   description:
-    'The exact text to write in place of the removed range. "" deletes the range, "\\n" is one blank line, and a trailing line break sets the last line\'s ending instead of adding a blank line.',
+    'The exact text to write in place of the removed range. "" deletes the range. A trailing line break sets the newline of the last line written instead of adding a blank line; a lone newline writes one blank line.',
 });
 
 const removeFromSchema = Type.String({
@@ -234,7 +234,7 @@ const replaceMatchOldStringSchema = Type.String({
 });
 const replaceMatchNewStringSchema = Type.String({
   description:
-    'The exact replacement for every matched occurrence. "" deletes the matches, "\\n" inserts one blank line, and a trailing line break sets the last line\'s ending instead of adding a blank line; the rest of the range is kept byte-for-byte.',
+    'The exact replacement for every matched occurrence. "" deletes the matches. A trailing line break sets the newline of the last line written instead of adding a blank line; a lone newline writes one blank line; the rest of the range is kept byte-for-byte.',
 });
 const replaceMatchPathRequiredSchema = Type.String({
   description:

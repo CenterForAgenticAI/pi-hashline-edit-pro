@@ -188,7 +188,7 @@ Edge cases:
 | --- | --- |
 | `remove_from` | 4-char anchor marking the FIRST line to remove (inclusive). |
 | `remove_to` | 4-char anchor marking the LAST line to remove (inclusive). |
-| `text` | The exact text to write in place of the removed range, as one string: `""` deletes the range, `"\n"` is one blank line, and a trailing line break sets the last line's ending instead of adding a blank line. Embedded `\r\n`/`\r`/`\n` are preserved; JSON decoding happens once, before the tool; the tool writes the string it receives and never decodes — `\uXXXX` is the character, `\\uXXXX` the literal text. Legacy arrays are converted to text (elements joined with LF); prefer the string form. |
+| `text` | The exact text to write in place of the removed range, as one string: `""` deletes the range. A trailing line break sets the newline of the last line written instead of adding a blank line; a lone newline writes one blank line. Embedded `\r\n`/`\r`/`\n` are preserved; JSON decoding happens once, before the tool; the tool writes the string it receives and never decodes — `\uXXXX` is the character, `\\uXXXX` the literal text. Legacy arrays are converted to text (elements joined with LF); prefer the string form. |
 
 `replace_from` and `replace_to` are accepted as aliases for `remove_from` and `remove_to`.
 
@@ -235,7 +235,7 @@ In a same-message batch it joins the other calls on its file: the batch validate
 | --- | --- |
 | `anchor` | 4-char anchor marking the line next to which the lines go. The anchor line is preserved. A pasted `+Hasu│x` diff row or `anchor│` prefix is stripped automatically with a warning. |
 | `direction` | `"after"` inserts below the anchor line, `"before"` above it. |
-| `text` | The exact text to insert, as one string: `""` inserts one blank line (the same as `"\n"`), and a trailing line break sets the last line's ending instead of adding a blank line. Never include the anchor line. Embedded `\r\n`/`\r`/`\n` are preserved; JSON decoding happens once, before the tool; the tool writes the string it receives and never decodes — `\uXXXX` is the character, `\\uXXXX` the literal text. Legacy arrays are converted to text (elements joined with LF); prefer the string form. |
+| `text` | The exact text to insert, as one string: `""` inserts one blank line (the same as `"\n"`). A trailing line break sets the newline of the last line written instead of adding a blank line. Never include the anchor line. Embedded `\r\n`/`\r`/`\n` are preserved; JSON decoding happens once, before the tool; the tool writes the string it receives and never decodes — `\uXXXX` is the character, `\\uXXXX` the literal text. Legacy arrays are converted to text (elements joined with LF); prefer the string form. |
 
 Nothing is removed and the inserted lines are written exactly as given; the anchor line and every other line stay in place. An empty `text` payload inserts one blank line. To seed an empty file, read it and insert after the `anchor│` empty-line row.
 

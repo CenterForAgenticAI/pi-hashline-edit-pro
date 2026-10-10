@@ -170,7 +170,7 @@ export function withUndoPrompts(base: { description: string; snippet: string; gu
   const script = flags.codemode ? [RESULT_CONTRACT_GUIDELINE, SCRIPT_UNDO_GUIDELINE] : [];
   let guidelines = [...base.guidelines, ...script];
   if (!flags.autoRead) {
-    guidelines = guidelines.map((guideline) => guideline.includes("bad diff") ? "`undo_last_change`: only the last `replace`/`replace_match`/`insert`/`copy`/`move` per file is undoable; a `write` clears it, so undo right after a bad edit — review what you're restoring." : guideline);
+    guidelines = guidelines.map((guideline) => guideline.includes("a `write` clears the history") ? "`undo_last_change`: only the last `replace`/`replace_match`/`insert`/`copy`/`move` per file is undoable; a `write` clears it, so undo before any other edit or write." : guideline);
   }
   if (ops.length !== 5) {
     description = description.replaceAll("replace, replace_match, insert, copy, or move", joinOps(ops));

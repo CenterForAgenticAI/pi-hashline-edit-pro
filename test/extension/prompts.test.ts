@@ -231,10 +231,10 @@ describe("edit prompt flag variants", () => {
 
   it("withUndoPrompts keeps diff detail when auto-read is on and neutralizes when off", () => {
     const on = withUndoPrompts(undoBase, DEFAULT_EDIT_FLAGS);
-    expect(on.guidelines.some((g) => g.includes("bad diff"))).toBe(true);
+    expect(on.guidelines.some((g) => g.includes("the undo diff's"))).toBe(true);
     const off = withUndoPrompts(undoBase, { ...DEFAULT_EDIT_FLAGS, autoRead: false });
-    expect(off.guidelines.some((g) => g.includes("bad diff"))).toBe(false);
-    expect(off.guidelines.some((g) => g.includes("bad edit"))).toBe(true);
+    expect(off.guidelines.some((g) => g.includes("the undo diff's"))).toBe(false);
+    expect(off.guidelines.some((g) => g.includes("undo before any other edit or write"))).toBe(true);
   });
 
   it("withUndoPrompts drops disabled tools from its operation lists", () => {
