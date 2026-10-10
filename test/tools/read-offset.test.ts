@@ -67,7 +67,7 @@ describe("read tool - offset addressing", () => {
       await editTool.execute("e1", { remove_from: two, remove_to: two, text: "L2" }, undefined, undefined, ctx);
       const message = await toolError(() => readTool.execute("r2", { path: "sample.txt", offset: two }, undefined, undefined, ctx));
       expect(message).toContain("[E_STALE_ANCHOR]");
-      expect(message).toContain("Call read()");
+      expect(message).toContain("Use a line number, or read again for fresh anchors.");
     });
   });
 
@@ -81,6 +81,7 @@ describe("read tool - offset addressing", () => {
       const message = await toolError(() => readTool.execute("r2", { path: "b.txt", offset: anchor }, undefined, undefined, ctx));
       expect(message).toContain("[E_STALE_ANCHOR]");
       expect(message).toContain("a.txt");
+      expect(message).toContain("Use a line number, or read");
     });
   });
 

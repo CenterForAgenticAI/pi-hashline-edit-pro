@@ -95,6 +95,8 @@ describe("perfect hashing", () => {
 		expect(caught).toBeDefined();
 		expect(caught!.message).toMatch(/E_STALE_ANCHOR/);
 		expect(caught!.message).toContain("Call read()");
+		expect(caught!.message).toContain("1 stale anchor");
+		expect(caught!.message).not.toContain('"ZZZZ", "ZZZZ"');
 	});
 
 	it("all hashes are unique for any file shape", async () => {

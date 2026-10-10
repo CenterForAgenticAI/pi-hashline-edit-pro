@@ -210,10 +210,10 @@ export function resolveReadOffset(
 	if (owner === undefined) {
 		const folded = ownersDifferingOnlyByCase(ref.hash);
 		const hint = folded.length > 0 ? ` Anchors are case-sensitive; ${folded.map((match) => `"${match.anchor}"`).join(", ")} differs only in case.` : "";
-		throw new Error(`[E_STALE_ANCHOR] "${ref.hash}" is not owned in this session.${hint} Call read() on ${resolvedPath} first.`);
+		throw new Error(`[E_STALE_ANCHOR] "${ref.hash}" is not owned in this session.${hint} Use a line number, or read again for fresh anchors.`);
 	}
 	if (owner.path !== resolvedPath) {
-		throw new Error(`[E_STALE_ANCHOR] "${ref.hash}" is owned by ${owner.path}. Call read() on ${resolvedPath} for fresh anchors.`);
+		throw new Error(`[E_STALE_ANCHOR] "${ref.hash}" is owned by ${owner.path}. Use a line number, or read ${owner.path} to use that anchor.`);
 	}
 	try {
 		return resolveAnchorLine(ref, fileLines, fileHashes, resolvedPath);

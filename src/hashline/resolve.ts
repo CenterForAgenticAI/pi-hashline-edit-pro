@@ -93,7 +93,12 @@ export function fmtMismatchWithHashes(
   const out: string[] = [];
   const hashes: string[] = [];
   const servedMap = new Map<string, string>();
-  const notFound = mismatches;
+  const seen = new Set<string>();
+  const notFound = mismatches.filter((mismatch) => {
+    if (seen.has(mismatch.ref.hash)) return false;
+    seen.add(mismatch.ref.hash);
+    return true;
+  });
   if (notFound.length > 0) {
     const refList = notFound.map((m) => `"${m.ref.hash}"`).join(", ");
     out.push(
