@@ -235,7 +235,7 @@ In a same-message batch it joins the other calls on its file: the batch validate
 | --- | --- |
 | `anchor` | 4-char anchor marking the line next to which the lines go. The anchor line is preserved. A pasted `+Hasu│x` diff row or `anchor│` prefix is stripped automatically with a warning. |
 | `direction` | `"after"` inserts below the anchor line, `"before"` above it. |
-| `text` | The exact text to insert, as one string: `""` inserts one blank line (the same as `"\n"`). A trailing line break sets the newline of the last line written instead of adding a blank line. Never include the anchor line. Embedded `\r\n`/`\r`/`\n` are preserved; JSON decoding happens once, before the tool; the tool writes the string it receives and never decodes — `\uXXXX` is the character, `\\uXXXX` the literal text. Legacy arrays are converted to text (elements joined with LF); prefer the string form. |
+| `text` | The exact text to insert, as one string: `""` inserts one blank line (the same as a lone newline). A trailing line break sets the newline of the last line written instead of adding a blank line. Never include the anchor line. Embedded `\r\n`/`\r`/`\n` are preserved; JSON decoding happens once, before the tool; the tool writes the string it receives and never decodes — `\uXXXX` is the character, `\\uXXXX` the literal text. Legacy arrays are converted to text (elements joined with LF); prefer the string form. |
 
 Nothing is removed and the inserted lines are written exactly as given; the anchor line and every other line stay in place. An empty `text` payload inserts one blank line. To seed an empty file, read it and insert after the `anchor│` empty-line row.
 

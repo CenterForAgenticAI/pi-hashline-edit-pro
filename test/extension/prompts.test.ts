@@ -81,7 +81,7 @@ describe("tool-prompts/read.md (model-facing contract)", () => {
   });
 
   it("documents pagination support", () => {
-    expect(readPrompt).toContain("offset/limit");
+    expect(readPrompt).toContain("Page long files with `offset` and `limit`");
   });
 
   it("documents file-kind handling", () => {
@@ -269,11 +269,11 @@ describe("edit prompt flag variants", () => {
     expect(result.guidelines.some((g) => g.includes("strict-input mode is on"))).toBe(true);
   });
 
-  it("withReplaceMatchPrompts keeps its own guideline first and names only enabled tools", () => {
+  it("withReplaceMatchPrompts keeps its own guideline and names only enabled tools", () => {
     const on = withReplaceMatchPrompts(withinBase, DEFAULT_EDIT_FLAGS);
     const off = withReplaceMatchPrompts(withinBase, { ...DEFAULT_EDIT_FLAGS, copyMoveEnabled: false });
-    expect(on.guidelines[0]).toBe(withinBase.guidelines[0]);
-    expect(off.guidelines[0]).toBe(withinBase.guidelines[0]);
+    expect(on.guidelines[1]).toBe(withinBase.guidelines[0]);
+    expect(off.guidelines[1]).toBe(withinBase.guidelines[0]);
     expect(off.guidelines.some((g) => g.includes("`copy`") || g.includes("`move`"))).toBe(false);
   });
 
@@ -282,7 +282,7 @@ describe("edit prompt flag variants", () => {
     const shared = result.guidelines.join("\n");
     expect(shared).toContain("`replace`/`replace_match`/`insert`/`copy`/`move`: same-file calls in one message are grouped into one batch");
     expect(shared).toContain("`replace`/`replace_match`/`insert`/`copy`/`move`: path resolution is anchor-only");
-    expect(shared).toContain("`replace`/`replace_match`/`insert`: JSON decoding happens once");
+    expect(shared).toContain("`replace`/`replace_match`/`insert`: write the character itself, not an escape");
     expect(shared).toContain("`replace`/`replace_match`/`insert`/`copy`/`move`/`undo_last_change`: in the post-edit diff, `-anchor│` rows are dead anchors");
     const transfer = withTransferPrompts({
       description: loadP("../tool-prompts/copy.md"),

@@ -69,7 +69,7 @@ function batchGuideline(flags: EditToolFlags): string {
   const tools = operationNames(SHARED_EDIT_OPS, flags);
   const outcome = flags.autoRead ? "diff" : "result";
   const script = flags.codemode ? ` ${SCRIPT_BATCH_GUIDELINE}` : "";
-  return `${tools}: same-file calls in one message are grouped into one batch; earlier calls reply \`In batch N (queued)\` and the last applied call shows the combined ${outcome}, with one undo for the whole batch. A call whose own request is invalid (anchors, shape, or \`old_string\`) fails on its own and is left out of the batch; the rest still commits.${script}`;
+  return `${tools}: same-file calls in one message are grouped into one batch; earlier calls reply \`In batch N (queued)\` and the last applied call shows the combined ${outcome}, with one undo for the whole batch. A call whose own request is invalid (anchors, shape, or \`old_string\`) fails on its own; any failure once the batch runs aborts the whole batch.${script}`;
 }
 
 function diffGuideline(flags: EditToolFlags): string {
@@ -86,7 +86,7 @@ function pathGuideline(flags: EditToolFlags): string {
 
 function payloadGuideline(flags: EditToolFlags): string {
   const tools = operationNames(SHARED_PAYLOAD_OPS, flags);
-  return `${tools}: JSON decoding happens once, before the tool; the tool writes the string it receives and never decodes — \`\\uXXXX\` is the character, \`\\\\uXXXX\` the literal text.`;
+  return `${tools}: write the character itself, not an escape; the tool writes \`text\` verbatim and never decodes escapes — \`\\uXXXX\` is the character, \`\\\\uXXXX\` the literal text.`;
 }
 
 function strictInputGuideline(flags: EditToolFlags): string {
@@ -140,12 +140,12 @@ export function withReadPrompts(base: { description: string; snippet: string; gu
 }
 
 export function withInsertPrompts(base: { description: string; snippet: string; guidelines: string[] }, flags: EditToolFlags): { description: string; snippet: string; guidelines: string[] } {
-  const guidelines = [...base.guidelines];
+  const guidelines = [preferenceGuideline(flags), ...base.guidelines];
   return finalizePrompts(base.description, base.snippet, guidelines, flags);
 }
 
 export function withReplaceMatchPrompts(base: { description: string; snippet: string; guidelines: string[] }, flags: EditToolFlags): { description: string; snippet: string; guidelines: string[] } {
-  const guidelines = [...base.guidelines];
+  const guidelines = [preferenceGuideline(flags), ...base.guidelines];
   return finalizePrompts(base.description, base.snippet, guidelines, flags);
 }
 
@@ -167,8 +167,8 @@ function joinOps(ops: string[], options?: { backtick?: boolean; separator?: "/" 
 }
 
 export function withGrepPrompts(base: { description: string; snippet: string; guidelines: string[] }, flags: EditToolFlags): { description: string; snippet: string; guidelines: string[] } {
-  if (!flags.codemode && flags.copyMoveEnabled) return base;
-  const guidelines = flags.codemode ? [...base.guidelines, RESULT_CONTRACT_GUIDELINE] : base.guidelines;
+  const guidelines = [preferenceGuideline(flags), ...base.guidelines];
+  if (flags.codemode) guidelines.push(RESULT_CONTRACT_GUIDELINE);
   if (flags.copyMoveEnabled) return { ...base, guidelines };
   return { ...base, guidelines, description: base.description.replaceAll("replace, insert, copy, or move", joinOps(gatedEditOps(["replace", "insert", "copy", "move"], flags))) };
 }
@@ -178,7 +178,7 @@ export function withUndoPrompts(base: { description: string; snippet: string; gu
   let description = base.description;
   let snippet = base.snippet;
   const script = flags.codemode ? [RESULT_CONTRACT_GUIDELINE, SCRIPT_UNDO_GUIDELINE] : [];
-  let guidelines = [...base.guidelines, ...script];
+  let guidelines = [preferenceGuideline(flags), ...base.guidelines, ...script];
   if (!flags.autoRead) {
     guidelines = guidelines.map((guideline) => guideline.includes("a `write` clears the history") ? "`undo_last_change`: only the last `replace`/`replace_match`/`insert`/`copy`/`move` per file is undoable; a `write` clears it, so undo before any other edit or write." : guideline);
   }
@@ -194,7 +194,7 @@ export function withUndoPrompts(base: { description: string; snippet: string; gu
 }
 
 export function withTransferPrompts(base: { description: string; snippet: string; guidelines: string[] }, flags: EditToolFlags): { description: string; snippet: string; guidelines: string[] } {
-  const guidelines = flags.codemode ? [...base.guidelines, SCRIPT_TRANSFER_GUIDELINE] : [...base.guidelines];
+  const guidelines = [preferenceGuideline(flags), ...base.guidelines, ...(flags.codemode ? [SCRIPT_TRANSFER_GUIDELINE] : [])];
   return finalizePrompts(base.description, base.snippet, guidelines, flags, { stringPayload: false });
 }
 

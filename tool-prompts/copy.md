@@ -1,3 +1,3 @@
 Copy a range of lines to another position, targeted by 4-character anchors from any served anchor│content row. Give `source_from` and `source_to` as bare anchors marking the first and last line to copy in the source file, and `insert_after` as the bare anchor of the destination line after which the copy goes. The source lines stay in place, and the copied lines are written exactly as the source file holds them.
 
-A cross-file copy joins the destination file's batch. A copy always duplicates the content its source anchors were served from, so a same-message edit to the source file does not change what is copied.
+A copy always duplicates the content its source anchors were served from, so a same-message edit to the source file does not change what is copied.
