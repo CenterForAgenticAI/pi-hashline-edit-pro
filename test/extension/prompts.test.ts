@@ -325,7 +325,7 @@ describe("edit prompt flag variants", () => {
   });
 
   it("withReadPrompts prepends the preference line and keeps the read guidelines when auto-read-all is off", () => {
-    const result = withReadPrompts(readBase, DEFAULT_EDIT_FLAGS);
+    const result = withReadPrompts(readBase, { ...DEFAULT_EDIT_FLAGS, autoReadAllOutline: true });
     expect(result.description).toBe(readBase.description);
     expect(result.snippet).toBe(readBase.snippet);
     expect(result.guidelines[0]).toContain("Prefer the hashline tools for anything that touches files:");
@@ -341,6 +341,21 @@ describe("edit prompt flag variants", () => {
   it("withReadPrompts rewrites the re-read note when auto-read is off", () => {
     const result = withReadPrompts(readBase, { ...DEFAULT_EDIT_FLAGS, autoRead: false });
     expect(result.guidelines.some((g) => g === "`read`: call again after an edit when you need anchors you lack.")).toBe(true);
+  });
+
+  it("withReadPrompts gates the outline note on outline mode", () => {
+    const outline = withReadPrompts(readBase, { ...DEFAULT_EDIT_FLAGS, autoReadAllActive: true, autoReadAllOutline: true });
+    expect(outline.guidelines.some((g) => g.includes("[limit N]"))).toBe(true);
+    const full = withReadPrompts(readBase, { ...DEFAULT_EDIT_FLAGS, autoReadAllActive: true, autoReadAllOutline: false });
+    expect(full.guidelines.some((g) => g.includes("[limit N]"))).toBe(false);
+    expect(withReadPrompts(readBase, DEFAULT_EDIT_FLAGS).guidelines.some((g) => g.includes("[limit N]"))).toBe(false);
+  });
+
+  it("withReadPrompts drops the replace_match note when the tool is off", () => {
+    const on = withReadPrompts(readBase, { ...DEFAULT_EDIT_FLAGS, autoReadAllOutline: true });
+    expect(on.guidelines.some((g) => g.includes("needs both boundary lines served"))).toBe(true);
+    const off = withReadPrompts(readBase, { ...DEFAULT_EDIT_FLAGS, autoReadAllOutline: true, replaceMatchEnabled: false });
+    expect(off.guidelines.some((g) => g.includes("needs both boundary lines served"))).toBe(false);
   });
 
   it("withTransferPrompts keeps the anchor-only contract by default", () => {

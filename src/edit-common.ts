@@ -13,6 +13,7 @@ export interface EditToolFlags {
   strictInput: boolean;
   autoRead: boolean;
   autoReadAllActive: boolean;
+  autoReadAllOutline: boolean;
   replaceMatchEnabled: boolean;
   copyMoveEnabled: boolean;
   codemode: boolean;
@@ -23,6 +24,7 @@ export const DEFAULT_EDIT_FLAGS: EditToolFlags = {
   strictInput: false,
   autoRead: true,
   autoReadAllActive: false,
+  autoReadAllOutline: false,
   replaceMatchEnabled: true,
   copyMoveEnabled: true,
   codemode: false,
@@ -35,6 +37,7 @@ export async function currentEditFlags(codemode = false): Promise<EditToolFlags>
     strictInput: config.strictInput === true,
     autoRead: config.autoRead !== false,
     autoReadAllActive: (config.autoReadAll ?? "off") !== "off",
+    autoReadAllOutline: (config.autoReadAll ?? "off") === "outline",
     replaceMatchEnabled: config.replaceMatchEnabled !== false,
     copyMoveEnabled: config.copyMoveEnabled !== false,
     codemode
@@ -115,16 +118,23 @@ export function withReplacePrompts(base: { description: string; snippet: string;
   return finalizePrompts(description, base.snippet, guidelines, flags);
 }
 
+function readGuidelineApplies(guideline: string, flags: EditToolFlags): boolean {
+  if (!flags.autoReadAllOutline && guideline.includes("[limit N]")) return false;
+  if (!flags.replaceMatchEnabled && guideline.includes("`replace_match`")) return false;
+  return true;
+}
+
 export function withReadPrompts(base: { description: string; snippet: string; guidelines: string[] }, flags: EditToolFlags): { description: string; snippet: string; guidelines: string[] } {
   const preference = preferenceGuideline(flags);
   const script = flags.codemode ? [RESULT_CONTRACT_GUIDELINE] : [];
+  const baseGuidelines = base.guidelines.filter((guideline) => readGuidelineApplies(guideline, flags));
   if (flags.autoReadAllActive) {
-    const rewritten = base.guidelines
+    const rewritten = baseGuidelines
       .filter((guideline) => !guideline.includes("call again after an edit"))
     return { description: base.description, snippet: base.snippet, guidelines: [preference, ...rewritten, ...script] };
   }
-  if (flags.autoRead) return { description: base.description, snippet: base.snippet, guidelines: [preference, ...base.guidelines, ...script] };
-  const guidelines = [preference, ...base.guidelines, ...script];
+  if (flags.autoRead) return { description: base.description, snippet: base.snippet, guidelines: [preference, ...baseGuidelines, ...script] };
+  const guidelines = [preference, ...baseGuidelines, ...script];
   const mapped = guidelines.map((guideline) => guideline.startsWith("`read`: call again after an edit") ? "`read`: call again after an edit when you need anchors you lack." : guideline);
   return { description: base.description, snippet: base.snippet, guidelines: mapped };
 }

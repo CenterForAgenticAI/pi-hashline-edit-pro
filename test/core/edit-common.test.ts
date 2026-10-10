@@ -50,4 +50,15 @@ describe("currentEditFlags", () => {
       expect((await currentEditFlags(true)).codemode).toBe(true);
     });
   });
+
+  it("tracks the auto-read-all outline mode", async () => {
+    await withTempDir("pi-hashline-edit-common-flags-", async () => {
+      await writeConfig({ autoRead: true, anchorGrepEnabled: true, autoReadAll: "outline" });
+      const outline = await currentEditFlags();
+      expect(outline.autoReadAllActive).toBe(true);
+      expect(outline.autoReadAllOutline).toBe(true);
+      await writeConfig({ autoRead: true, anchorGrepEnabled: true, autoReadAll: "full" });
+      expect((await currentEditFlags()).autoReadAllOutline).toBe(false);
+    });
+  });
 });
