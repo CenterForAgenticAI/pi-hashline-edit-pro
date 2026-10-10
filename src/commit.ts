@@ -37,7 +37,7 @@ export async function commitEdit(pipe: PipelineResult, meta: CommitMeta): Promis
   const span = pipe.spans?.[0] ?? (meta.editAnchors ? spanForEdit(pipe.originalHashes, meta.editAnchors[0], meta.editAnchors[1], pipe.result) : undefined);
   if (span && meta.anchorCarry !== undefined) span.carry = meta.anchorCarry;
   const resultSeparators = span
-    ? separatorsForSpans(pipe.originalSeparators, pipe.originalHashes.length, [span], pipe.result, pipe.originalEnding)
+    ? separatorsForSpans(pipe.originalSeparators, pipe.originalHashes.length, [span], pipe.result, pipe.originalEnding, splitLines(pipe.originalNormalized))
     : undefined;
   if (resultSeparators !== undefined && span !== undefined) {
     applyEndingOverrides(resultSeparators, span.start, pipe.contentSeparators);

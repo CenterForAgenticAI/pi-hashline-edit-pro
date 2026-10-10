@@ -126,9 +126,7 @@ function countLineChanges(
 export function buildReplaceHEdit(params: RawReqParams): { edit: HEdit; warnings: string[] } {
   const editWarnings: string[] = [];
   const anchors = { remove_from: params.remove_from, remove_to: params.remove_to };
-  const edit = typeof params.text === "string"
-    ? resEdit({ ...anchors, text: params.text }, editWarnings)
-    : resEdit({ ...anchors, text: params.text }, editWarnings);
+  const edit = resEdit({ ...anchors, text: params.text }, editWarnings);
   return { edit, warnings: editWarnings };
 }
 

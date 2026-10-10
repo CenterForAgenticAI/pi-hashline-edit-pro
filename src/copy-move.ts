@@ -332,13 +332,13 @@ async function commitMovePair(input: {
   const destinationSpan = input.destination.pipe.spans?.[0];
   const sourceSpan = input.source.pipe.spans?.[0];
   const destinationSeparators = destinationSpan
-    ? separatorsForSpans(input.destination.pipe.originalSeparators, input.destination.pipe.originalHashes.length, [destinationSpan], input.destination.pipe.result, input.destination.pipe.originalEnding)
+    ? separatorsForSpans(input.destination.pipe.originalSeparators, input.destination.pipe.originalHashes.length, [destinationSpan], input.destination.pipe.result, input.destination.pipe.originalEnding, splitLines(input.destination.pipe.originalNormalized))
     : undefined;
   if (destinationSeparators !== undefined && destinationSpan !== undefined) {
     applyEndingOverrides(destinationSeparators, destinationSpan.start, input.destination.endingOverrides);
   }
   const sourceSeparators = sourceSpan
-    ? separatorsForSpans(input.source.pipe.originalSeparators, input.source.pipe.originalHashes.length, [sourceSpan], input.source.pipe.result, input.source.pipe.originalEnding)
+    ? separatorsForSpans(input.source.pipe.originalSeparators, input.source.pipe.originalHashes.length, [sourceSpan], input.source.pipe.result, input.source.pipe.originalEnding, splitLines(input.source.pipe.originalNormalized))
     : undefined;
   const destinationBytes = input.destination.pipe.bom + (destinationSeparators !== undefined
     ? joinSeparators(input.destination.pipe.result, destinationSeparators)

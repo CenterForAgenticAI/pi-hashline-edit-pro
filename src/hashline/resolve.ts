@@ -194,7 +194,13 @@ export function stripAnchorRow(
 	return match[2]!;
 }
 
-export function resEdit(edit: HTEdit | HTPayloadEdit, warnings?: string[]): HEdit {
+export type HTextInput = {
+  text: string | string[];
+  remove_from: string;
+  remove_to: string;
+};
+
+export function resEdit(edit: HTextInput, warnings?: string[]): HEdit {
 	if (typeof edit.text === "string") {
 		assertPayloadItem(edit as unknown as Record<string, unknown>);
 		return resolveParsedEdit(edit.remove_from, edit.remove_to, parsePayloadText(edit.text), warnings);

@@ -518,7 +518,24 @@ Config, SQLite (including WAL/SHM and undo history), registry sidecars, and the 
 
 Background snapshot pruning and registry sidecar GC skip `EPERM`/`EACCES` without deleting records or logging each inaccessible path. Unexpected errors remain visible; tool file-access failures and SQLite errors are not silenced.
 
+### Environment variables
+
+| Variable | Effect |
+| --- | --- |
+| `PI_HASHLINE_DIR` | Absolute path overriding this extension's state directory on all platforms; an unset or empty value keeps the XDG/home defaults and a relative value is rejected with `[E_CONFIG]`. |
+| `PI_HASHLINE_DEBUG` | Set to `1` or `true` to show the "Hashline Edit mode active" notification at session start. |
+
 ## How anchors work
+
+### Request flow
+
+```text
+read / anchor_grep / auto-read-all ──► anchor registry (ownership + served records)
+                                            │
+edit call ──► resolve anchors ──► apply ──► commit ──► post-edit diff with fresh anchors
+                                            │
+                                      hash store (SQLite snapshots + undo)
+```
 
 ### Allocation
 

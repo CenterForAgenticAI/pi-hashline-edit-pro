@@ -75,9 +75,18 @@ export function separatorsForSpans(
 	spans: readonly EndingSpan[],
 	resultContent: string,
 	fallback: LineEnding,
+	baseLines?: readonly string[],
 ): LineEnding[] {
+	const consumed = new Set<number>();
+	if (baseLines !== undefined && baseSeparators.length < baseLineCount) {
+		for (const span of spans) {
+			if (span.replacementCount !== 0 || span.end !== baseLineCount - 1) continue;
+			const previous = baseLines[span.start - 1];
+			if (previous !== undefined && previous.trim().length > 0) consumed.add(span.start - 1);
+		}
+	}
 	const mapped = sourceLineMap(baseLineCount, spans).map((source) =>
-		source >= 0 && source < baseSeparators.length ? baseSeparators[source]! : "",
+		source >= 0 && source < baseSeparators.length && !consumed.has(source) ? baseSeparators[source]! : "",
 	);
 	const needed = countNewlines(resultContent);
 	const result: LineEnding[] = [];

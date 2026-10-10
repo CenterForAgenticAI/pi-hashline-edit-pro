@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { initRegistry, resetRegistryForTests } from "../../src/anchor-registry";
 import { finalizeTurn, planAssistantMessage, resetBatchStateForTests } from "../../src/batch";
 import { splitLines } from "../../src/utils";
+import { toLF } from "../../src/normalize";
 import { assistantMessage, getText, makeFakePiRegistry, toolCall, withTempDir } from "../support/fixtures";
 import register from "../../index";
 
@@ -39,10 +40,11 @@ function randLine(rnd: () => number): string {
   return VOCAB[randInt(rnd, 0, VOCAB.length - 1)]!;
 }
 
-function randContent(rnd: () => number): string {
+function randContent(rnd: () => number): { raw: string; lines: string[] } {
   const lines = Array.from({ length: randInt(rnd, 2, 8) }, () => randLine(rnd));
   const body = lines.join("\n");
-  return rnd() < 0.5 ? body : `${body}\n`;
+  const raw = rnd() < 0.5 ? body : `${body}\n`;
+  return { raw, lines: splitLines(raw) };
 }
 
 function randEdits(rnd: () => number, lines: string[]): EditSpec[] {
@@ -200,6 +202,15 @@ const FIXED_CASES: Array<{ id: string; content: string; edits: EditSpec[] }> = [
       { kind: "move", start: 2, end: 2, insertAfter: 4 },
     ],
   },
+  {
+    id: "mixed-ending-eof-delete",
+    content: "dup\r\ndup\rdup\n}",
+    edits: [
+      { kind: "replace", start: 3, end: 4, lines: [] },
+      { kind: "insert", start: 2, end: 2, direction: "after", lines: ["c"] },
+      { kind: "replace", start: 1, end: 1, lines: ["a", "b"] },
+    ],
+  },
 ];
 
 describe("batch vs solo equivalence", () => {
@@ -227,8 +238,8 @@ describe("batch vs solo equivalence", () => {
         const soloRead = await readTool.execute(`sr-${id}`, { path: "solo.txt" }, undefined, undefined, ctx);
         const batchAnchors = anchorsFromRead(getText(batchRead));
         const soloAnchors = anchorsFromRead(getText(soloRead));
-        expect(batchAnchors, id).toHaveLength(splitLines(content).length);
-        expect(soloAnchors, id).toHaveLength(splitLines(content).length);
+        expect(batchAnchors, id).toHaveLength(splitLines(toLF(content)).length);
+        expect(soloAnchors, id).toHaveLength(splitLines(toLF(content)).length);
 
         const calls = edits.map((edit, index) => toolCall(`b${id}-${index}`, edit.kind, argsFor(edit, batchAnchors)));
         await planAssistantMessage(assistantMessage(calls), dir);
@@ -256,15 +267,14 @@ describe("batch vs solo equivalence", () => {
       let compared = 0;
       for (let iter = 0; iter < 300 && compared < 120; iter += 1) {
         const rnd = mulberry32(iter * 2654435761 + 11);
-        const content = randContent(rnd);
-        const lines = splitLines(content);
+        const { raw, lines } = randContent(rnd);
         if (lines.length < 3) continue;
         const edits = randEdits(rnd, lines);
         if (edits.length < 2) continue;
         const transfer = randTransferEdit(rnd, lines, edits);
         if (transfer) edits.push(transfer);
         if (projectedLineCount(lines.length, edits) <= 0) continue;
-        await runCase(`r${iter}`, content, edits);
+        await runCase(`r${iter}`, raw, edits);
         compared += 1;
       }
       expect(compared).toBeGreaterThanOrEqual(60);

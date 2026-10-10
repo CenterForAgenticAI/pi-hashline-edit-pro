@@ -817,7 +817,7 @@ async function finishBatch(member: PlannedMember, signal?: AbortSignal): Promise
   const spans = composed.length === 0
     ? [{ start: 0, end: base.hashes.length - 1, replacementCount: 1 }]
     : pieceMappingSpans(effectivePieces);
-  const resultSeparators = separatorsForSpans(base.separators, base.hashes.length, spans, composed, base.ending);
+  const resultSeparators = separatorsForSpans(base.separators, base.hashes.length, spans, composed, base.ending, base.baseLines);
   applySpanEndings(resultSeparators, effectivePieces.map((piece) => ({
     start: piece.start - 1,
     end: piece.end - 1,
@@ -883,7 +883,7 @@ async function finishBatch(member: PlannedMember, signal?: AbortSignal): Promise
     }
     const sourceSpan = source.pipe.spans?.[0];
     const sourceSeparators = sourceSpan
-      ? separatorsForSpans(source.pipe.originalSeparators, source.pipe.originalHashes.length, [sourceSpan], source.pipe.result, source.pipe.originalEnding)
+      ? separatorsForSpans(source.pipe.originalSeparators, source.pipe.originalHashes.length, [sourceSpan], source.pipe.result, source.pipe.originalEnding, splitLines(source.pipe.originalNormalized))
       : undefined;
     const sourceBytes = source.pipe.bom + (sourceSeparators !== undefined
       ? joinSeparators(source.pipe.result, sourceSeparators)
