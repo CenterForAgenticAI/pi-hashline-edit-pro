@@ -218,15 +218,22 @@ function sameCallHead(payloadLine: string, referenceLine: string): boolean {
   return left !== undefined && left === right;
 }
 
-function indentMismatchHint(payloadLine: string, reference: ReferenceRow, anchor: string | undefined): string | undefined {
+function indentMismatchHint(
+  payloadLine: string,
+  reference: ReferenceRow,
+  newAnchor: string | undefined,
+  referenceAnchor: string | undefined,
+): string | undefined {
   const payloadIndent = leadingWhitespace(payloadLine);
   const referenceIndent = leadingWhitespace(reference.line);
   if (payloadIndent.length >= referenceIndent.length || !referenceIndent.startsWith(payloadIndent)) return undefined;
   const grams = gramSet([payloadLine], INDENT_SIMILARITY_RUN);
   const sharesLongRun = grams !== undefined && sharesRun(reference.line, grams, INDENT_SIMILARITY_RUN);
   if (!sharesLongRun && !sameCallHead(payloadLine, reference.line)) return undefined;
-  const label = anchor === undefined ? "the nearby line" : `${anchor}${HASH_SEP}`;
-  return `[H_INDENT_MISMATCH] new line has ${plural(payloadIndent.length, "leading whitespace character")}; ${label} has ${referenceIndent.length}.`;
+  const count = plural(payloadIndent.length, "leading whitespace character");
+  const referenceLabel = referenceAnchor === undefined ? "the nearby line" : `neighboring line ${referenceAnchor}${HASH_SEP}`;
+  const newLabel = newAnchor === undefined ? "new line" : `new line ${newAnchor}${HASH_SEP}`;
+  return `[H_INDENT_MISMATCH] ${newLabel} has ${count}; ${referenceLabel} has ${referenceIndent.length}.`;
 }
 
 function referenceRows(lines: string[], start: number, end: number): ReferenceRow[] {
@@ -373,11 +380,12 @@ export function fidelityHints(
   resultContent: string,
   spans: readonly DiffSpan[] | undefined,
   originalHashes?: readonly string[],
-  options?: { separatorMoved?: boolean; indentHints?: boolean },
+  options?: { separatorMoved?: boolean; indentHints?: boolean; resultHashes?: readonly string[] },
 ): string[] {
   if (spans === undefined || spans.length === 0) return [];
   const oldLines = splitLines(originalContent);
   const newLines = splitLines(resultContent);
+  const resultHashes = options?.resultHashes;
   const hints: string[] = [];
   const seen = new Set<string>();
   let sensitiveIndex: Map<string, IndexedLine[]> | undefined;
@@ -460,7 +468,7 @@ export function fidelityHints(
           let nearestDistance = Number.POSITIVE_INFINITY;
           for (const candidate of references) {
             if (candidate.index < span.start - INDENT_REFERENCE_WINDOW || candidate.index > span.end + INDENT_REFERENCE_WINDOW) continue;
-            if (indentMismatchHint(payload[payloadIndex]!, candidate, undefined) === undefined) continue;
+            if (indentMismatchHint(payload[payloadIndex]!, candidate, undefined, undefined) === undefined) continue;
             const distance = Math.abs(candidate.index - span.start);
             if (distance < nearestDistance) {
               nearest = candidate;
@@ -474,12 +482,14 @@ export function fidelityHints(
         }
         return undefined;
       };
+      const resultIndexForPayload = (payloadIndex: number): number =>
+        span.start + offset + (carried !== undefined && payloadIndex >= carried ? payloadIndex + 1 : payloadIndex);
       for (let index = 0; index < payload.length; index += 1) {
         if (hints.length >= MAX_FIDELITY_HINTS) break;
         const payloadLine = payload[index]!;
         const reference = indentReferenceFor(index);
         if (reference === undefined) continue;
-        const indentHint = indentMismatchHint(payloadLine, reference, originalHashes?.[reference.index]);
+        const indentHint = indentMismatchHint(payloadLine, reference, resultHashes?.[resultIndexForPayload(index)], originalHashes?.[reference.index]);
         if (indentHint === undefined) continue;
         const key = `indent:${reference.index}:${payloadLine}`;
         if (seen.has(key)) continue;

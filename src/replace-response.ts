@@ -160,6 +160,7 @@ export function buildChanged(input: SuccessInput, verb = "replaced", diffContext
   const fidelity = fidelityHints(originalNormalized, result, spans, originalHashes, {
     separatorMoved: fidelityOptions?.separatorMoved ?? (verb === "inserted" || verb === "edited"),
     indentHints: fidelityOptions?.indentHints ?? (verb !== "copied" && verb !== "moved"),
+    resultHashes,
   });
   const { warnings: noticeWarnings, hints } = splitNotices(fidelity.length > 0 ? [...(warnings ?? []), ...fidelity] : warnings);
   const annotatedHints = annotateLiteralEscapeHints(hints, result, spans, resultHashes);

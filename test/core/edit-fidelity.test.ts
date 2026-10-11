@@ -11,6 +11,8 @@ const NNBSP = "\u202f";
 
 const ANCHORS = ["Aaaa", "Bbbb", "Cccc", "Dddd", "Eeee", "Ffff", "Gggg", "Hhhh", "Iiii", "Jjjj", "Kkkk", "Llll", "Mmmm", "Nnnn", "Oooo", "Pppp"];
 
+const RESULT_ANCHORS = ["Zaaa", "Zbbb", "Zccc", "Zddd", "Zeee", "Zfff", "Zggg", "Zhhh", "Ziii", "Zjjj", "Zkkk", "Zlll", "Zmmm", "Znnn", "Zooo", "Zppp"];
+
 function replaceSpan(start: number, end: number, replacementCount: number): DiffSpan {
   return { start, end, replacementCount };
 }
@@ -156,10 +158,10 @@ describe("fidelityHints", () => {
   it("flags an unindented inserted line that echoes the anchor line", () => {
     const old = `head\n  - id: checkout-5\ntail\n`;
     const result = `head\n- id: checkout-11\n  - id: checkout-5\ntail\n`;
-    const hints = fidelityHints(old, result, [insertSpan(1, 2, 1)], ANCHORS);
+    const hints = fidelityHints(old, result, [insertSpan(1, 2, 1)], ANCHORS, { resultHashes: RESULT_ANCHORS });
     expect(hints).toHaveLength(1);
     expect(hints[0]).toContain("[H_INDENT_MISMATCH]");
-    expect(hints[0]).toContain("new line has 0 leading whitespace characters; Bbbb│ has 2.");
+    expect(hints[0]).toContain("new line Zbbb│ has 0 leading whitespace characters; neighboring line Bbbb│ has 2.");
     expect(hints[0]).toContain("Bbbb│ has");
   });
 
@@ -172,10 +174,10 @@ describe("fidelityHints", () => {
   it("flags a replaced line that lost the removed line's leading tab", () => {
     const old = "a\n\t{ID: \"checkout-1\"}\nb\n";
     const result = "a\n{ID: \"checkout-1\"}\nb\n";
-    const hints = fidelityHints(old, result, [replaceSpan(1, 1, 1)], ANCHORS);
+    const hints = fidelityHints(old, result, [replaceSpan(1, 1, 1)], ANCHORS, { resultHashes: RESULT_ANCHORS });
     expect(hints).toHaveLength(1);
     expect(hints[0]).toContain("[H_INDENT_MISMATCH]");
-    expect(hints[0]).toContain("new line has 0 leading whitespace characters; Bbbb│ has 1.");
+    expect(hints[0]).toContain("new line Zbbb│ has 0 leading whitespace characters; neighboring line Bbbb│ has 1.");
   });
 
   it("flags an unindented inserted line that echoes a nearby body line", () => {
@@ -202,10 +204,10 @@ describe("fidelityHints", () => {
   it("flags an adjacent call line that is missing the reference's indentation", () => {
     const old = `a\n  expect(hints[0]).toContain("x");\ntail\n`;
     const result = `a\n  expect(hints[0]).toContain("x");\nexpect(hints).toHaveLength(1);\ntail\n`;
-    const hints = fidelityHints(old, result, [insertSpan(2, 2, 1)], ANCHORS);
+    const hints = fidelityHints(old, result, [insertSpan(2, 2, 1)], ANCHORS, { resultHashes: RESULT_ANCHORS });
     expect(hints).toHaveLength(1);
     expect(hints[0]).toContain("[H_INDENT_MISMATCH]");
-    expect(hints[0]).toContain("new line has 0 leading whitespace characters; Bbbb│ has 2.");
+    expect(hints[0]).toContain("new line Zccc│ has 0 leading whitespace characters; neighboring line Bbbb│ has 2.");
   });
 
   it("does not flag an adjacent call line with a different callee", () => {

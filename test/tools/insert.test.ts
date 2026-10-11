@@ -457,7 +457,7 @@ describe("insert indentation hints", () => {
       );
       const hint = ((result.details.hints ?? []) as string[]).find((entry) => entry.startsWith("[H_INDENT_MISMATCH]")) ?? "";
       expect(hint).toContain("[H_INDENT_MISMATCH]");
-      expect(hint).toContain("new line has 0 leading whitespace characters;");
+      expect(hint).toMatch(/new line [A-Za-z]{4}│ has 0 leading whitespace characters; neighboring line [A-Za-z]{4}│ has 2\./);
       expect(hint).toContain("│ has");
       expect(await readFile(path, "utf-8")).toBe("routes:\n- id: checkout-11\n    feature: stableCheckout\n  - id: checkout-5\n    feature: legacyCheckout\n");
     });
