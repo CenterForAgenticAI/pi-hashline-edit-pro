@@ -47,7 +47,7 @@ export async function currentEditFlags(codemode = false): Promise<EditToolFlags>
 
 function preferenceGuideline(flags: EditToolFlags): string {
   const tools = gatedEditOps(["read", "replace", "replace_match", "insert", "copy", "move", "undo_last_change"], flags);
-  return `Prefer the hashline tools for file work: ${joinOps(tools, { backtick: true })}.`;
+  return `Prefer the hashline tools for every file read and edit: ${joinOps(tools, { backtick: true })}.`;
 }
 
 const SHARED_EDIT_OPS = ["replace", "replace_match", "insert", "copy", "move"];
@@ -86,7 +86,7 @@ function batchGuideline(flags: EditToolFlags): string {
 
 function diffGuideline(flags: EditToolFlags): string {
   const tools = operationNames(SHARED_DIFF_OPS, flags);
-  return `${tools}: in the post-edit diff, \`-\` rows are dead anchors; \`+\` and \` \` rows carry live anchors for the next edit.`;
+  return `${tools}: in the post-edit diff, \`-anchor│\` rows are dead anchors; \`+anchor│\` and \` anchor│\` rows carry live anchors for the next edit.`;
 }
 
 function pathGuideline(flags: EditToolFlags): string {
@@ -98,7 +98,7 @@ function pathGuideline(flags: EditToolFlags): string {
 
 function payloadGuideline(flags: EditToolFlags): string {
   const tools = operationNames(SHARED_PAYLOAD_OPS, flags);
-  return `${tools}: \`text\` is written exactly as received; the tool-call parser decodes escapes once — \`\\uXXXX\` is the character, \`\\\\uXXXX\` the literal text.`;
+  return `${tools}: \`text\` is written exactly as received; escapes are decoded once when the call is parsed, and the tool never decodes again — \`\\uXXXX\` is the character, \`\\\\uXXXX\` the literal text.`;
 }
 
 function strictInputGuideline(flags: EditToolFlags): string {
