@@ -735,6 +735,32 @@ describe("copy and move direction", () => {
     });
   });
 
+  it("copies a multi-line range right after itself when the anchor is its last line", async () => {
+    await withTempFile("sample.txt", "alpha\nbeta\ngamma\ndelta\n", async ({ cwd, path }) => {
+      const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
+      const text = getText(await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx));
+      const beta = anchorFor(text, "beta");
+      const gamma = anchorFor(text, "gamma");
+
+      await getTool("copy").execute("c1", { source_from: beta, source_to: gamma, anchor: gamma, direction: "after" }, undefined, undefined, ctx);
+
+      expect(await readFile(path, "utf-8")).toBe("alpha\nbeta\ngamma\nbeta\ngamma\ndelta\n");
+    });
+  });
+
+  it("copies a multi-line range right before itself when the anchor is its first line", async () => {
+    await withTempFile("sample.txt", "alpha\nbeta\ngamma\ndelta\n", async ({ cwd, path }) => {
+      const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
+      const text = getText(await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx));
+      const beta = anchorFor(text, "beta");
+      const gamma = anchorFor(text, "gamma");
+
+      await getTool("copy").execute("c1", { source_from: beta, source_to: gamma, anchor: beta, direction: "before" }, undefined, undefined, ctx);
+
+      expect(await readFile(path, "utf-8")).toBe("alpha\nbeta\ngamma\nbeta\ngamma\ndelta\n");
+    });
+  });
+
   it("moves a block before an anchor", async () => {
     await withTempFile("sample.txt", "alpha\nbeta\ngamma\ndelta\n", async ({ cwd, path }) => {
       const { ctx, readTool, getTool } = setupIntegrationTest(cwd);

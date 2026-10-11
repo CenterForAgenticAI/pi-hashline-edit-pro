@@ -256,7 +256,7 @@ The same safety machinery as `replace` applies: undo is saved before the write (
 | `source_from` | 4-char anchor marking the FIRST source line to copy (inclusive). |
 | `source_to` | 4-char anchor marking the LAST source line to copy (inclusive). |
 | `anchor` | 4-char anchor of the destination line the block goes before or after, resolved in the destination file. |
-| `direction` | `"after"` places the block below the anchor line, `"before"` above it. Within one file the destination position must sit outside the source range. |
+| `direction` | `"after"` places the block below the anchor line, `"before"` above it. Within one file the insertion point must fall before the source range's first line or after its last. |
 
 Example: read served `Hasu│old` in `a.ts` and `Qwer│top` in `b.ts`; to copy `old` into `b.ts` below `top`:
 
@@ -264,7 +264,7 @@ Example: read served `Hasu│old` in `a.ts` and `Qwer│top` in `b.ts`; to copy 
 { "source_from": "Hasu", "source_to": "Hasu", "anchor": "Qwer", "direction": "after" }
 ```
 
-The source lines stay in place and keep their anchors; the copied lines are minted fresh anchors in the destination's post-edit diff and keep their source line endings. A cross-file copy writes only the destination, so one `undo_last_change` on it reverts the copy. In a same-message batch, a same-file copy and a cross-file copy join the destination file's batch; the copy still duplicates the content its source anchors were served from, not the result of a sibling edit.
+The source lines stay in place and keep their anchors; the copied lines are minted fresh anchors in the destination's post-edit diff and keep their source line endings. A cross-file copy writes only the destination, so one `undo_last_change` on it reverts the copy. In a same-message batch, a same-file copy and a cross-file copy join the destination file's batch; the copy still duplicates the content its source anchors were served from, not the result of a sibling edit. Anchoring the block's last line with `direction: "after"` (or its first line with `direction: "before"`) duplicates the block right beside itself.
 
 ### move
 
