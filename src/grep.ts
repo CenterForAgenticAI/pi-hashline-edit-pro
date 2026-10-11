@@ -14,7 +14,7 @@ import { toCwd, toDisplayPath } from "./paths";
 import { loadP, loadGuide } from "./prompts";
 import { normReq } from "./payload-contract";
 import { DEFAULT_EDIT_FLAGS, withGrepPrompts, type EditToolFlags } from "./edit-common";
-import { abortIf, clipLine, errCode, isRec, makePrepareArguments, rejectUnknownFields, truncateToBytes, visLines, withLineNumbers } from "./utils";
+import { abortIf, clipLine, errCode, isRec, makePrepareArguments, rejectUnknownFields, truncateToBytes, visLines, gutterWidth } from "./utils";
 import { withAnchorSession, formatAnchorReclaimNotice, takeReclaimedPaths } from "./anchor-registry";
 import { serveRows } from "./served";
 import { Text } from "@earendil-works/pi-tui";
@@ -351,7 +351,12 @@ async function collectRgMatches(
 
 
 function displayRowsForHit(hit: FileHit): string[] {
-  return withLineNumbers(hit.rows.join("\n"), hit.lineNumbers).split("\n").slice(0, hit.rows.length);
+  const matched = new Set(hit.matchLines);
+  const width = gutterWidth(hit.lineNumbers.reduce((m, n) => (n > m ? n : m), 0), hit.lineNumbers.length);
+  return hit.rows.map((row, index) => {
+    const lineNumber = hit.lineNumbers[index]!;
+    return `${String(lineNumber).padStart(width)}${matched.has(lineNumber) ? ":" : "-"}${HASH_SEP} ${row}`;
+  });
 }
 
 const grepToolSchema = Type.Object(
@@ -436,6 +441,7 @@ function highlightMatches(text: string, regex: RegExp, theme: FgT): string {
 }
 
 const ANCHORED_ROW_RE = new RegExp(`^${HASH_CLASS}${HASH_SEP}`);
+const GREP_GUTTER_RE = /^\s*\d+(?: │ |[:-]│ )/;
 
 function highlightHitRow(row: string, highlight: RegExp, theme: FgT): string {
   const anchored = row.match(ANCHORED_ROW_RE);
@@ -447,9 +453,9 @@ function styleGrepLine(line: string, highlight: RegExp | undefined, theme: FgT):
   if (line.startsWith("=== ")) return theme.fg("accent", line);
   if (line.startsWith("[grep:") || line.startsWith("... ")) return theme.fg("dim", line);
   if (!highlight) return line;
-  const gutter = line.indexOf(" │ ");
-  if (gutter < 0) return highlightHitRow(line, highlight, theme);
-  const cut = gutter + " │ ".length;
+  const gutter = GREP_GUTTER_RE.exec(line);
+  if (gutter === null) return highlightHitRow(line, highlight, theme);
+  const cut = gutter[0].length;
   return line.slice(0, cut) + highlightHitRow(line.slice(cut), highlight, theme);
 }
 
@@ -627,6 +633,7 @@ export function regGrep(pi: ExtensionAPI, flags: EditToolFlags = DEFAULT_EDIT_FL
         if (limitTruncated) notes.push(`[grep: showing first ${limit} matches; increase limit to see more.]`);
         if (linesReplaced > 0) notes.push(`[grep: ${linesReplaced} line(s) exceed ${formatSize(MAX_GREP_LINE_BYTES)} and are shown as truncated fragments; use read to see the full lines.]`);
         if (poolSkipped > 0) notes.push(`[grep: ${poolSkipped} file(s) skipped because the session's anchor pool is exhausted; narrow the search.]`);
+        if (context > 0 && hits.length > 0) notes.push('[grep: match rows are "line:│", context rows are "line-│".]');
         const truncated = limitTruncated || rowTruncated;
         const truncation: TruncationResult | undefined = rowTruncated
           ? {

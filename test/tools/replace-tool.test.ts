@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { mkdir, readFile, writeFile } from "fs/promises";
 import { lineHashes } from "../../src/hashline";
 import { compPreview, editToolSchema, regReplace } from "../../src/replace";
-import { makeFakePiRegistry, withTempFile, useTestHome, toolError } from "../support/fixtures";
+import { makeFakePiRegistry, withTempFile, useTestHome, toolError, setupIntegrationTest, getText, anchorFor } from "../support/fixtures";
 useTestHome();
 
 describe("editToolSchema", () => {
@@ -456,15 +456,15 @@ describe("regReplace", () => {
     ))).toMatch(/\[E_BAD_REF\]/);
   });
 
-  it("rejects a passed path", async () => {
-    const { pi, getTool } = makeFakePiRegistry();
-    regReplace(pi);
-    const tool = getTool("replace");
-    expect(await toolError(() => tool.execute(
-      "e1",
-      { path: "sample.ts", remove_from: "PyBY", remove_to: "PyBY", text: ["x"] } as any,
-      undefined, undefined, { cwd: "/tmp" } as any,
-    ))).toMatch(/E_BAD_SHAPE/);
+  it("accepts a matching path and rejects a mismatching one in anchor-only mode", async () => {
+    await withTempFile("sample.ts", "alpha\nbeta\n", async ({ cwd, path }) => {
+      const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
+      const text = getText(await readTool.execute("r1", { path: "sample.ts" }, undefined, undefined, ctx));
+      const beta = anchorFor(text, "beta");
+      expect(await toolError(() => getTool("replace").execute("e1", { path: "missing.ts", remove_from: beta, remove_to: beta, text: "BETA" }, undefined, undefined, ctx))).toMatch(/does not match anchor ownership/);
+      await getTool("replace").execute("e2", { path: "sample.ts", remove_from: beta, remove_to: beta, text: "BETA" }, undefined, undefined, ctx);
+      expect(await readFile(path, "utf-8")).toBe("alpha\nBETA\n");
+    });
   });
 
   it("rethrows aborts from preview computation", async () => {

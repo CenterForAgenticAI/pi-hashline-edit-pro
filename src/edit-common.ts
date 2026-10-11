@@ -81,7 +81,7 @@ function pathGuideline(flags: EditToolFlags): string {
   const tools = operationNames(SHARED_EDIT_OPS, flags);
   return flags.requirePath
     ? `${tools}: pass \`path\` matching the file the anchors were served for; it is required and must match anchor ownership.`
-    : `${tools}: path resolution is anchor-only; do not pass \`path\`.`;
+    : `${tools}: path resolution is anchor-only; \`path\` is unnecessary and must match anchor ownership when passed.`;
 }
 
 function payloadGuideline(flags: EditToolFlags): string {
@@ -246,24 +246,43 @@ export interface PathRequirementInput {
   anchorTarget?: string;
 }
 
-export async function resolveEditTargetWithRequirement(input: PathRequirementInput): Promise<string> {
+export interface PathOptionInput {
+  providedPath: unknown;
+  cwd: string;
+  targets: readonly string[];
+  expected: string;
+  requestLabel: string;
+}
+
+export async function assertPathOption(input: PathOptionInput): Promise<void> {
   const { requirePath } = await readConfig();
-  if (!requirePath && input.providedPath !== undefined) {
-    throw new Error("[E_BAD_SHAPE] Edit request contains unknown or unsupported fields: path. Path resolution is anchor-only; retry without `path`.");
+  if (input.providedPath === undefined || (requirePath && input.providedPath === "")) {
+    if (requirePath) {
+      throw new Error(`[E_BAD_SHAPE] ${input.requestLabel} requires a non-empty "path" string when require-path mode is on. Provide \`path\` matching ${input.expected}.`);
+    }
+    return;
   }
-  if (requirePath && (typeof input.providedPath !== "string" || input.providedPath.length === 0)) {
-    throw new Error('[E_BAD_SHAPE] Edit request requires a non-empty "path" string when require-path mode is on. Provide `path` matching the file the anchors were served for.');
+  if (typeof input.providedPath !== "string" || input.providedPath.length === 0) {
+    throw new Error(`[E_BAD_SHAPE] ${input.requestLabel} field "path" must be a non-empty string when provided.`);
   }
+  const { resolved } = await resolveInCwd(input.providedPath, input.cwd);
+  if (!input.targets.includes(resolved)) {
+    throw new Error(`[E_BAD_SHAPE] Provided "path" "${input.providedPath}" does not match ${input.expected}.`);
+  }
+}
+
+export async function resolveEditTargetWithRequirement(input: PathRequirementInput): Promise<string> {
   const anchorTarget = input.anchorTarget
     ?? (typeof input.anchor === "string"
       ? resolveEditTarget(input.anchor)
       : resolveEditTarget(input.removeFrom as string, input.removeTo));
-  if (requirePath) {
-    const { resolved } = await resolveInCwd(input.providedPath as string, input.cwd);
-    if (resolved !== anchorTarget) {
-      throw new Error(`[E_BAD_SHAPE] Provided "path" "${input.providedPath}" does not match anchor ownership "${anchorTarget}".`);
-    }
-  }
+  await assertPathOption({
+    providedPath: input.providedPath,
+    cwd: input.cwd,
+    targets: [anchorTarget],
+    expected: `anchor ownership "${anchorTarget}"`,
+    requestLabel: "Edit request",
+  });
   return anchorTarget;
 }
 

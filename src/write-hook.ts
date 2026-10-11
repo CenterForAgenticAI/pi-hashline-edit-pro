@@ -6,7 +6,7 @@ import { resolveInCwd } from "./fs-write";
 import { abortIf, splitLines, isRec } from "./utils";
 import type { ModelLike } from "./model-gate";
 
-const HASH_ECHO_RE = new RegExp(`^(?: *[0-9]+ ${HASH_SEP} )?[+ -]?(${HASH_CLASS})${HASH_SEP}`);
+const HASH_ECHO_RE = new RegExp(`^(?: *[0-9]+(?: │ |[:-]│ ))?[+ -]?(${HASH_CLASS})${HASH_SEP}`);
 
 function searchEcho(lines: string[], served: ReadonlyMap<string, string> | ReadonlySet<string>): { line: number; hash: string } | undefined {
   for (let i = 0; i < lines.length; i++) {

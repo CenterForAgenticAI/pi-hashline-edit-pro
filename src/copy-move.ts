@@ -24,7 +24,7 @@ import { loadP, loadGuide } from "./prompts";
 import { assertTransferReq, normReq, type TransferReq } from "./payload-contract";
 import { abortIf, assertByteLimit, isRec, splitLines } from "./utils";
 import { toDisplayPath } from "./paths";
-import { getDiffContextLines, readConfig } from "./config";
+import { getDiffContextLines } from "./config";
 import { resolveInCwd, writeAtomic } from "./fs-write";
 import { restoreEndings, type LineEnding } from "./normalize";
 import { applyEndingOverrides, endingsForRange, joinSeparators, separatorsForSpans } from "./line-endings";
@@ -33,6 +33,7 @@ import { buildChanged, buildMetrics, type TResult } from "./replace-response";
 import { servedHashesFromDiff, serveRows } from "./served";
 import {
   assertBoundaryLinesServed,
+  assertPathOption,
   DEFAULT_EDIT_FLAGS,
   editRenderResultWrapper,
   editToolBase,
@@ -169,40 +170,34 @@ export function buildTransferEdit(input: {
   };
 }
 
+function describeTransferTargets(sourcePath: string, destinationPath: string): string {
+  return sourcePath === destinationPath
+    ? `the file "${sourcePath}"`
+    : `the source file "${sourcePath}" or the destination file "${destinationPath}"`;
+}
+
 async function resolveTransferTargets(req: TransferReq, cwd: string): Promise<{ sourcePath: string; destinationPath: string }> {
-  const { requirePath } = await readConfig();
-  if (!requirePath && req.path !== undefined) {
-    throw new Error("[E_BAD_SHAPE] Edit request contains unknown or unsupported fields: path. Path resolution is anchor-only; retry without `path`.");
-  }
-  if (requirePath && (typeof req.path !== "string" || req.path.length === 0)) {
-    throw new Error('[E_BAD_SHAPE] Copy/move request requires a non-empty "path" string when require-path mode is on. Provide `path` matching the source or destination file the anchors were served for.');
-  }
   const sourcePath = resolveEditTarget(req.source_from, req.source_to);
   const destinationPath = resolveEditTarget(req.insert_after);
-  if (requirePath) {
-    const { resolved } = await resolveInCwd(req.path as string, cwd);
-    if (resolved !== sourcePath && resolved !== destinationPath) {
-      throw new Error(`[E_BAD_SHAPE] Provided "path" "${req.path}" does not match the source file "${sourcePath}" or the destination file "${destinationPath}".`);
-    }
-  }
+  await assertPathOption({
+    providedPath: req.path,
+    cwd,
+    targets: [sourcePath, destinationPath],
+    expected: describeTransferTargets(sourcePath, destinationPath),
+    requestLabel: "Copy/move request",
+  });
   return { sourcePath, destinationPath };
 }
 
 async function assertTransferPathOption(req: TransferReq, cwd: string, member: PlannedMember): Promise<void> {
-  const { requirePath } = await readConfig();
-  if (!requirePath && req.path !== undefined) {
-    throw new Error("[E_BAD_SHAPE] Edit request contains unknown or unsupported fields: path. Path resolution is anchor-only; retry without `path`.");
-  }
-  if (requirePath && (typeof req.path !== "string" || req.path.length === 0)) {
-    throw new Error('[E_BAD_SHAPE] Copy/move request requires a non-empty "path" string when require-path mode is on. Provide `path` matching the source or destination file the anchors were served for.');
-  }
-  if (requirePath) {
-    const sourceTarget = member.sourceTarget ?? member.target;
-    const { resolved } = await resolveInCwd(req.path as string, cwd);
-    if (resolved !== sourceTarget && resolved !== member.target) {
-      throw new Error(`[E_BAD_SHAPE] Provided "path" "${req.path}" does not match the source file "${sourceTarget}" or the destination file "${member.target}".`);
-    }
-  }
+  const sourceTarget = member.sourceTarget ?? member.target;
+  await assertPathOption({
+    providedPath: req.path,
+    cwd,
+    targets: [sourceTarget, member.target],
+    expected: describeTransferTargets(sourceTarget, member.target),
+    requestLabel: "Copy/move request",
+  });
 }
 
 interface CrossTransferPreparation {

@@ -370,7 +370,7 @@ describe("edit prompt flag variants", () => {
       guidelines: loadGuide("../tool-prompts/copy-guidelines.md"),
     };
     const result = withTransferPrompts(base, DEFAULT_EDIT_FLAGS);
-    expect(result.guidelines.some((g) => g.includes("path resolution is anchor-only; do not pass `path`."))).toBe(true);
+    expect(result.guidelines.some((g) => g.includes("path resolution is anchor-only; `path` is unnecessary and must match anchor ownership when passed."))).toBe(true);
   });
 
   it("withTransferPrompts adds the require-path and strict-input notices", () => {

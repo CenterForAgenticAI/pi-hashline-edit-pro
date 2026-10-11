@@ -135,7 +135,7 @@ describe("grep tool", () => {
     });
   });
 
-  it("includes context lines with anchors", async () => {
+  it("includes context lines with anchors and marks hits versus context", async () => {
     await withTempFile("sample.ts", "alpha\nbeta\ngamma\ndelta\n", async ({ cwd }) => {
       const { ctx, getTool } = setupIntegrationTest(cwd);
       const grepTool = getTool("grep");
@@ -150,6 +150,10 @@ describe("grep tool", () => {
       expect(text).toContain("│beta");
       expect(text).toContain("│gamma");
       expect(text).not.toContain("│delta");
+      expect(text).toMatch(/^\d+:│ \w{4}│beta$/m);
+      expect(text).toMatch(/^\d+-│ \w{4}│alpha$/m);
+      expect(text).toMatch(/^\d+-│ \w{4}│gamma$/m);
+      expect(text).toContain("match rows are");
     });
   });
 
@@ -819,14 +823,14 @@ describe("grep display", () => {
   it("renderResult shows hits without a summary line", async () => {
     const { renderGrepResult } = await import("../../src/grep");
     const component = renderGrepResult(
-      { content: [{ type: "text", text: "=== a.txt ===\n1 │ abde│beta" }] },
+      { content: [{ type: "text", text: "=== a.txt ===\n1:│ abde│beta" }] },
       { isPartial: false, expanded: true },
       theme,
       plainContext,
     );
     const rendered = (component as unknown as { text: string }).text ?? String(component);
     expect(rendered).toContain("=== a.txt ===");
-    expect(rendered).toContain("1 │ abde│beta");
+    expect(rendered).toContain("1:│ abde│beta");
     expect(rendered).not.toContain("match in");
   });
 
@@ -860,26 +864,26 @@ describe("grep display", () => {
     const { renderGrepResult } = await import("../../src/grep");
     const markTheme = { fg: (area: string, text: string) => `<${area}>${text}</>`, bold: (text: string) => text } as never;
     const component = renderGrepResult(
-      { content: [{ type: "text", text: "=== a.txt ===\n1 │ abde│beta gamma beta" }] },
+      { content: [{ type: "text", text: "=== a.txt ===\n1:│ abde│beta gamma beta" }] },
       { isPartial: false, expanded: true },
       markTheme,
       { ...plainContext, args: { pattern: "beta" } },
     );
     const rendered = (component as unknown as { text: string }).text ?? String(component);
-    expect(rendered).toContain("1 │ abde│<accent>beta</> gamma <accent>beta</>");
+    expect(rendered).toContain("1:│ abde│<accent>beta</> gamma <accent>beta</>");
   });
 
   it("renderResult leaves rows plain without usable args", async () => {
     const { renderGrepResult } = await import("../../src/grep");
     const markTheme = { fg: (area: string, text: string) => `<${area}>${text}</>`, bold: (text: string) => text } as never;
     const component = renderGrepResult(
-      { content: [{ type: "text", text: "1 │ abde│beta" }] },
+      { content: [{ type: "text", text: "1:│ abde│beta" }] },
       { isPartial: false, expanded: true },
       markTheme,
       plainContext,
     );
     const rendered = (component as unknown as { text: string }).text ?? String(component);
-    expect(rendered).toContain("1 │ abde│beta");
+    expect(rendered).toContain("1:│ abde│beta");
     expect(rendered).not.toContain("<accent>");
   });
 
@@ -887,7 +891,7 @@ describe("grep display", () => {
     const { renderGrepResult } = await import("../../src/grep");
     const markTheme = { fg: (area: string, text: string) => `<${area}>${text}</>`, bold: (text: string) => text } as never;
     const component = renderGrepResult(
-      { content: [{ type: "text", text: "1 │ abde│a.c axc" }] },
+      { content: [{ type: "text", text: "1:│ abde│a.c axc" }] },
       { isPartial: false, expanded: true },
       markTheme,
       { ...plainContext, args: { pattern: "a.c", literal: true } },
@@ -900,12 +904,12 @@ describe("grep display", () => {
     const { renderGrepResult } = await import("../../src/grep");
     const markTheme = { fg: (area: string, text: string) => `<${area}>${text}</>`, bold: (text: string) => text } as never;
     const component = renderGrepResult(
-      { content: [{ type: "text", text: "1 │ blue│blue sky" }] },
+      { content: [{ type: "text", text: "1:│ blue│blue sky" }] },
       { isPartial: false, expanded: true },
       markTheme,
       { ...plainContext, args: { pattern: "^blue" } },
     );
     const rendered = (component as unknown as { text: string }).text ?? String(component);
-    expect(rendered).toContain("1 │ blue│<accent>blue</> sky");
+    expect(rendered).toContain("1:│ blue│<accent>blue</> sky");
   });
 });

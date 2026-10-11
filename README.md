@@ -155,7 +155,7 @@ Nothing commits until an edit call returns: the extension validates the request 
 
 ## Tools
 
-The extension registers eight tools: `read`, `replace`, `replace_match`, `insert`, `copy`, `move`, `grep`, and `undo_last_change`. The built-in `edit` tool is disabled. `copy` and `move` are enabled by default; turn Copy/move off in `/hashline-config` to remove both. `replace_match` is enabled by default; turn Replace match off in `/hashline-config` to remove it. `replace`, `replace_match`, `insert`, `copy`, and `move` take no `path` parameter by default: the file is resolved from the anchors' session ownership alone, so an edit can only land on the file the anchors were served for. Opt in with `/hashline-config` to require `path` in `replace`, `replace_match`, `insert`, `copy`, and `move` for RPC visibility (for example pimacs.el); anchors still resolve the target and `path` must match.
+The extension registers eight tools: `read`, `replace`, `replace_match`, `insert`, `copy`, `move`, `grep`, and `undo_last_change`. The built-in `edit` tool is disabled. `copy` and `move` are enabled by default; turn Copy/move off in `/hashline-config` to remove both. `replace_match` is enabled by default; turn Replace match off in `/hashline-config` to remove it. `replace`, `replace_match`, `insert`, `copy`, and `move` do not need a `path` parameter by default: the file is resolved from the anchors' session ownership alone, so an edit can only land on the file the anchors were served for. A `path` passed anyway is checked against anchor ownership: a matching path is accepted, a mismatch is rejected. Opt in with `/hashline-config` to require `path` in `replace`, `replace_match`, `insert`, `copy`, and `move` for RPC visibility (for example pimacs.el); anchors still resolve the target and `path` must match.
 
 ### read
 
@@ -229,7 +229,7 @@ In a same-message batch it joins the other calls on its file: the batch validate
 
 ### insert
 
-`insert` adds lines after or before an existing line without removing anything. Like `replace`, there is no `path` parameter.
+`insert` adds lines after or before an existing line without removing anything. Like `replace`, `path` is unnecessary and must match anchor ownership when passed.
 
 | Field | Description |
 | --- | --- |
@@ -275,7 +275,7 @@ The same safety machinery as `replace` applies to both tools: undo is saved befo
 
 `grep` is an anchored search backed by ripgrep, registered under pi's own `grep` name. It is enabled by default; turn Anchor grep off in `/hashline-config` (or set `anchorGrepEnabled` to `false` in the config file) to register pi's plain `grep` in its place.
 
-Every matching line, and each requested context line, is returned as `lineNumber │ anchor│content`. The `anchor│content` part is served exactly like `read` output, so you can target it with `replace` or `insert` without a separate `read`; the line-number gutter and `=== path ===` header give filename and line for navigation.
+Every matching line is returned as `lineNumber:│ anchor│content` and each requested context line as `lineNumber-│ anchor│content`, so the `:`/`-` gutter always tells a hit from a context row. The `anchor│content` part is served exactly like `read` output, so you can target it with `replace` or `insert` without a separate `read`; the line-number gutter and `=== path ===` header give filename and line for navigation.
 
 | Field | Description |
 | --- | --- |
@@ -478,7 +478,7 @@ Full reference:
 | `[E_FILE_TOO_LARGE]` | The file exceeds the 1,353,139-line hashline limit or the 100MB size limit. |
 | `[E_REGISTRY]` | The anchor registry was not initialized; a serve or edit ran outside an initialized session. |
 | `[E_STORE_UNAVAILABLE]` | No SQLite runtime could be loaded: the host exposes neither `node:sqlite` (Node 22.19+) nor `bun:sqlite`. The pi release binary's bundled Bun lacks `node:sqlite`; run pi under Node or a Bun build that ships SQLite. |
-| `[E_WRITE_HASH_ECHO]` | A `write` `content` line reproduces a served row for this file (a bare `anchor│` read row, a `+anchor│`, ` anchor│`, or `-anchor│` diff row, or a `lineNumber │ anchor│content` grep row). The write is refused, file byte-identical; retry with bare content (remove the copied anchors). |
+| `[E_WRITE_HASH_ECHO]` | A `write` `content` line reproduces a served row for this file (a bare `anchor│` read row, a `+anchor│`, ` anchor│`, or `-anchor│` diff row, or a `lineNumber:│ anchor│content` grep row). The write is refused, file byte-identical; retry with bare content (remove the copied anchors). |
 | `[E_PATH_CHANGED]` | A write target changed identity after it was read; the write was refused to avoid following a swapped symlink or overwriting a replacement file. |
 | `[E_BATCH_OVERLAP]` | Batched edit calls target overlapping ranges; the whole batch was refused. One `before` plus one `after` insert on the same anchor line is not an overlap. Retry with disjoint ranges. |
 | `[E_OP_ABORTED]` | A batch-level failure aborted the edit before writing (the base read failed, a cross-file member could not be prepared, the file changed or was deleted during the batch, or the composed result exceeded a limit). Nothing was written; a call whose own request is invalid is left out of the batch instead. Fix the cause and retry, otherwise call `read` for fresh anchors and retry. The abort names the failing call and its error code when one is known. |

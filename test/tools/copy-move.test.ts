@@ -360,13 +360,15 @@ describe("copy and move validation", () => {
     });
   });
 
-  it("refuses a path in anchor-only mode and requires it in require-path mode", async () => {
+  it("accepts a matching path in anchor-only mode and requires it in require-path mode", async () => {
     await withTempFile("sample.txt", "alpha\nbeta\ngamma\n", async ({ cwd, path }) => {
       const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
       const text = getText(await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx));
       const beta = anchorFor(text, "beta");
       const gamma = anchorFor(text, "gamma");
-      expect(await toolError(() => getTool("copy").execute("c1", { path: "sample.txt", source_from: beta, source_to: beta, insert_after: gamma }, undefined, undefined, ctx))).toMatch(/unsupported fields: path/);
+      await getTool("copy").execute("c1", { path: "sample.txt", source_from: beta, source_to: beta, insert_after: gamma }, undefined, undefined, ctx);
+      expect(await readFile(path, "utf-8")).toBe("alpha\nbeta\ngamma\nbeta\n");
+      expect(await toolError(() => getTool("copy").execute("c2", { path: "other.txt", source_from: beta, source_to: beta, insert_after: gamma }, undefined, undefined, ctx))).toMatch(/does not match the file/);
 
       await mkdir(join(cwd, ".config", "pi-hashline-edit-pro"), { recursive: true });
       await writeFile(
@@ -374,15 +376,15 @@ describe("copy and move validation", () => {
         JSON.stringify({ autoRead: true, requirePath: true }),
         "utf-8",
       );
-      expect(await toolError(() => getTool("copy").execute("c2", { source_from: beta, source_to: beta, insert_after: gamma }, undefined, undefined, ctx))).toMatch(/requires a non-empty "path"/);
+      expect(await toolError(() => getTool("copy").execute("c3", { source_from: beta, source_to: beta, insert_after: gamma }, undefined, undefined, ctx))).toMatch(/requires a non-empty "path"/);
       await getTool("copy").execute(
-        "c3",
+        "c4",
         { path: "sample.txt", source_from: beta, source_to: beta, insert_after: gamma },
         undefined,
         undefined,
         ctx,
       );
-      expect(await readFile(path, "utf-8")).toBe("alpha\nbeta\ngamma\nbeta\n");
+      expect(await readFile(path, "utf-8")).toBe("alpha\nbeta\ngamma\nbeta\nbeta\n");
     });
   });
 });

@@ -42,6 +42,8 @@ describe("write-hook findServedHashEcho", () => {
     const served = new Set(["ioor"]);
     expect(findServedHashEcho("12 │ ioor│second\n", served)).toEqual({ line: 1, hash: "ioor" });
     expect(findServedHashEcho("  3 │ ioor│second\n", served)).toEqual({ line: 1, hash: "ioor" });
+    expect(findServedHashEcho("12:│ ioor│second\n", served)).toEqual({ line: 1, hash: "ioor" });
+    expect(findServedHashEcho("  3-│ ioor│second\n", served)).toEqual({ line: 1, hash: "ioor" });
   });
   it("ignores padded deletion rows without a hash", () => {
     expect(findServedHashEcho("-    │hello\n", new Set(["ATIm"]))).toBeUndefined();
