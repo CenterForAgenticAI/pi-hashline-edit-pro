@@ -313,9 +313,10 @@ describe("edit prompt flag variants", () => {
     expect(off.description).toContain("replace or insert");
   });
 
-  it("withGrepPrompts keeps the anchor-first search guideline", () => {
+  it("withGrepPrompts keeps the literal-matching and row-marker guidelines", () => {
     const result = withGrepPrompts(grepBase, DEFAULT_EDIT_FLAGS);
-    expect(result.guidelines.some((guideline) => guideline.includes("not bash `rg`/`grep`"))).toBe(true);
+    expect(result.guidelines.some((guideline) => guideline.includes("set `literal: true`"))).toBe(true);
+    expect(result.guidelines.some((guideline) => guideline.includes("`N:│` rows are matches"))).toBe(true);
   });
 
   it("withReadPrompts lists only the enabled edit tools in its first guideline", () => {

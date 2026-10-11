@@ -1,1 +1,2 @@
-- `grep`: for searching file contents, use this tool, not bash `rg`/`grep`; shell hits carry no anchors, so every edit from one costs a second `read`; set `literal: true` when the pattern contains regex metacharacters.
+- `grep`: set `literal: true` when the pattern contains regex metacharacters.
+- `grep`: `N:│` rows are matches and `N-│` rows are context;
