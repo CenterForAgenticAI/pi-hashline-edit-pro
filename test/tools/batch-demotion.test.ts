@@ -83,7 +83,7 @@ describe("batch demotion", () => {
       const two = anchorFor(bText, "two");
       await writeFile(join(dir, "b.ts"), "ONE\ntwo\nthree\n", "utf-8");
       const replaceArgs = { remove_from: two, remove_to: two, text: ["TWO"] };
-      const copyArgs = { source_from: alpha, source_to: alpha, insert_after: one };
+      const copyArgs = { source_from: alpha, source_to: alpha, direction: "after", anchor: one };
       const message = assistantMessage([toolCall("c1", "replace", replaceArgs), toolCall("c2", "copy", copyArgs)]);
       await handlers.get("message_end")!({ type: "message_end", message }, ctx);
 

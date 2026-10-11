@@ -86,7 +86,7 @@ describe("batched same-file copy and move", () => {
       const beta = anchorFor(text, "beta");
       const gamma = anchorFor(text, "gamma");
       const replaceArgs = { remove_from: alpha, remove_to: alpha, text: ["ALPHA"] };
-      const copyArgs = { source_from: beta, source_to: beta, insert_after: gamma };
+      const copyArgs = { source_from: beta, source_to: beta, direction: "after", anchor: gamma };
       const message = assistantMessage([toolCall("c1", "replace", replaceArgs), toolCall("c2", "copy", copyArgs)]);
       await handlers.get("message_end")!({ type: "message_end", message }, ctx);
 
@@ -117,7 +117,7 @@ describe("batched same-file copy and move", () => {
       const gamma = anchorFor(text, "gamma");
       const delta = anchorFor(text, "delta");
       const replaceArgs = { remove_from: beta, remove_to: beta, text: ["BETA"] };
-      const moveArgs = { source_from: gamma, source_to: gamma, insert_after: delta };
+      const moveArgs = { source_from: gamma, source_to: gamma, direction: "after", anchor: delta };
       const message = assistantMessage([toolCall("v1", "replace", replaceArgs), toolCall("v2", "move", moveArgs)]);
       await handlers.get("message_end")!({ type: "message_end", message }, ctx);
 
@@ -142,7 +142,7 @@ describe("batched same-file copy and move", () => {
       const b = anchorFor(text, "b");
       const c = anchorFor(text, "c");
       const replaceArgs = { remove_from: b, remove_to: b, text: ["B"] };
-      const copyArgs = { source_from: a, source_to: a, insert_after: c };
+      const copyArgs = { source_from: a, source_to: a, direction: "after", anchor: c };
       const message = assistantMessage([toolCall("e1", "replace", replaceArgs), toolCall("e2", "copy", copyArgs)]);
       await handlers.get("message_end")!({ type: "message_end", message }, ctx);
 
@@ -153,7 +153,7 @@ describe("batched same-file copy and move", () => {
     });
   });
 
-  it("rejects a copy whose insert_after line is replaced by a sibling", async () => {
+  it("rejects a copy whose anchor line is replaced by a sibling", async () => {
     await withTempFile("sample.txt", "alpha\nbeta\ngamma\n", async ({ cwd, path }) => {
       const { handlers, getTool, ctx } = setupIntegrationTest(cwd);
       const read = getTool("read");
@@ -164,7 +164,7 @@ describe("batched same-file copy and move", () => {
       const beta = anchorFor(text, "beta");
       const gamma = anchorFor(text, "gamma");
       const replaceArgs = { remove_from: gamma, remove_to: gamma, text: ["GAMMA"] };
-      const copyArgs = { source_from: beta, source_to: beta, insert_after: gamma };
+      const copyArgs = { source_from: beta, source_to: beta, direction: "after", anchor: gamma };
       const message = assistantMessage([toolCall("o1", "replace", replaceArgs), toolCall("o2", "copy", copyArgs)]);
       await handlers.get("message_end")!({ type: "message_end", message }, ctx);
 
@@ -190,7 +190,7 @@ describe("batched same-file copy and move", () => {
       const delta = anchorFor(text, "delta");
       await writeFile(path, "alpha\nbeta\nGAMMA\ndelta\n", "utf-8");
       const replaceArgs = { remove_from: alpha, remove_to: alpha, text: ["ALPHA"] };
-      const copyArgs = { source_from: beta, source_to: gamma, insert_after: delta };
+      const copyArgs = { source_from: beta, source_to: gamma, direction: "after", anchor: delta };
       const message = assistantMessage([toolCall("s1", "replace", replaceArgs), toolCall("s2", "copy", copyArgs)]);
       await handlers.get("message_end")!({ type: "message_end", message }, ctx);
 
@@ -222,7 +222,7 @@ describe("batched cross-file copy", () => {
       const one = anchorFor(bText, "one");
       const two = anchorFor(bText, "two");
       const replaceArgs = { remove_from: two, remove_to: two, text: ["TWO"] };
-      const copyArgs = { source_from: beta, source_to: beta, insert_after: one };
+      const copyArgs = { source_from: beta, source_to: beta, direction: "after", anchor: one };
       const message = assistantMessage([toolCall("d1", "replace", replaceArgs), toolCall("d2", "copy", copyArgs)]);
       await handlers.get("message_end")!({ type: "message_end", message }, ctx);
 
@@ -260,7 +260,7 @@ describe("batched cross-file copy", () => {
       const aFirstArgs = { remove_from: beta, remove_to: beta, text: ["BETA"] };
       const aLastArgs = { remove_from: gamma, remove_to: gamma, text: ["GAMMA"] };
       const bFirstArgs = { remove_from: two, remove_to: two, text: ["TWO"] };
-      const copyArgs = { source_from: beta, source_to: beta, insert_after: one };
+      const copyArgs = { source_from: beta, source_to: beta, direction: "after", anchor: one };
       const message = assistantMessage([
         toolCall("a1", "replace", aFirstArgs),
         toolCall("a2", "replace", aLastArgs),
@@ -301,7 +301,7 @@ describe("batched cross-file copy", () => {
       const one = anchorFor(bText, "one");
       const two = anchorFor(bText, "two");
       const replaceArgs = { path: "b.ts", remove_from: two, remove_to: two, text: ["TWO"] };
-      const copyArgs = { path: "a.ts", source_from: beta, source_to: beta, insert_after: one };
+      const copyArgs = { path: "a.ts", source_from: beta, source_to: beta, direction: "after", anchor: one };
       const message = assistantMessage([toolCall("p1", "replace", replaceArgs), toolCall("p2", "copy", copyArgs)]);
       await handlers.get("message_end")!({ type: "message_end", message }, ctx);
 
@@ -331,7 +331,7 @@ describe("batched cross-file copy", () => {
       const one = anchorFor(bText, "one");
       const two = anchorFor(bText, "two");
       const replaceArgs = { remove_from: two, remove_to: two, text: ["TWO"] };
-      const copyArgs = { source_from: staleSource, source_to: staleSource, insert_after: one };
+      const copyArgs = { source_from: staleSource, source_to: staleSource, direction: "after", anchor: one };
       const message = assistantMessage([toolCall("q1", "replace", replaceArgs), toolCall("q2", "copy", copyArgs)]);
       await handlers.get("message_end")!({ type: "message_end", message }, ctx);
 
@@ -361,7 +361,7 @@ describe("batched cross-file move", () => {
       const one = anchorFor(bText, "one");
       const two = anchorFor(bText, "two");
       const replaceArgs = { remove_from: two, remove_to: two, text: ["TWO"] };
-      const moveArgs = { source_from: beta, source_to: beta, insert_after: one };
+      const moveArgs = { source_from: beta, source_to: beta, direction: "after", anchor: one };
       const message = assistantMessage([toolCall("m1", "replace", replaceArgs), toolCall("m2", "move", moveArgs)]);
       await handlers.get("message_end")!({ type: "message_end", message }, ctx);
 
@@ -402,7 +402,7 @@ describe("batched cross-file move", () => {
       const one = anchorFor(bText, "one");
       const two = anchorFor(bText, "two");
       const replaceArgs = { remove_from: two, remove_to: two, text: ["TWO"] };
-      const moveArgs = { source_from: beta, source_to: beta, insert_after: one };
+      const moveArgs = { source_from: beta, source_to: beta, direction: "after", anchor: one };
       const message = assistantMessage([toolCall("m1", "replace", replaceArgs), toolCall("m2", "move", moveArgs)]);
       await handlers.get("message_end")!({ type: "message_end", message }, ctx);
 
@@ -432,7 +432,7 @@ describe("batched cross-file move", () => {
       const one = anchorFor(bText, "one");
       const two = anchorFor(bText, "two");
       const replaceArgs = { remove_from: two, remove_to: two, text: ["TWO"] };
-      const moveArgs = { source_from: beta, source_to: beta, insert_after: one };
+      const moveArgs = { source_from: beta, source_to: beta, direction: "after", anchor: one };
       const message = assistantMessage([toolCall("m1", "move", moveArgs), toolCall("m2", "replace", replaceArgs)]);
       await handlers.get("message_end")!({ type: "message_end", message }, ctx);
 
@@ -465,8 +465,8 @@ describe("batched cross-file move", () => {
       const y = anchorFor(cText, "y");
       const one = anchorFor(bText, "one");
       const three = anchorFor(bText, "three");
-      const firstArgs = { source_from: beta, source_to: beta, insert_after: one };
-      const secondArgs = { source_from: y, source_to: y, insert_after: three };
+      const firstArgs = { source_from: beta, source_to: beta, direction: "after", anchor: one };
+      const secondArgs = { source_from: y, source_to: y, direction: "after", anchor: three };
       const message = assistantMessage([toolCall("n1", "move", firstArgs), toolCall("n2", "move", secondArgs)]);
       await handlers.get("message_end")!({ type: "message_end", message }, ctx);
 
@@ -497,7 +497,7 @@ describe("batched cross-file move", () => {
       const one = anchorFor(bText, "one");
       const two = anchorFor(bText, "two");
       const replaceArgs = { path: "b.ts", remove_from: two, remove_to: two, text: ["TWO"] };
-      const moveArgs = { path: "a.ts", source_from: beta, source_to: beta, insert_after: one };
+      const moveArgs = { path: "a.ts", source_from: beta, source_to: beta, direction: "after", anchor: one };
       const message = assistantMessage([toolCall("p1", "replace", replaceArgs), toolCall("p2", "move", moveArgs)]);
       await handlers.get("message_end")!({ type: "message_end", message }, ctx);
 
@@ -530,7 +530,7 @@ describe("batched cross-file move", () => {
       const betaArgs = { remove_from: beta, remove_to: beta, text: ["BETA"] };
       const firstArgs = { remove_from: one, remove_to: one, text: ["ONE"] };
       const lastArgs = { remove_from: two, remove_to: two, text: ["TWO"] };
-      const moveArgs = { source_from: gamma, source_to: gamma, insert_after: two };
+      const moveArgs = { source_from: gamma, source_to: gamma, direction: "after", anchor: two };
       const message = assistantMessage([
         toolCall("a1", "replace", alphaArgs),
         toolCall("a2", "replace", betaArgs),

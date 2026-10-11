@@ -228,7 +228,7 @@ describe("structuredContent for read and replace", () => {
 			const text = getText(await readTool.execute("r1", { path: "sample.ts" }, undefined, undefined, ctx));
 			const beta = anchorFor(text, "beta");
 			const gamma = anchorFor(text, "gamma");
-			const copied = await getTool("copy").execute("c1", { source_from: beta, source_to: beta, insert_after: gamma }, undefined, undefined, ctx);
+			const copied = await getTool("copy").execute("c1", { source_from: beta, source_to: beta, direction: "after", anchor: gamma }, undefined, undefined, ctx);
 			const sc = structured(copied);
 			expect(sc.ok).toBe(true);
 			expect(sc.verb).toBe("copied");
@@ -242,7 +242,7 @@ describe("structuredContent for read and replace", () => {
 			const text = getText(await readTool.execute("r1", { path: "sample.ts" }, undefined, undefined, ctx));
 			const beta = anchorFor(text, "beta");
 			const gamma = anchorFor(text, "gamma");
-			const moved = await getTool("move").execute("v1", { source_from: beta, source_to: beta, insert_after: gamma }, undefined, undefined, ctx);
+			const moved = await getTool("move").execute("v1", { source_from: beta, source_to: beta, direction: "after", anchor: gamma }, undefined, undefined, ctx);
 			const sc = structured(moved);
 			expect(sc.ok).toBe(true);
 			expect(sc.verb).toBe("moved");
@@ -259,7 +259,7 @@ describe("structuredContent for read and replace", () => {
 			const bText = getText(await readTool.execute("rb", { path: "b.ts" }, undefined, undefined, ctx));
 			const beta = anchorFor(aText, "beta");
 			const one = anchorFor(bText, "one");
-			const result = await getTool("move").execute("m1", { source_from: beta, source_to: beta, insert_after: one }, undefined, undefined, ctx);
+			const result = await getTool("move").execute("m1", { source_from: beta, source_to: beta, direction: "after", anchor: one }, undefined, undefined, ctx);
 			const sc = structured(result);
 			expect(sc.ok).toBe(true);
 			expect(sc.verb).toBe("moved");

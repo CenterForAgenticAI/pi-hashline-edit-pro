@@ -156,7 +156,8 @@ function argsFor(edit: EditSpec, anchors: string[]): Record<string, unknown> {
   return {
     source_from: anchors[edit.start - 1]!,
     source_to: anchors[edit.end - 1]!,
-    insert_after: anchors[(edit.insertAfter ?? edit.end) - 1]!,
+    direction: "after",
+    anchor: anchors[(edit.insertAfter ?? edit.end) - 1]!,
   };
 }
 

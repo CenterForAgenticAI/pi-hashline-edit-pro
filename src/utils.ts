@@ -23,18 +23,10 @@ function normalizeAnchorAliases(record: Record<string, unknown>, pair: AnchorPai
   }
 }
 
-function normalizeTransferDestination(record: Record<string, unknown>): void {
-  if (!("insert_after" in record) || record.source_from === undefined) return;
-  if (record.anchor === undefined) record.anchor = record.insert_after;
-  if (record.direction === undefined) record.direction = "after";
-  delete record.insert_after;
-}
-
 export function normalizeRequest(input: unknown, pair?: AnchorPairName): unknown {
   if (!isRec(input)) return input;
   const record: Record<string, unknown> = { ...input };
   normalizeEditLines(record);
-  normalizeTransferDestination(record);
   if (pair !== undefined) normalizeAnchorAliases(record, pair);
   return record;
 }

@@ -72,7 +72,7 @@ describe("copy", () => {
 
       const result = await getTool("copy").execute(
         "c1",
-        { source_from: beta, source_to: gamma, insert_after: delta },
+        { source_from: beta, source_to: gamma, direction: "after", anchor: delta },
         undefined,
         undefined,
         ctx,
@@ -95,35 +95,35 @@ describe("copy", () => {
     });
   });
 
-  it("duplicates a single line when insert_after is source_to", async () => {
+  it("duplicates a single line when anchor is source_to", async () => {
     await withTempFile("sample.txt", "alpha\nbeta\ngamma\n", async ({ cwd, path }) => {
       const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
       const text = getText(await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx));
       const beta = anchorFor(text, "beta");
-      await getTool("copy").execute("c1", { source_from: beta, source_to: beta, insert_after: beta }, undefined, undefined, ctx);
+      await getTool("copy").execute("c1", { source_from: beta, source_to: beta, direction: "after", anchor: beta }, undefined, undefined, ctx);
       expect(await readFile(path, "utf-8")).toBe("alpha\nbeta\nbeta\ngamma\n");
     });
   });
 
-  it("copies a block above itself when insert_after precedes the source", async () => {
+  it("copies a block above itself when the anchor precedes the source", async () => {
     await withTempFile("sample.txt", "alpha\nbeta\ngamma\ndelta\n", async ({ cwd, path }) => {
       const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
       const text = getText(await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx));
       const alpha = anchorFor(text, "alpha");
       const gamma = anchorFor(text, "gamma");
       const delta = anchorFor(text, "delta");
-      await getTool("copy").execute("c1", { source_from: gamma, source_to: delta, insert_after: alpha }, undefined, undefined, ctx);
+      await getTool("copy").execute("c1", { source_from: gamma, source_to: delta, direction: "after", anchor: alpha }, undefined, undefined, ctx);
       expect(await readFile(path, "utf-8")).toBe("alpha\ngamma\ndelta\nbeta\ngamma\ndelta\n");
     });
   });
 
-  it("rejects insert_after strictly inside the source range", async () => {
+  it("rejects a destination anchor strictly inside the source range", async () => {
     await withTempFile("sample.txt", "alpha\nbeta\ngamma\ndelta\n", async ({ cwd }) => {
       const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
       const text = getText(await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx));
       const beta = anchorFor(text, "beta");
       const gamma = anchorFor(text, "gamma");
-      expect(await toolError(() => getTool("copy").execute("c1", { source_from: beta, source_to: gamma, insert_after: beta }, undefined, undefined, ctx))).toContain("[E_BAD_SHAPE]");
+      expect(await toolError(() => getTool("copy").execute("c1", { source_from: beta, source_to: gamma, direction: "after", anchor: beta }, undefined, undefined, ctx))).toContain("[E_BAD_SHAPE]");
     });
   });
 
@@ -133,7 +133,7 @@ describe("copy", () => {
       const text = getText(await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx));
       const gamma = anchorFor(text, "gamma");
       const beta = anchorFor(text, "beta");
-      await getTool("copy").execute("c1", { source_from: beta, source_to: beta, insert_after: gamma }, undefined, undefined, ctx);
+      await getTool("copy").execute("c1", { source_from: beta, source_to: beta, direction: "after", anchor: gamma }, undefined, undefined, ctx);
       expect(await readFile(path, "utf-8")).toBe("alpha\nbeta\ngamma\nbeta\n");
       const undone = await getTool("undo_last_change").execute("u1", { path: "sample.txt" }, undefined, undefined, ctx);
       expect(undone.isError).toBeFalsy();
@@ -149,7 +149,7 @@ describe("move", () => {
       const text = getText(await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx));
       const beta = anchorFor(text, "beta");
       const delta = anchorFor(text, "delta");
-      const result = await getTool("move").execute("m1", { source_from: beta, source_to: beta, insert_after: delta }, undefined, undefined, ctx);
+      const result = await getTool("move").execute("m1", { source_from: beta, source_to: beta, direction: "after", anchor: delta }, undefined, undefined, ctx);
       expect(getText(result)).toContain("Successfully moved in sample.txt");
       expect(await readFile(path, "utf-8")).toBe("alpha\ngamma\ndelta\nbeta\n");
     });
@@ -161,7 +161,7 @@ describe("move", () => {
       const text = getText(await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx));
       const alpha = anchorFor(text, "alpha");
       const delta = anchorFor(text, "delta");
-      await getTool("move").execute("m1", { source_from: delta, source_to: delta, insert_after: alpha }, undefined, undefined, ctx);
+      await getTool("move").execute("m1", { source_from: delta, source_to: delta, direction: "after", anchor: alpha }, undefined, undefined, ctx);
       expect(await readFile(path, "utf-8")).toBe("alpha\ndelta\nbeta\ngamma\n");
     });
   });
@@ -173,7 +173,7 @@ describe("move", () => {
       const gamma = anchorFor(text, "gamma");
       const alpha = anchorFor(text, "alpha");
       const delta = anchorFor(text, "delta");
-      await getTool("move").execute("m1", { source_from: gamma, source_to: alpha, insert_after: delta }, undefined, undefined, ctx);
+      await getTool("move").execute("m1", { source_from: gamma, source_to: alpha, direction: "after", anchor: delta }, undefined, undefined, ctx);
       expect(await readFile(path, "utf-8")).toBe("delta\nalpha\nbeta\ngamma\n");
     });
   });
@@ -184,7 +184,7 @@ describe("move", () => {
       const text = getText(await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx));
       const beta = anchorFor(text, "beta");
       const gamma = anchorFor(text, "gamma");
-      const result = await getTool("move").execute("m1", { source_from: gamma, source_to: gamma, insert_after: beta }, undefined, undefined, ctx);
+      const result = await getTool("move").execute("m1", { source_from: gamma, source_to: gamma, direction: "after", anchor: beta }, undefined, undefined, ctx);
       expect(getText(result)).toContain("No changes made");
       expect(result.details.classification).toBe("noop");
       expect(await readFile(path, "utf-8")).toBe("alpha\nbeta\ngamma\ndelta\n");
@@ -197,7 +197,7 @@ describe("move", () => {
       const text = getText(await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx));
       const beta = anchorFor(text, "beta");
       const delta = anchorFor(text, "delta");
-      await getTool("move").execute("m1", { source_from: beta, source_to: beta, insert_after: delta }, undefined, undefined, ctx);
+      await getTool("move").execute("m1", { source_from: beta, source_to: beta, direction: "after", anchor: delta }, undefined, undefined, ctx);
       expect(await readFile(path, "utf-8")).toBe("alpha\ngamma\ndelta\nbeta\n");
       const undone = await getTool("undo_last_change").execute("u1", { path: "sample.txt" }, undefined, undefined, ctx);
       expect(undone.isError).toBeFalsy();
@@ -211,18 +211,18 @@ describe("move", () => {
       const text = getText(await readTool.execute("r1", { path: "crlf.txt" }, undefined, undefined, ctx));
       const beta = anchorFor(text, "beta");
       const gamma = anchorFor(text, "gamma");
-      await getTool("move").execute("m1", { source_from: beta, source_to: beta, insert_after: gamma }, undefined, undefined, ctx);
+      await getTool("move").execute("m1", { source_from: beta, source_to: beta, direction: "after", anchor: gamma }, undefined, undefined, ctx);
       expect(await readFile(path, "utf-8")).toBe("alpha\r\ngamma\r\nbeta\r\n");
     });
   });
 });
 
 describe("copy and move validation", () => {
-  it("requires all three anchors", async () => {
+  it("requires source_from, source_to, anchor, and direction", async () => {
     await withTempFile("sample.txt", "alpha\nbeta\n", async ({ cwd }) => {
       const { ctx, getTool } = setupIntegrationTest(cwd);
       expect(await toolError(() => getTool("copy").execute("c1", { source_from: "Hasu" }, undefined, undefined, ctx))).toContain("[E_BAD_SHAPE]");
-      expect(await toolError(() => getTool("move").execute("m1", { source_from: "Hasu", source_to: "Hasu", insert_after: "Hasu", extra: true }, undefined, undefined, ctx))).toMatch(/unknown or unsupported fields/);
+      expect(await toolError(() => getTool("move").execute("m1", { source_from: "Hasu", source_to: "Hasu", direction: "after", anchor: "Hasu", extra: true }, undefined, undefined, ctx))).toMatch(/unknown or unsupported fields/);
     });
   });
 
@@ -231,8 +231,8 @@ describe("copy and move validation", () => {
       const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
       const text = getText(await readTool.execute("r1", { path: "empty.txt" }, undefined, undefined, ctx));
       const anchor = text.split("\n")[0]!.split("│")[0]!;
-      expect(await toolError(() => getTool("copy").execute("c1", { source_from: anchor, source_to: anchor, insert_after: anchor }, undefined, undefined, ctx))).toContain("[E_BAD_SHAPE] The file is empty");
-      expect(await toolError(() => getTool("move").execute("m1", { source_from: anchor, source_to: anchor, insert_after: anchor }, undefined, undefined, ctx))).toContain("[E_BAD_SHAPE] The file is empty");
+      expect(await toolError(() => getTool("copy").execute("c1", { source_from: anchor, source_to: anchor, direction: "after", anchor: anchor }, undefined, undefined, ctx))).toContain("[E_BAD_SHAPE] The file is empty");
+      expect(await toolError(() => getTool("move").execute("m1", { source_from: anchor, source_to: anchor, direction: "after", anchor: anchor }, undefined, undefined, ctx))).toContain("[E_BAD_SHAPE] The file is empty");
     });
   });
 
@@ -245,7 +245,7 @@ describe("copy and move validation", () => {
       const bText = getText(await readTool.execute("r2", { path: "b.ts" }, undefined, undefined, ctx));
       const beta = anchorFor(aText, "beta");
       const one = anchorFor(bText, "one");
-      const result = await getTool("copy").execute("c1", { source_from: beta, source_to: beta, insert_after: one }, undefined, undefined, ctx);
+      const result = await getTool("copy").execute("c1", { source_from: beta, source_to: beta, direction: "after", anchor: one }, undefined, undefined, ctx);
       expect(getText(result)).toContain("Successfully copied in b.ts");
       expect(await readFile(join(dir, "a.ts"), "utf-8")).toBe("alpha\nbeta\ngamma\n");
       expect(await readFile(join(dir, "b.ts"), "utf-8")).toBe("one\nbeta\ntwo\n");
@@ -264,7 +264,7 @@ describe("copy and move validation", () => {
       const alpha = anchorFor(aText, "alpha");
       const beta = anchorFor(aText, "beta");
       const emptyAnchor = bText.split("\n")[0]!.split("│")[0]!;
-      await getTool("copy").execute("c1", { source_from: alpha, source_to: beta, insert_after: emptyAnchor }, undefined, undefined, ctx);
+      await getTool("copy").execute("c1", { source_from: alpha, source_to: beta, direction: "after", anchor: emptyAnchor }, undefined, undefined, ctx);
       expect(await readFile(join(dir, "b.ts"), "utf-8")).toBe("alpha\nbeta\n");
     });
   });
@@ -278,7 +278,7 @@ describe("copy and move validation", () => {
       const bText = getText(await readTool.execute("r2", { path: "b.ts" }, undefined, undefined, ctx));
       const beta = anchorFor(aText, "beta");
       const two = anchorFor(bText, "two");
-      const result = await getTool("move").execute("m1", { source_from: beta, source_to: beta, insert_after: two }, undefined, undefined, ctx);
+      const result = await getTool("move").execute("m1", { source_from: beta, source_to: beta, direction: "after", anchor: two }, undefined, undefined, ctx);
       expect(getText(result)).toContain("Successfully moved 1 line(s) from a.ts to b.ts");
       expect(await readFile(join(dir, "a.ts"), "utf-8")).toBe("alpha\ngamma\n");
       expect(await readFile(join(dir, "b.ts"), "utf-8")).toBe("one\ntwo\nbeta\n");
@@ -301,7 +301,7 @@ describe("copy and move validation", () => {
       const alpha = anchorFor(aText, "alpha");
       const beta = anchorFor(aText, "beta");
       const keep = anchorFor(bText, "keep");
-      await getTool("move").execute("m1", { source_from: alpha, source_to: beta, insert_after: keep }, undefined, undefined, ctx);
+      await getTool("move").execute("m1", { source_from: alpha, source_to: beta, direction: "after", anchor: keep }, undefined, undefined, ctx);
       expect(await readFile(join(dir, "a.ts"), "utf-8")).toBe("");
       expect(await readFile(join(dir, "b.ts"), "utf-8")).toBe("keep\nalpha\nbeta\n");
     });
@@ -316,14 +316,14 @@ describe("copy and move validation", () => {
       const bText = getText(await readTool.execute("r2", { path: "b.ts" }, undefined, undefined, ctx));
       const alpha = anchorFor(aText, "alpha");
       const one = anchorFor(bText, "one");
-      expect(await toolError(() => getTool("copy").execute("c1", { source_from: alpha, source_to: "PyBY", insert_after: one }, undefined, undefined, ctx))).toContain("[E_STALE_ANCHOR]");
+      expect(await toolError(() => getTool("copy").execute("c1", { source_from: alpha, source_to: "PyBY", direction: "after", anchor: one }, undefined, undefined, ctx))).toContain("[E_STALE_ANCHOR]");
     });
   });
 
   it("rejects a stale anchor", async () => {
     await withTempFile("sample.txt", "alpha\nbeta\n", async ({ cwd }) => {
       const { ctx, getTool } = setupIntegrationTest(cwd);
-      expect(await toolError(() => getTool("move").execute("m1", { source_from: "PyBY", source_to: "PyBY", insert_after: "PyBY" }, undefined, undefined, ctx))).toContain("[E_STALE_ANCHOR]");
+      expect(await toolError(() => getTool("move").execute("m1", { source_from: "PyBY", source_to: "PyBY", direction: "after", anchor: "PyBY" }, undefined, undefined, ctx))).toContain("[E_STALE_ANCHOR]");
     });
   });
 
@@ -335,7 +335,7 @@ describe("copy and move validation", () => {
       const gamma = anchorFor(text, "gamma");
       const result = await getTool("copy").execute(
         "c1",
-        { source_from: `${beta}│beta`, source_to: beta, insert_after: gamma },
+        { source_from: `${beta}│beta`, source_to: beta, direction: "after", anchor: gamma },
         undefined,
         undefined,
         ctx,
@@ -357,7 +357,7 @@ describe("copy and move validation", () => {
       const text = getText(await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx));
       const beta = anchorFor(text, "beta");
       const gamma = anchorFor(text, "gamma");
-      expect(await toolError(() => getTool("copy").execute("c1", { source_from: `${beta}│beta`, source_to: beta, insert_after: gamma }, undefined, undefined, ctx))).toContain("[E_BAD_SHAPE] Strict-input mode");
+      expect(await toolError(() => getTool("copy").execute("c1", { source_from: `${beta}│beta`, source_to: beta, direction: "after", anchor: gamma }, undefined, undefined, ctx))).toContain("[E_BAD_SHAPE] Strict-input mode");
       expect(await readFile(path, "utf-8")).toBe("alpha\nbeta\ngamma\n");
     });
   });
@@ -368,9 +368,9 @@ describe("copy and move validation", () => {
       const text = getText(await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx));
       const beta = anchorFor(text, "beta");
       const gamma = anchorFor(text, "gamma");
-      await getTool("copy").execute("c1", { path: "sample.txt", source_from: beta, source_to: beta, insert_after: gamma }, undefined, undefined, ctx);
+      await getTool("copy").execute("c1", { path: "sample.txt", source_from: beta, source_to: beta, direction: "after", anchor: gamma }, undefined, undefined, ctx);
       expect(await readFile(path, "utf-8")).toBe("alpha\nbeta\ngamma\nbeta\n");
-      expect(await toolError(() => getTool("copy").execute("c2", { path: "other.txt", source_from: beta, source_to: beta, insert_after: gamma }, undefined, undefined, ctx))).toMatch(/does not match the file/);
+      expect(await toolError(() => getTool("copy").execute("c2", { path: "other.txt", source_from: beta, source_to: beta, direction: "after", anchor: gamma }, undefined, undefined, ctx))).toMatch(/does not match the file/);
 
       await mkdir(join(cwd, ".config", "pi-hashline-edit-pro"), { recursive: true });
       await writeFile(
@@ -378,10 +378,10 @@ describe("copy and move validation", () => {
         JSON.stringify({ autoRead: true, requirePath: true }),
         "utf-8",
       );
-      expect(await toolError(() => getTool("copy").execute("c3", { source_from: beta, source_to: beta, insert_after: gamma }, undefined, undefined, ctx))).toMatch(/requires a non-empty "path"/);
+      expect(await toolError(() => getTool("copy").execute("c3", { source_from: beta, source_to: beta, direction: "after", anchor: gamma }, undefined, undefined, ctx))).toMatch(/requires a non-empty "path"/);
       await getTool("copy").execute(
         "c4",
-        { path: "sample.txt", source_from: beta, source_to: beta, insert_after: gamma },
+        { path: "sample.txt", source_from: beta, source_to: beta, direction: "after", anchor: gamma },
         undefined,
         undefined,
         ctx,
@@ -398,17 +398,17 @@ describe("served-range verification", () => {
       await readTool.execute("r1", { path: "sample.txt", limit: 2 }, undefined, undefined, ctx);
       const abs = await resolveTarget(join(cwd, "sample.txt"));
       const hashes = await lineHashes("a\nb\nc\nd\n", abs);
-      expect(await toolError(() => getTool("copy").execute("c1", { source_from: hashes[2]!, source_to: hashes[3]!, insert_after: hashes[0]! }, undefined, undefined, ctx))).toContain("[E_RANGE_STALE]");
+      expect(await toolError(() => getTool("copy").execute("c1", { source_from: hashes[2]!, source_to: hashes[3]!, direction: "after", anchor: hashes[0]! }, undefined, undefined, ctx))).toContain("[E_RANGE_STALE]");
     });
   });
 
-  it("rejects a copy whose insert_after line was never served", async () => {
+  it("rejects a copy whose anchor line was never served", async () => {
     await withTempFile("sample.txt", "a\nb\nc\nd\n", async ({ cwd }) => {
       const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
       await readTool.execute("r1", { path: "sample.txt", limit: 2 }, undefined, undefined, ctx);
       const abs = await resolveTarget(join(cwd, "sample.txt"));
       const hashes = await lineHashes("a\nb\nc\nd\n", abs);
-      expect(await toolError(() => getTool("copy").execute("c1", { source_from: hashes[0]!, source_to: hashes[0]!, insert_after: hashes[3]! }, undefined, undefined, ctx))).toContain("[E_RANGE_STALE]");
+      expect(await toolError(() => getTool("copy").execute("c1", { source_from: hashes[0]!, source_to: hashes[0]!, direction: "after", anchor: hashes[3]! }, undefined, undefined, ctx))).toContain("[E_RANGE_STALE]");
     });
   });
 
@@ -419,7 +419,7 @@ describe("served-range verification", () => {
       await readTool.execute("r2", { path: "sample.txt", offset: 5, limit: 2 }, undefined, undefined, ctx);
       const abs = await resolveTarget(join(cwd, "sample.txt"));
       const hashes = await lineHashes("a\nb\nc\nd\ne\nf\n", abs);
-      await getTool("move").execute("m1", { source_from: hashes[0]!, source_to: hashes[1]!, insert_after: hashes[4]! }, undefined, undefined, ctx);
+      await getTool("move").execute("m1", { source_from: hashes[0]!, source_to: hashes[1]!, direction: "after", anchor: hashes[4]! }, undefined, undefined, ctx);
       expect(await readFile(path, "utf-8")).toBe("c\nd\ne\na\nb\nf\n");
     });
   });
@@ -432,7 +432,7 @@ describe("served-range verification", () => {
       await readTool.execute("r3", { path: "sample.txt", offset: 5, limit: 1 }, undefined, undefined, ctx);
       const abs = await resolveTarget(join(cwd, "sample.txt"));
       const hashes = await lineHashes("a\nb\nc\nd\ne\n", abs);
-      await getTool("copy").execute("c1", { source_from: hashes[0]!, source_to: hashes[3]!, insert_after: hashes[4]! }, undefined, undefined, ctx);
+      await getTool("copy").execute("c1", { source_from: hashes[0]!, source_to: hashes[3]!, direction: "after", anchor: hashes[4]! }, undefined, undefined, ctx);
       expect(await readFile(path, "utf-8")).toBe("a\nb\nc\nd\ne\na\nb\nc\nd\n");
     });
   });
@@ -445,7 +445,7 @@ describe("served-range verification", () => {
       await readTool.execute("r3", { path: "sample.txt", offset: 5, limit: 1 }, undefined, undefined, ctx);
       const abs = await resolveTarget(join(cwd, "sample.txt"));
       const hashes = await lineHashes("a\nb\nc\nd\ne\n", abs);
-      await getTool("move").execute("m1", { source_from: hashes[0]!, source_to: hashes[3]!, insert_after: hashes[4]! }, undefined, undefined, ctx);
+      await getTool("move").execute("m1", { source_from: hashes[0]!, source_to: hashes[3]!, direction: "after", anchor: hashes[4]! }, undefined, undefined, ctx);
       expect(await readFile(path, "utf-8")).toBe("e\na\nb\nc\nd\n");
     });
   });
@@ -485,11 +485,11 @@ describe("copy and move previews", () => {
       const text = getText(await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx));
       const beta = anchorFor(text, "beta");
       const gamma = anchorFor(text, "gamma");
-      const preview = await transferPreview("copy", { source_from: beta, source_to: beta, insert_after: gamma }, cwd);
+      const preview = await transferPreview("copy", { source_from: beta, source_to: beta, direction: "after", anchor: gamma }, cwd);
       expect(preview).toHaveProperty("diff");
       expect((preview as { diff: string }).diff).toContain("beta");
 
-      const failure = await transferPreview("move", { source_from: "!!!!", source_to: "!!!!", insert_after: "!!!!" }, cwd);
+      const failure = await transferPreview("move", { source_from: "!!!!", source_to: "!!!!", direction: "after", anchor: "!!!!" }, cwd);
       expect(failure).toHaveProperty("error");
     });
   });
@@ -502,7 +502,7 @@ describe("copy and move previews", () => {
       const beta = anchorFor(text, "beta");
       const controller = new AbortController();
       controller.abort();
-      await expect(transferPreview("copy", { source_from: alpha, source_to: alpha, insert_after: beta }, cwd, controller.signal)).rejects.toThrow(
+      await expect(transferPreview("copy", { source_from: alpha, source_to: alpha, direction: "after", anchor: beta }, cwd, controller.signal)).rejects.toThrow(
         "Operation aborted",
       );
     });
@@ -516,7 +516,7 @@ describe("copy and move previews", () => {
       const theme = fakeTheme();
       expect(tool.renderCall("nope", theme, renderContext(cwd))).toBeDefined();
       expect(tool.renderCall({ source_from: 42 }, theme, renderContext(cwd))).toBeDefined();
-      expect(tool.renderCall({ source_from: "Hasu", source_to: "Hasu", insert_after: "Hasu" }, theme, renderContext(cwd))).toBeDefined();
+      expect(tool.renderCall({ source_from: "Hasu", source_to: "Hasu", direction: "after", anchor: "Hasu" }, theme, renderContext(cwd))).toBeDefined();
     });
   });
 });
@@ -550,14 +550,14 @@ describe("auto-read after copy and move", () => {
       const dstText = getText(await getTool("read").execute("r2", { path: "dst.ts" }, undefined, undefined, ctx));
       const beta = anchorFor(srcText, "beta");
       const two = anchorFor(dstText, "two");
-      const moved = await getTool("move").execute("m1", { source_from: beta, source_to: beta, insert_after: two }, undefined, undefined, ctx);
+      const moved = await getTool("move").execute("m1", { source_from: beta, source_to: beta, direction: "after", anchor: two }, undefined, undefined, ctx);
       const handler = handlers.get("tool_result")!;
       const transformed = (await handler(
         {
           type: "tool_result",
           toolName: "move",
           toolCallId: "m1",
-          input: { source_from: beta, source_to: beta, insert_after: two },
+          input: { source_from: beta, source_to: beta, direction: "after", anchor: two },
           content: moved.content,
           details: moved.details,
           isError: false,
@@ -584,10 +584,10 @@ describe("cross-file previews and require-path", () => {
       const bText = getText(await readTool.execute("r2", { path: "b.ts" }, undefined, undefined, ctx));
       const beta = anchorFor(aText, "beta");
       const one = anchorFor(bText, "one");
-      const copyPreview = await transferPreview("copy", { source_from: beta, source_to: beta, insert_after: one }, dir);
+      const copyPreview = await transferPreview("copy", { source_from: beta, source_to: beta, direction: "after", anchor: one }, dir);
       expect(copyPreview).toHaveProperty("diff");
       expect((copyPreview as { diff: string }).diff).toContain("beta");
-      const movePreview = await transferPreview("move", { source_from: beta, source_to: beta, insert_after: one }, dir);
+      const movePreview = await transferPreview("move", { source_from: beta, source_to: beta, direction: "after", anchor: one }, dir);
       expect(movePreview).toHaveProperty("diff");
       const diff = (movePreview as { diff: string }).diff;
       expect(diff).toContain("--- a.ts ---");
@@ -610,8 +610,8 @@ describe("cross-file previews and require-path", () => {
       const bText = getText(await readTool.execute("r2", { path: "b.ts" }, undefined, undefined, ctx));
       const alpha = anchorFor(aText, "alpha");
       const one = anchorFor(bText, "one");
-      expect(await toolError(() => getTool("copy").execute("c1", { path: "missing.ts", source_from: alpha, source_to: alpha, insert_after: one }, undefined, undefined, ctx))).toMatch(/does not match the source file/);
-      await getTool("copy").execute("c2", { path: "a.ts", source_from: alpha, source_to: alpha, insert_after: one }, undefined, undefined, ctx);
+      expect(await toolError(() => getTool("copy").execute("c1", { path: "missing.ts", source_from: alpha, source_to: alpha, direction: "after", anchor: one }, undefined, undefined, ctx))).toMatch(/does not match the source file/);
+      await getTool("copy").execute("c2", { path: "a.ts", source_from: alpha, source_to: alpha, direction: "after", anchor: one }, undefined, undefined, ctx);
       expect(await readFile(join(dir, "b.ts"), "utf-8")).toBe("one\nalpha\ntwo\n");
     });
   });
@@ -626,7 +626,7 @@ describe("cross-file previews and require-path", () => {
       const alpha = anchorFor(aText, "alpha");
       const beta = anchorFor(aText, "beta");
       const emptyAnchor = bText.split("\n")[0]!.split("│")[0]!;
-      await getTool("move").execute("m1", { source_from: alpha, source_to: beta, insert_after: emptyAnchor }, undefined, undefined, ctx);
+      await getTool("move").execute("m1", { source_from: alpha, source_to: beta, direction: "after", anchor: emptyAnchor }, undefined, undefined, ctx);
       expect(await readFile(join(dir, "a.ts"), "utf-8")).toBe("");
       expect(await readFile(join(dir, "b.ts"), "utf-8")).toBe("alpha\nbeta\n");
     });
@@ -643,7 +643,7 @@ describe("source line endings", () => {
       const bText = getText(await readTool.execute("r2", { path: "b.ts" }, undefined, undefined, ctx));
       const beta = anchorFor(aText, "beta");
       const one = anchorFor(bText, "one");
-      await getTool("copy").execute("c1", { source_from: beta, source_to: beta, insert_after: one }, undefined, undefined, ctx);
+      await getTool("copy").execute("c1", { source_from: beta, source_to: beta, direction: "after", anchor: one }, undefined, undefined, ctx);
       expect(await readFile(join(dir, "a.ts"), "utf-8")).toBe("alpha\r\nbeta\r\n");
       expect(await readFile(join(dir, "b.ts"), "utf-8")).toBe("one\nbeta\r\ntwo\n");
     });
@@ -658,7 +658,7 @@ describe("source line endings", () => {
       const bText = getText(await readTool.execute("r2", { path: "b.ts" }, undefined, undefined, ctx));
       const beta = anchorFor(aText, "beta");
       const one = anchorFor(bText, "one");
-      await getTool("copy").execute("c1", { source_from: beta, source_to: beta, insert_after: one }, undefined, undefined, ctx);
+      await getTool("copy").execute("c1", { source_from: beta, source_to: beta, direction: "after", anchor: one }, undefined, undefined, ctx);
       expect(await readFile(join(dir, "b.ts"), "utf-8")).toBe("one\r\nbeta\ntwo\r\n");
     });
   });
@@ -672,7 +672,7 @@ describe("source line endings", () => {
       const bText = getText(await readTool.execute("r2", { path: "b.ts" }, undefined, undefined, ctx));
       const beta = anchorFor(aText, "beta");
       const one = anchorFor(bText, "one");
-      await getTool("move").execute("m1", { source_from: beta, source_to: beta, insert_after: one }, undefined, undefined, ctx);
+      await getTool("move").execute("m1", { source_from: beta, source_to: beta, direction: "after", anchor: one }, undefined, undefined, ctx);
       expect(await readFile(join(dir, "a.ts"), "utf-8")).toBe("alpha\r\n");
       expect(await readFile(join(dir, "b.ts"), "utf-8")).toBe("one\nbeta\r\ntwo\n");
     });
@@ -687,7 +687,7 @@ describe("source line endings", () => {
       const bText = getText(await readTool.execute("r2", { path: "b.ts" }, undefined, undefined, ctx));
       const beta = anchorFor(aText, "beta");
       const one = anchorFor(bText, "one");
-      await getTool("copy").execute("c1", { source_from: beta, source_to: beta, insert_after: one }, undefined, undefined, ctx);
+      await getTool("copy").execute("c1", { source_from: beta, source_to: beta, direction: "after", anchor: one }, undefined, undefined, ctx);
       expect(await readFile(join(dir, "b.ts"), "utf-8")).toBe("one\nbeta\ntwo\n");
     });
   });
@@ -698,7 +698,7 @@ describe("source line endings", () => {
       const text = getText(await readTool.execute("r1", { path: "mixed-copy.ts" }, undefined, undefined, ctx));
       const a = anchorFor(text, "a");
       const b = anchorFor(text, "b");
-      await getTool("copy").execute("c1", { source_from: a, source_to: a, insert_after: b }, undefined, undefined, ctx);
+      await getTool("copy").execute("c1", { source_from: a, source_to: a, direction: "after", anchor: b }, undefined, undefined, ctx);
       expect(await readFile(path, "utf-8")).toBe("a\r\nb\na\r\nc\r\n");
     });
   });
@@ -799,21 +799,20 @@ describe("copy and move direction", () => {
     });
   });
 
-  it("accepts insert_after as an alias for anchor with direction after", async () => {
-    await withTempFile("sample.txt", "alpha\nbeta\ngamma\n", async ({ cwd, path }) => {
+  it("rejects the removed insert_after field", async () => {
+    await withTempFile("sample.txt", "alpha\nbeta\ngamma\n", async ({ cwd }) => {
       const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
       const text = getText(await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx));
       const beta = anchorFor(text, "beta");
       const gamma = anchorFor(text, "gamma");
 
-      await getTool("copy").execute("c1", { source_from: beta, source_to: beta, insert_after: gamma }, undefined, undefined, ctx);
-
-      expect(await readFile(path, "utf-8")).toBe("alpha\nbeta\ngamma\nbeta\n");
+      expect(await toolError(() => getTool("copy").execute("c1", { source_from: beta, source_to: beta, insert_after: gamma } as any, undefined, undefined, ctx))).toMatch(/E_BAD_SHAPE/);
     });
   });
 
   it("rejects a missing or invalid direction at the request contract", () => {
     expect(() => assertTransferReq({ source_from: "Hasu", source_to: "Hasu", anchor: "Qwer" })).toThrow(/"direction"/);
     expect(() => assertTransferReq({ source_from: "Hasu", source_to: "Hasu", anchor: "Qwer", direction: "sideways" })).toThrow(/"direction"/);
+    expect(() => assertTransferReq({ source_from: "Hasu", source_to: "Hasu", insert_after: "Qwer" })).toThrow(/unknown or unsupported fields/);
   });
 });

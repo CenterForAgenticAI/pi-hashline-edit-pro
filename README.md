@@ -255,7 +255,7 @@ The same safety machinery as `replace` applies: undo is saved before the write (
 | --- | --- |
 | `source_from` | 4-char anchor marking the FIRST source line to copy (inclusive). |
 | `source_to` | 4-char anchor marking the LAST source line to copy (inclusive). |
-| `anchor` | 4-char anchor of the destination line the block goes before or after, resolved in the destination file. `insert_after` is accepted as an alias for `anchor` with `direction: "after"`. |
+| `anchor` | 4-char anchor of the destination line the block goes before or after, resolved in the destination file. |
 | `direction` | `"after"` places the block below the anchor line, `"before"` above it. Within one file the destination position must sit outside the source range. |
 
 Example: read served `Hasu│old` in `a.ts` and `Qwer│top` in `b.ts`; to copy `old` into `b.ts` below `top`:
