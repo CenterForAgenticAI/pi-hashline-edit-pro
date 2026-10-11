@@ -139,8 +139,9 @@ export default function (pi: ExtensionAPI): void {
       if (tool === "grep") return config.anchorGrepEnabled === true;
       return true;
     });
-    let next = [...new Set([...pi.getActiveTools().filter((tool) => tool !== "edit"), ...enabled])];
-    pi.setActiveTools(next);
+    const active = pi.getActiveTools().filter((tool) => tool !== "edit");
+    const base = enabled.includes("grep") ? active.filter((tool) => tool !== "grep") : active;
+    pi.setActiveTools([...new Set([...base, ...enabled])]);
   }
 
   pi.on("session_start", async (_event, ctx) => withAnchorSession(ctx, async () => {

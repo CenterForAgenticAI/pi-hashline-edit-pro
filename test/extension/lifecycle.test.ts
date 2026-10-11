@@ -9,10 +9,10 @@ async function registerExtension(pi: any) {
 }
 
 describe("session_start lifecycle", () => {
-  it("removes the built-in edit and grep tools while keeping grep", async () => {
+  it("removes the built-in edit tool while keeping grep", async () => {
     await withTempDir("lifecycle-tools-", async (dir) => {
       const { pi, handlers } = makePiStub();
-      pi.setActiveTools(["read", "replace", "edit", "grep", "grep", "bash"]);
+      pi.setActiveTools(["read", "replace", "edit", "grep", "bash"]);
       await registerExtension(pi);
       const sessionStart = handlers.get("session_start");
       expect(sessionStart).toBeDefined();

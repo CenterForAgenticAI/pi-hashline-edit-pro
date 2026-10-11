@@ -42,7 +42,7 @@ describe("disableOnModels gate", () => {
   it("removes read for a matching model when readOnDisabledModels is remove", async () => {
     await withTempDir("model-gate-off-", async (dir) => {
       await writeConfig(dir, { autoRead: true, anchorGrepEnabled: true, disableOnModels: ["openai/*"], readOnDisabledModels: "remove" });
-      const { pi, handlers, getActive } = makePiStub([...ANCHOR_TOOLS, "grep", "edit"]);
+      const { pi, handlers, getActive } = makePiStub([...ANCHOR_TOOLS, "edit"]);
       register(pi);
       await handlers.get("session_start")!({}, sessionContext(dir, OPENAI));
       expect(getActive()).toEqual(["grep"]);
@@ -53,7 +53,7 @@ describe("disableOnModels gate", () => {
     await withTempDir("model-gate-read-", async (dir) => {
       await writeConfig(dir, { autoRead: true, anchorGrepEnabled: true, disableOnModels: ["openai/*"] });
       await writeFile(join(dir, "sample.txt"), "alpha\nbeta\n", "utf-8");
-      const { pi, handlers, getActive, getTool } = makePiStub([...ANCHOR_TOOLS, "grep", "edit"]);
+      const { pi, handlers, getActive, getTool } = makePiStub([...ANCHOR_TOOLS, "edit"]);
       register(pi);
       const ctx = sessionContext(dir, OPENAI);
       await handlers.get("session_start")!({}, ctx);
@@ -70,7 +70,7 @@ describe("disableOnModels gate", () => {
     await withTempDir("model-gate-read-inactive-", async (dir) => {
       await writeConfig(dir, { autoRead: true, anchorGrepEnabled: true, disableOnModels: ["openai/*"] });
       const withoutRead = ANCHOR_TOOLS.filter((tool) => tool !== "read");
-      const { pi, handlers, getActive } = makePiStub([...withoutRead, "grep", "edit"]);
+      const { pi, handlers, getActive } = makePiStub([...withoutRead, "edit"]);
       register(pi);
       const ctx = sessionContext(dir, OPENAI);
       await handlers.get("session_start")!({}, ctx);
@@ -85,7 +85,7 @@ describe("disableOnModels gate", () => {
     await withTempDir("model-gate-read-restore-", async (dir) => {
       await writeConfig(dir, { autoRead: true, anchorGrepEnabled: true, disableOnModels: ["openai/*"] });
       const withoutRead = ANCHOR_TOOLS.filter((tool) => tool !== "read");
-      const { pi, handlers, getActive } = makePiStub([...withoutRead, "grep", "edit"]);
+      const { pi, handlers, getActive } = makePiStub([...withoutRead, "edit"]);
       register(pi);
       const ctx = sessionContext(dir, OPENAI);
       await handlers.get("session_start")!({}, ctx);
@@ -102,7 +102,7 @@ describe("disableOnModels gate", () => {
     await withTempDir("model-gate-read-switch-", async (dir) => {
       await writeConfig(dir, { autoRead: true, anchorGrepEnabled: true, disableOnModels: ["openai/*"], readOnDisabledModels: "vanilla" });
       await writeFile(join(dir, "sample.txt"), "alpha\nbeta\n", "utf-8");
-      const { pi, handlers, getActive, getTool } = makePiStub([...ANCHOR_TOOLS, "grep", "edit"]);
+      const { pi, handlers, getActive, getTool } = makePiStub([...ANCHOR_TOOLS, "edit"]);
       register(pi);
       const ctx = sessionContext(dir, ANTHROPIC);
       await handlers.get("session_start")!({}, ctx);
@@ -119,20 +119,21 @@ describe("disableOnModels gate", () => {
     });
   });
 
-  it("keeps an already active built-in grep when gating a model", async () => {
+  it("registers pi's grep for a gated model when Anchor grep is off", async () => {
     await withTempDir("model-gate-grep-", async (dir) => {
       await writeConfig(dir, { autoRead: true, anchorGrepEnabled: false, disableOnModels: ["openai/*"] });
-      const { pi, handlers, getActive } = makePiStub([...ANCHOR_TOOLS, "grep", "edit"]);
+      const { pi, handlers, getActive, getTool } = makePiStub([...ANCHOR_TOOLS, "edit"]);
       register(pi);
       await handlers.get("session_start")!({}, sessionContext(dir, OPENAI));
       expect(getActive()).toEqual(["read", "grep"]);
+      expect(getTool("grep").promptSnippet).not.toContain("anchor│content");
     });
   });
 
   it("keeps the anchored surface for a non-matching model", async () => {
     await withTempDir("model-gate-on-", async (dir) => {
       await writeConfig(dir, { autoRead: true, anchorGrepEnabled: true, disableOnModels: ["openai/*"] });
-      const { pi, handlers, getActive } = makePiStub([...ANCHOR_TOOLS, "grep", "edit"]);
+      const { pi, handlers, getActive } = makePiStub([...ANCHOR_TOOLS, "edit"]);
       register(pi);
       await handlers.get("session_start")!({}, sessionContext(dir, ANTHROPIC));
       expect(getActive()).toEqual([...ANCHOR_TOOLS]);
@@ -142,7 +143,7 @@ describe("disableOnModels gate", () => {
   it("switches the surface when the model changes mid-session", async () => {
     await withTempDir("model-gate-switch-", async (dir) => {
       await writeConfig(dir, { autoRead: true, anchorGrepEnabled: true, disableOnModels: ["*gpt*"] });
-      const { pi, handlers, getActive } = makePiStub([...ANCHOR_TOOLS, "grep", "edit"]);
+      const { pi, handlers, getActive } = makePiStub([...ANCHOR_TOOLS, "edit"]);
       register(pi);
       const ctx = sessionContext(dir, ANTHROPIC);
       await handlers.get("session_start")!({}, ctx);
@@ -159,7 +160,7 @@ describe("disableOnModels gate", () => {
       await writeConfig(dir, { autoRead: true, anchorGrepEnabled: true, autoReadAll: "full", disableOnModels: ["openai/*"] });
       initGitRepo(dir);
       await writeFile(join(dir, "sample.txt"), "alpha\nbeta\n", "utf-8");
-      const { pi, handlers } = makePiStub([...ANCHOR_TOOLS, "grep", "edit"]);
+      const { pi, handlers } = makePiStub([...ANCHOR_TOOLS, "edit"]);
       register(pi);
       const gated = sessionContext(dir, OPENAI);
       await handlers.get("session_start")!({}, gated);
@@ -175,7 +176,7 @@ describe("disableOnModels gate", () => {
     await withTempDir("model-gate-write-", async (dir) => {
       await writeConfig(dir, { autoRead: true, anchorGrepEnabled: true, disableOnModels: ["openai/*"] });
       await writeFile(join(dir, "written.txt"), "hello\n", "utf-8");
-      const { pi, handlers } = makePiStub([...ANCHOR_TOOLS, "grep", "edit"]);
+      const { pi, handlers } = makePiStub([...ANCHOR_TOOLS, "edit"]);
       register(pi);
       const gated = sessionContext(dir, OPENAI);
       await handlers.get("session_start")!({}, gated);
@@ -198,7 +199,7 @@ describe("disableOnModels gate", () => {
     await withTempDir("model-gate-diff-", async (dir) => {
       await writeConfig(dir, { autoRead: true, anchorGrepEnabled: true, disableOnModels: ["openai/*"] });
       await writeFile(join(dir, "diff.txt"), "alpha\nbeta\n", "utf-8");
-      const { pi, handlers } = makePiStub([...ANCHOR_TOOLS, "grep", "edit"]);
+      const { pi, handlers } = makePiStub([...ANCHOR_TOOLS, "edit"]);
       register(pi);
       const gated = sessionContext(dir, OPENAI);
       await handlers.get("session_start")!({}, gated);
@@ -220,7 +221,7 @@ describe("disableOnModels gate", () => {
     await withTempDir("model-gate-hook-", async (dir) => {
       await writeConfig(dir, { autoRead: true, anchorGrepEnabled: true, disableOnModels: ["openai/*"] });
       await writeFile(join(dir, "echo.txt"), "hello\n", "utf-8");
-      const { pi, handlers, getTool } = makePiStub([...ANCHOR_TOOLS, "grep", "edit"]);
+      const { pi, handlers, getTool } = makePiStub([...ANCHOR_TOOLS, "edit"]);
       register(pi);
       const open = sessionContext(dir, ANTHROPIC);
       await handlers.get("session_start")!({}, open);

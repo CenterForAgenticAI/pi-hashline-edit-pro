@@ -107,20 +107,20 @@ describe("grep huge quantifier", () => {
 
 
 describe("grep default", () => {
-  it("session_start keeps grep by default and disables the built-in grep", async () => {
+  it("session_start keeps the anchored grep by default", async () => {
     await withTempDir("startup-grep-on-", async dir => {
       const home = join(dir, "home");
       await mkdir(join(home, ".config", "pi-hashline-edit-pro"), { recursive: true });
       vi.stubEnv("HOME", home);
       vi.stubEnv("XDG_CONFIG_HOME", "");
       try {
-        const { pi, handlers, getActive } = makePiStub(["read", "replace", "insert", "grep", "grep", "undo_last_change", "edit"]);
+        const { pi, handlers, getActive, getTool } = makePiStub(["read", "replace", "insert", "grep", "undo_last_change", "edit"]);
         const { default: register } = await import("../../index");
         register(pi);
         const sessionStart = handlers.get("session_start") as (a: unknown, b: unknown) => Promise<void>;
         await sessionStart({}, { cwd: dir, ui: { notify: vi.fn() } });
-        expect(getActive()).not.toContain("grep");
         expect(getActive()).toContain("grep");
+        expect(getTool("grep").promptSnippet).toContain("anchor│content");
         expect(getActive()).not.toContain("edit");
         expect(getActive()).toContain("read");
       } finally {
@@ -131,7 +131,7 @@ describe("grep default", () => {
     });
   });
 
-  it("session_start keeps grep and disables the built-in grep when anchorGrepEnabled is true", async () => {
+  it("session_start registers the anchored grep when anchorGrepEnabled is true", async () => {
     await withTempDir("startup-grep-off-", async dir => {
       const home = join(dir, "home");
       await mkdir(join(home, ".config", "pi-hashline-edit-pro"), { recursive: true });
@@ -143,13 +143,13 @@ describe("grep default", () => {
           join(home, ".config", "pi-hashline-edit-pro", "config.json"),
           JSON.stringify({ autoRead: true, anchorGrepEnabled: true }),
         );
-        const { pi, handlers, getActive } = makePiStub(["read", "replace", "insert", "grep", "grep", "undo_last_change", "edit"]);
+        const { pi, handlers, getActive, getTool } = makePiStub(["read", "replace", "insert", "grep", "undo_last_change", "edit"]);
         const { default: register } = await import("../../index");
         register(pi);
         const sessionStart = handlers.get("session_start") as (a: unknown, b: unknown) => Promise<void>;
         await sessionStart({}, { cwd: dir, ui: { notify: vi.fn() } });
-        expect(getActive()).not.toContain("grep");
         expect(getActive()).toContain("grep");
+        expect(getTool("grep").promptSnippet).toContain("anchor│content");
         expect(getActive()).not.toContain("edit");
       } finally {
         vi.unstubAllEnvs();
@@ -159,20 +159,20 @@ describe("grep default", () => {
     });
   });
 
-  it("hashline-config toggles grep and the built-in grep", async () => {
+  it("hashline-config swaps the anchored grep for pi's grep", async () => {
     await withTempDir("toggle-anchor-grep-", async dir => {
       const home = join(dir, "home");
       await mkdir(join(home, ".config", "pi-hashline-edit-pro"), { recursive: true });
       vi.stubEnv("HOME", home);
       vi.stubEnv("XDG_CONFIG_HOME", "");
       try {
-        const { pi, commands, handlers, getActive } = makePiStub(["read", "replace", "insert", "grep", "grep", "undo_last_change"]);
+        const { pi, commands, handlers, getActive, getTool } = makePiStub(["read", "replace", "insert", "grep", "undo_last_change"]);
         const { default: register } = await import("../../index");
         register(pi);
         const sessionStart = handlers.get("session_start") as (a: unknown, b: unknown) => Promise<void>;
         await sessionStart({}, { cwd: dir, ui: { notify: vi.fn() } });
-        expect(getActive()).not.toContain("grep");
         expect(getActive()).toContain("grep");
+        expect(getTool("grep").promptSnippet).toContain("anchor│content");
         const overlay = await openConfigOverlay(commands, dir);
         overlay.handleInput("j");
         overlay.handleInput("j");
@@ -180,13 +180,13 @@ describe("grep default", () => {
         overlay.handleInput("j");
         overlay.handleInput("j");
         overlay.handleInput(" ");
-        await waitForConfig(async () => (await readConfig()).anchorGrepEnabled === false && !getActive().includes("grep") && getActive().includes("grep"));
-        expect(getActive()).not.toContain("grep");
+        await waitForConfig(async () => (await readConfig()).anchorGrepEnabled === false && !getTool("grep").promptSnippet.includes("anchor│content"));
         expect(getActive()).toContain("grep");
+        expect(getTool("grep").promptSnippet).not.toContain("anchor│content");
         overlay.handleInput(" ");
-        await waitForConfig(async () => (await readConfig()).anchorGrepEnabled === true && getActive().includes("grep") && !getActive().includes("grep"));
+        await waitForConfig(async () => (await readConfig()).anchorGrepEnabled === true && getTool("grep").promptSnippet.includes("anchor│content"));
         expect(getActive()).toContain("grep");
-        expect(getActive()).not.toContain("grep");
+        expect(getTool("grep").promptSnippet).toContain("anchor│content");
       } finally {
         vi.unstubAllEnvs();
         const { shutdownHashStore } = await import("../../src/hash-store");
@@ -195,20 +195,20 @@ describe("grep default", () => {
     });
   });
 
-  it("hashline-config does not enable the built-in grep when it was not active", async () => {
+  it("hashline-config does not activate grep when it was not active", async () => {
     await withTempDir("toggle-anchor-grep-off-", async dir => {
       const home = join(dir, "home");
       await mkdir(join(home, ".config", "pi-hashline-edit-pro"), { recursive: true });
       vi.stubEnv("HOME", home);
       vi.stubEnv("XDG_CONFIG_HOME", "");
       try {
-        const { pi, commands, handlers, getActive } = makePiStub(["read", "replace", "insert", "grep", "undo_last_change"]);
+        const { pi, commands, handlers, getActive, getTool } = makePiStub(["read", "replace", "insert", "undo_last_change"]);
         const { default: register } = await import("../../index");
         register(pi);
         const sessionStart = handlers.get("session_start") as (a: unknown, b: unknown) => Promise<void>;
         await sessionStart({}, { cwd: dir, ui: { notify: vi.fn() } });
         expect(getActive()).not.toContain("grep");
-        expect(getActive()).toContain("grep");
+        expect(getTool("grep").promptSnippet).toContain("anchor│content");
         const overlay = await openConfigOverlay(commands, dir);
         overlay.handleInput("j");
         overlay.handleInput("j");
@@ -216,13 +216,13 @@ describe("grep default", () => {
         overlay.handleInput("j");
         overlay.handleInput("j");
         overlay.handleInput(" ");
-        await waitForConfig(async () => (await readConfig()).anchorGrepEnabled === false && !getActive().includes("grep"));
+        await waitForConfig(async () => (await readConfig()).anchorGrepEnabled === false && !getTool("grep").promptSnippet.includes("anchor│content"));
         expect(getActive()).not.toContain("grep");
-        expect(getActive()).not.toContain("grep");
+        expect(getTool("grep").promptSnippet).not.toContain("anchor│content");
         overlay.handleInput(" ");
-        await waitForConfig(async () => (await readConfig()).anchorGrepEnabled === true && getActive().includes("grep"));
-        expect(getActive()).toContain("grep");
+        await waitForConfig(async () => (await readConfig()).anchorGrepEnabled === true && getTool("grep").promptSnippet.includes("anchor│content"));
         expect(getActive()).not.toContain("grep");
+        expect(getTool("grep").promptSnippet).toContain("anchor│content");
       } finally {
         vi.unstubAllEnvs();
         const { shutdownHashStore } = await import("../../src/hash-store");
@@ -412,7 +412,7 @@ describe("hashline-config overlay rendering", () => {
       vi.stubEnv("XDG_CONFIG_HOME", "");
       vi.stubEnv("PI_HASHLINE_DEBUG", "1");
       try {
-        const { pi, commands, handlers } = makePiStub(["read", "replace", "insert", "grep", "grep", "undo_last_change", "edit"]);
+        const { pi, commands, handlers } = makePiStub(["read", "replace", "insert", "grep", "undo_last_change", "edit"]);
         const { default: register } = await import("../../index");
         register(pi);
         const notify = vi.fn();
@@ -453,7 +453,7 @@ describe("hashline-config overlay rendering", () => {
       vi.stubEnv("HOME", home);
       vi.stubEnv("XDG_CONFIG_HOME", "");
       try {
-        const { pi, commands, handlers, getActive } = makePiStub(["read", "replace", "insert", "grep", "grep", "undo_last_change"]);
+        const { pi, commands, handlers, getActive, getTool } = makePiStub(["read", "replace", "insert", "grep", "undo_last_change"]);
         const { default: register } = await import("../../index");
         register(pi);
         const sessionStart = handlers.get("session_start") as (a: unknown, b: unknown) => Promise<void>;
@@ -496,7 +496,7 @@ describe("hashline-config overlay rendering", () => {
         expect(config.strictInput).toBe(true);
         expect(config.diffContextLines).toBe(1);
         expect(getActive()).toContain("grep");
-        expect(getActive()).not.toContain("grep");
+        expect(getTool("grep").promptSnippet).not.toContain("anchor│content");
       } finally {
         vi.unstubAllEnvs();
         const { shutdownHashStore } = await import("../../src/hash-store");
@@ -512,7 +512,7 @@ describe("hashline-config overlay rendering", () => {
       vi.stubEnv("HOME", home);
       vi.stubEnv("XDG_CONFIG_HOME", "");
       try {
-        const { pi, commands, handlers } = makePiStub(["read", "replace", "insert", "grep", "grep", "undo_last_change"]);
+        const { pi, commands, handlers } = makePiStub(["read", "replace", "insert", "grep", "undo_last_change"]);
         const { default: register } = await import("../../index");
         register(pi);
         const sessionStart = handlers.get("session_start") as (a: unknown, b: unknown) => Promise<void>;

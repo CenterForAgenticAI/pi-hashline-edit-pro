@@ -88,7 +88,7 @@ pi install /path/to/pi-hashline-edit-pro
 | --- | --- |
 | `read` | overridden, returns `anchor│content` rows |
 | `edit` | disabled |
-| `grep` | disabled while `grep` is enabled |
+| `grep` | replaced by an anchored `grep`; pi's own `grep` returns when Anchor grep is off |
 | `copy`, `move` | disabled while Copy/move is off |
 | `replace_match` | disabled while Replace match is off |
 | `write` | kept; an auto-read block with fresh anchors is appended to its result |
@@ -273,7 +273,7 @@ The same safety machinery as `replace` applies to both tools: undo is saved befo
 
 ### grep
 
-`grep` is an anchored search backed by ripgrep. It is enabled by default; disable it in `/hashline-config` (or set `anchorGrepEnabled` to `false` in the config file). While it is enabled, the built-in grep is disabled. Disabling it removes the tool and restores the built-in grep only if that was active before the extension loaded.
+`grep` is an anchored search backed by ripgrep, registered under pi's own `grep` name. It is enabled by default; turn Anchor grep off in `/hashline-config` (or set `anchorGrepEnabled` to `false` in the config file) to register pi's plain `grep` in its place.
 
 Every matching line, and each requested context line, is returned as `lineNumber │ anchor│content`. The `anchor│content` part is served exactly like `read` output, so you can target it with `replace` or `insert` without a separate `read`; the line-number gutter and `=== path ===` header give filename and line for navigation.
 
@@ -378,7 +378,7 @@ Settings live in `~/.config/pi-hashline-edit-pro/config.json`, created when a se
 | `autoReadAll` | Auto-read all | `"off"` | Attachment mode: `"off"`, `"outline"` (anchor-stamped per-file outlines), or `"full"` (full contents). Legacy `"git"`/`"outline(git)"` read as `"full"`/`"outline"` with Git repos only on; `"on"`/`true` read as `"full"`. |
 | `autoReadAllRequireGit` | Git repos only | `true` | Run the injection only when the working directory is inside a git repository; when off, auto-read all also attaches files discovered by `ripgrep` or the directory walk. |
 | `autoReadAllIgnore` | Ignore folders/files | `[]` | Extra folder names, file names, or globs skipped by auto-read all. |
-| `anchorGrepEnabled` | Anchor grep | `true` | Register `grep` and disable the built-in grep while it is on. |
+| `anchorGrepEnabled` | Anchor grep | `true` | Register an anchored `grep` in place of pi's own `grep` while it is on. |
 | `copyMoveEnabled` | Copy/move | `true` | Offer the `copy` and `move` tools; when off, both are removed from the active tools. |
 | `replaceMatchEnabled` | Replace match | `true` | Offer the `replace_match` tool; when off, it is removed from the active tools. |
 | `requirePath` | Require path | `false` | `replace`, `replace_match`, `insert`, `copy`, and `move` require a `path` argument that must match anchor ownership. |
@@ -387,7 +387,7 @@ Settings live in `~/.config/pi-hashline-edit-pro/config.json`, created when a se
 | `disableOnModels` | Disable on models | `[]` | Model globs matched case-insensitively against `provider/id`, the bare `id`, and `api`, with `*` and `?` wildcards. A matching model gets no anchored edit tools, no auto-read, and no write-echo refusal; `read` stays available as pi's ordinary read unless Read on disabled models is `remove`. |
 | `readOnDisabledModels` | Read on disabled models | `"vanilla"` | `read` for a model matched by `disableOnModels`: `"vanilla"` keeps pi's ordinary `read` active while the anchored edit tools stay off; `"remove"` disables `read` with the rest of the anchored tools. |
 
-`disableOnModels` turns off the whole anchored surface for the models you name, so another edit tool (`apply_patch`, a shell read) can own the session without competing instructions. A match removes `replace`, `replace_match`, `insert`, `copy`, `move`, `grep`, and `undo_last_change` from the active tools, and also `read` when Read on disabled models is `remove`, restoring the built-in `grep` when it was active, and it also skips the auto-read-all injection, the auto-read block after `write`, the post-edit diff substitution, and the `write` hook that refuses a `write` echoing a served anchor. Because the extension's `read` replaces the built-in one, a matched model has no `read` at all under `remove` unless another extension provides one; the default `vanilla` gives those models pi's ordinary `read` while the anchored edit tools stay off. The list is checked on `session_start`, on `model_select`, and again on `before_agent_start`, so a model change inside a session switches the surface immediately and another extension cannot re-add the tools mid-session. The default `[]` leaves every model unchanged.
+`disableOnModels` turns off the whole anchored surface for the models you name, so another edit tool (`apply_patch`, a shell read) can own the session without competing instructions. A match removes `replace`, `replace_match`, `insert`, `copy`, `move`, `grep`, and `undo_last_change` from the active tools, and also `read` when Read on disabled models is `remove`, registering pi's plain `grep` for those models, and it also skips the auto-read-all injection, the auto-read block after `write`, the post-edit diff substitution, and the `write` hook that refuses a `write` echoing a served anchor. Because the extension's `read` replaces the built-in one, a matched model has no `read` at all under `remove` unless another extension provides one; the default `vanilla` gives those models pi's ordinary `read` while the anchored edit tools stay off. The list is checked on `session_start`, on `model_select`, and again on `before_agent_start`, so a model change inside a session switches the surface immediately and another extension cannot re-add the tools mid-session. The default `[]` leaves every model unchanged.
 
 When `PI_HASHLINE_DIR` is unset or empty, non-Windows platforms honor `XDG_CONFIG_HOME` when set (falling back to `~/.config`); on Windows the directory always uses `~/.config`, where `~` is `%USERPROFILE%`. To move the directory explicitly, see [Isolated state](#isolated-state).
 
