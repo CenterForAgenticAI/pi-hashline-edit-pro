@@ -282,14 +282,14 @@ describe("edit prompt flag variants", () => {
     const shared = result.guidelines.join("\n");
     expect(shared).toContain("`replace`/`replace_match`/`insert`/`copy`/`move`: same-file calls in one message are grouped into one batch");
     expect(shared).toContain("`replace`/`replace_match`/`insert`/`copy`/`move`: path resolution is anchor-only");
-    expect(shared).toContain("`replace`/`replace_match`/`insert`: write the character itself, not an escape");
+    expect(shared).toContain("`replace`/`replace_match`/`insert`: escapes in the tool call are decoded once when the call is parsed");
     expect(shared).toContain("`replace`/`replace_match`/`insert`/`copy`/`move`/`undo_last_change`: in the post-edit diff, `-anchor│` rows are dead anchors");
     const transfer = withTransferPrompts({
       description: loadP("../tool-prompts/copy.md"),
       snippet: loadP("../tool-prompts/copy-snippet.md"),
       guidelines: loadGuide("../tool-prompts/copy-guidelines.md"),
     }, DEFAULT_EDIT_FLAGS);
-    expect(transfer.guidelines.some((g) => g.includes("JSON decoding"))).toBe(false);
+    expect(transfer.guidelines.some((g) => g.includes("escapes in the tool call"))).toBe(false);
   });
 
   it("keeps tool descriptions free of examples and moves the fragment guidance into the replace_match guideline", () => {

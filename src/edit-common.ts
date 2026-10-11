@@ -86,7 +86,7 @@ function pathGuideline(flags: EditToolFlags): string {
 
 function payloadGuideline(flags: EditToolFlags): string {
   const tools = operationNames(SHARED_PAYLOAD_OPS, flags);
-  return `${tools}: write the character itself, not an escape; the tool writes \`text\` verbatim and never decodes escapes — \`\\uXXXX\` is the character, \`\\\\uXXXX\` the literal text.`;
+  return `${tools}: escapes in the tool call are decoded once when the call is parsed, and the tool then writes \`text\` as-is, never decoding again — \`\\uXXXX\` is the character, \`\\\\uXXXX\` the literal text.`;
 }
 
 function strictInputGuideline(flags: EditToolFlags): string {
