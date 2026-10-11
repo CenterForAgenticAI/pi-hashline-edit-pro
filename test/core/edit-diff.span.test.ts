@@ -43,6 +43,18 @@ describe("genDiff with true spans", () => {
     expect(diff.split("\n").find((line) => line.startsWith("-"))).toBeUndefined();
   });
 
+  it("keeps the carried anchor on the context row when a duplicate lands before it", () => {
+    const oldContent = "a\nb\nc";
+    const newContent = "a\nb\nb\nc";
+    const oldHashes = ["Aaaa", "Bbbb", "Cccc"];
+    const newHashes = ["Aaaa", "Dddd", "Bbbb", "Cccc"];
+    const spans = [{ start: 1, end: 1, replacementCount: 2, carry: 1 }];
+    const { diff } = genDiff(oldContent, newContent, 1, newHashes, oldHashes, undefined, spans);
+    expect(diff).toContain("+Dddd│b");
+    expect(diff).toContain(" Bbbb│b");
+    expect(diff).not.toContain("+Bbbb│b");
+  });
+
   it("renders multi-span batches with true attribution per hunk", () => {
     const oldContent = "l0\nl1\nl2\nl3\nl4\nl5\nl6\nl7\nl8";
     const newContent = "l0\nR1\nl2\nl3\nl4\nl5\nl6\nR2\nl8";

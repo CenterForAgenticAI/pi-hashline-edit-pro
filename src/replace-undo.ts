@@ -12,7 +12,7 @@ import { toLF, stripBOM, restoreEndings, type LineEnding } from "./normalize";
 import { joinSeparators } from "./line-endings";
 import { genDiff, genPatch, spansFromHashes } from "./replace-diff";
 import { getDiffContextLines } from "./config";
-import { cntDiff, errCode, makePrepareArguments, splitLines } from "./utils";
+import { cntDiff, errCode, makePrepareArguments, mapIoError, splitLines } from "./utils";
 import { loadP, loadGuidelines } from "./prompts";
 import { withUndoPrompts, DEFAULT_EDIT_FLAGS, type EditToolFlags } from "./edit-common";
 import { buildMetrics } from "./replace-response";
@@ -166,7 +166,7 @@ export function regUndo(pi: ExtensionAPI, flags: EditToolFlags = DEFAULT_EDIT_FL
               await handle.close();
             }
           } catch (error) {
-            if (errCode(error) !== "ENOENT") throw error;
+            if (errCode(error) !== "ENOENT") throw mapIoError(error, "read", path);
           }
 
           if (

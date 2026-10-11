@@ -5,6 +5,7 @@ import { constants } from "node:fs";
 import { execPipeline, noteAnchorError, previewFromPipe, previewError, type PipelineResult, type ReplaceDetails } from "./replace";
 import { commitEdit } from "./commit";
 import { readNormFile, safeSnapId, type NormFile } from "./file-reader";
+import { preEditSnapshotFor } from "./pre-edit-snapshot";
 import {
   lineHashes,
   MAX_HASH_LINES,
@@ -236,11 +237,17 @@ async function prepareCrossTransfer(input: {
   const { kind, refs, sourcePath, destinationPath, cwd, signal, noPersist } = input;
   const common = { signal, maxLines: MAX_HASH_LINES };
   const sourceAccessMode = kind === "move" ? constants.R_OK | constants.W_OK : constants.R_OK;
-  const sourcePreload = input.sourcePreload ?? (await readNormFile(sourcePath, cwd, noPersist ? { ...common, accessMode: constants.R_OK, noPersist: true, allocation: "shadow" } : { ...common, accessMode: sourceAccessMode }));
+  const candidate = kind === "copy" && input.sourcePreload === undefined ? preEditSnapshotFor(sourcePath) : undefined;
+  const snapshotPreload = candidate !== undefined
+    && candidate.fileHashes.includes(refs.sourceFrom.hash)
+    && candidate.fileHashes.includes(refs.sourceTo.hash)
+    ? candidate
+    : undefined;
+  const sourcePreload = input.sourcePreload ?? snapshotPreload ?? (await readNormFile(sourcePath, cwd, noPersist ? { ...common, accessMode: constants.R_OK, noPersist: true, allocation: "shadow" } : { ...common, accessMode: sourceAccessMode }));
   const destinationPreload = input.destinationPreload ?? (await readNormFile(destinationPath, cwd, noPersist ? { ...common, accessMode: constants.R_OK, noPersist: true, allocation: "shadow" } : { ...common, accessMode: constants.R_OK | constants.W_OK }));
   const sourceDisplay = toDisplayPath(cwd, sourcePreload.absolutePath, sourcePath);
   const destinationDisplay = toDisplayPath(cwd, destinationPreload.absolutePath, destinationPath);
-  const sourceServed = input.sourceServed ?? servedForPath(sourcePreload.absolutePath);
+  const sourceServed = input.sourceServed ?? (snapshotPreload !== undefined ? snapshotPreload.served : servedForPath(sourcePreload.absolutePath));
   const destinationServed = input.destinationServed ?? servedForPath(destinationPreload.absolutePath);
   const sourceLines = splitLines(sourcePreload.normalized);
   const destinationLines = splitLines(destinationPreload.normalized);
@@ -667,7 +674,7 @@ async function executeBatchCrossCopy(
     const sourceMember = pendingBatchMemberFor(sourcePath);
     const sourcePreload = sourceMember
       ? preloadFromBase(await ensureBatchBase({ member: sourceMember, targetPath: sourcePath, mutationTargetPath: sourceMember.target, cwd, signal }))
-      : await readNormFile(sourcePath, cwd, { signal, accessMode: constants.R_OK, maxLines: MAX_HASH_LINES });
+      : undefined;
     prepared = await prepareCrossTransfer({
       kind: "copy",
       refs,

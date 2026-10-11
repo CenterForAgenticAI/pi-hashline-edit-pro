@@ -8,7 +8,9 @@ import {
   decodeStringArray,
   assertByteLimit,
   isModeUnsupported,
+  ioErrorCode,
   literalEscapeHints,
+  mapIoError,
 } from "../../src/utils";
 
 describe("isRec", () => {
@@ -453,5 +455,33 @@ describe("literalEscapeHints", () => {
 
   it("skips simple escapes in a line that also has a real break", () => {
     expect(literalEscapeHints([String.raw`a\nb` + "\nc"], "lines")).toEqual([]);
+  });
+});
+
+describe("mapIoError", () => {
+  it("maps errno codes to documented error codes", () => {
+    expect(mapIoError(Object.assign(new Error("permission denied"), { code: "EACCES" }), "write", "/tmp/a").message).toBe(
+      "[E_ACCESS] Cannot write /tmp/a: permission denied",
+    );
+    expect(mapIoError(Object.assign(new Error("no such file"), { code: "ENOENT" }), "read", "/tmp/a").message).toBe(
+      "[E_NOT_FOUND] Cannot read /tmp/a: no such file",
+    );
+    expect(mapIoError(Object.assign(new Error("is a directory"), { code: "EISDIR" }), "write", "/tmp/a").message).toBe(
+      "[E_ACCESS] Cannot write /tmp/a: is a directory",
+    );
+  });
+
+  it("keeps already coded errors and code-less errors unchanged", () => {
+    const coded = new Error("[E_PATH_CHANGED] Refusing to write /tmp/a");
+    expect(mapIoError(coded, "write", "/tmp/a")).toBe(coded);
+    const plain = new Error("chmod failed");
+    expect(mapIoError(plain, "write", "/tmp/a")).toBe(plain);
+  });
+
+  it("reports the code for errno errors and nothing for other errors", () => {
+    expect(ioErrorCode(Object.assign(new Error("denied"), { code: "EPERM" }))).toBe("E_ACCESS");
+    expect(ioErrorCode(Object.assign(new Error("gone"), { code: "ENOENT" }))).toBe("E_NOT_FOUND");
+    expect(ioErrorCode(new Error("plain"))).toBeUndefined();
+    expect(ioErrorCode(Object.assign(new Error("weird"), { code: "EUNKNOWN" }))).toBeUndefined();
   });
 });

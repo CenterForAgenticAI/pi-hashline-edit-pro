@@ -284,6 +284,41 @@ describe("batched cross-file copy", () => {
     });
   });
 
+  it("copies the pre-batch source when the source edit is solo", async () => {
+    await withTempDir("batch-cross-solo-source-", async (dir) => {
+      await writeFile(join(dir, "a.ts"), "alpha\nbeta\n", "utf-8");
+      await writeFile(join(dir, "b.ts"), "one\ntwo\n", "utf-8");
+      const { handlers, getTool, ctx } = setupIntegrationTest(dir);
+      const read = getTool("read");
+      const replace = getTool("replace");
+      const copy = getTool("copy");
+
+      const aText = getText(await read.execute("ra", { path: "a.ts" }, undefined, undefined, ctx));
+      const bText = getText(await read.execute("rb", { path: "b.ts" }, undefined, undefined, ctx));
+      const beta = anchorFor(aText, "beta");
+      const one = anchorFor(bText, "one");
+      const two = anchorFor(bText, "two");
+      const aReplaceArgs = { remove_from: beta, remove_to: beta, text: ["BETA"] };
+      const bReplaceArgs = { remove_from: two, remove_to: two, text: ["TWO"] };
+      const copyArgs = { source_from: beta, source_to: beta, direction: "after", anchor: one };
+      const message = assistantMessage([
+        toolCall("a1", "replace", aReplaceArgs),
+        toolCall("b1", "replace", bReplaceArgs),
+        toolCall("b2", "copy", copyArgs),
+      ]);
+      await handlers.get("message_end")!({ type: "message_end", message }, ctx);
+
+      const aApplied = await replace.execute("a1", aReplaceArgs, undefined, undefined, ctx);
+      expect(getText(aApplied)).toContain("Successfully replaced in a.ts");
+      const bFirst = await replace.execute("b1", bReplaceArgs, undefined, undefined, ctx);
+      expect(getText(bFirst)).toBe("In batch 1 (queued)");
+      const bLast = await copy.execute("b2", copyArgs, undefined, undefined, ctx);
+      expect(getText(bLast)).toContain("Batch 1: 2 edits applied as one commit");
+      expect(await readFile(join(dir, "a.ts"), "utf-8")).toBe("alpha\nBETA\n");
+      expect(await readFile(join(dir, "b.ts"), "utf-8")).toBe("one\nbeta\nTWO\n");
+    });
+  });
+
   it("accepts a require-path hint naming the copy source", async () => {
     await withTempDir("batch-cross-copy-path-", async (dir) => {
       await writeFile(join(dir, "a.ts"), "alpha\nbeta\n", "utf-8");

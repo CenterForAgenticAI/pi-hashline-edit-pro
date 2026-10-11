@@ -89,4 +89,46 @@ describe.skipIf(isRoot || isWindows)("permission errors", () => {
       }
     });
   });
+
+  describe("edit tool directory EACCES", () => {
+    it("codes a temp-file write failure as [E_ACCESS]", async () => {
+      const lockedDir = join(tempDir, "locked");
+      mkdirSync(lockedDir);
+      const filePath = join(lockedDir, "sample.txt");
+      writeFileSync(filePath, "alpha\nbeta\n", "utf-8");
+
+      try {
+        const { pi, getTool } = makeFakePiRegistry();
+        register(pi);
+        const readTool = getTool("read");
+        const editTool = getTool("replace");
+
+        const read = await readTool.execute(
+          "r1",
+          { path: filePath },
+          undefined,
+          undefined,
+          { cwd: tempDir } as any,
+        );
+        const anchor = (read.content[0] as { text: string }).text
+          .split("\n")[0]!
+          .split("\u2502")[0]!;
+
+        chmodSync(lockedDir, 0o555);
+
+        const result = await editTool.execute(
+          "e1",
+          { remove_from: anchor, remove_to: anchor, text: ["ALPHA"] },
+          undefined,
+          undefined,
+          { cwd: tempDir } as any,
+        ) as { content: Array<{ text?: string }>; structuredContent?: { error?: { code?: string } } };
+
+        expect(result.content[0]?.text).toContain("[E_ACCESS]");
+        expect(result.structuredContent?.error?.code).toBe("E_ACCESS");
+      } finally {
+        chmodSync(lockedDir, 0o755);
+      }
+    });
+  });
 });

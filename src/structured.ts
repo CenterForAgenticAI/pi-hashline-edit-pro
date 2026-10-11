@@ -1,5 +1,6 @@
 import { Type } from "typebox";
 import { HASH_CLASS, HASH_SEP } from "./hashline/hash";
+import { ioErrorCode } from "./utils";
 
 export type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
 
@@ -200,7 +201,7 @@ export function messageOf(error: unknown): string {
 
 export function structuredError(error: unknown): StructuredError {
 	const message = messageOf(error);
-	return { ok: false, kind: "error", error: { code: ERROR_CODE_RE.exec(message)?.[1] ?? "E_TOOL", message } };
+	return { ok: false, kind: "error", error: { code: ERROR_CODE_RE.exec(message)?.[1] ?? ioErrorCode(error) ?? "E_TOOL", message } };
 }
 
 export type StructuredFailureResult<TDetails> = {

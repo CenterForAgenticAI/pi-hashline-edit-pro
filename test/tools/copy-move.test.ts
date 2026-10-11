@@ -9,6 +9,7 @@ import { resolveTarget } from "../../src/fs-write";
 import type { NormFile } from "../../src/file-reader";
 import {
   anchorFor,
+  assistantMessage,
   getText,
   makeFakePiRegistry,
   makePiStub,
@@ -16,6 +17,7 @@ import {
   useTestHome,
   withTempDir,
   withTempFile,
+  toolCall,
   toolError,
 } from "../support/fixtures";
 
@@ -138,6 +140,66 @@ describe("copy", () => {
       const undone = await getTool("undo_last_change").execute("u1", { path: "sample.txt" }, undefined, undefined, ctx);
       expect(undone.isError).toBeFalsy();
       expect(await readFile(path, "utf-8")).toBe("alpha\nbeta\ngamma\n");
+    });
+  });
+
+  it("copies the served source when a same-message solo edit changed it", async () => {
+    await withTempDir("copy-snapshot-", async (dir) => {
+      await writeFile(join(dir, "a.txt"), "A1\nA2\n", "utf-8");
+      await writeFile(join(dir, "b.txt"), "B1\n", "utf-8");
+      const { handlers, getTool, ctx } = setupIntegrationTest(dir);
+      const read = getTool("read");
+      const replace = getTool("replace");
+      const copy = getTool("copy");
+
+      const aText = getText(await read.execute("ra", { path: "a.txt" }, undefined, undefined, ctx));
+      const bText = getText(await read.execute("rb", { path: "b.txt" }, undefined, undefined, ctx));
+      const a1 = anchorFor(aText, "A1");
+      const a2 = anchorFor(aText, "A2");
+      const b1 = anchorFor(bText, "B1");
+      const replaceArgs = { remove_from: a1, remove_to: a1, text: ["A1\nA4\nA5"] };
+      const copyArgs = { source_from: a1, source_to: a2, anchor: b1, direction: "after" };
+      const message = assistantMessage([toolCall("c1", "replace", replaceArgs), toolCall("c2", "copy", copyArgs)]);
+      await handlers.get("message_end")!({ type: "message_end", message }, ctx);
+
+      const applied = await replace.execute("c1", replaceArgs, undefined, undefined, ctx);
+      expect(getText(applied)).toContain("Successfully replaced in a.txt");
+      const copied = await copy.execute("c2", copyArgs, undefined, undefined, ctx);
+      expect(getText(copied)).toContain("Successfully copied in b.txt");
+      expect(await readFile(join(dir, "a.txt"), "utf-8")).toBe("A1\nA4\nA5\nA2\n");
+      expect(await readFile(join(dir, "b.txt"), "utf-8")).toBe("B1\nA1\nA2\n");
+    });
+  });
+
+  it("does not reuse a source snapshot from a previous message", async () => {
+    await withTempDir("copy-snapshot-scope-", async (dir) => {
+      await writeFile(join(dir, "a.txt"), "A1\nA2\n", "utf-8");
+      await writeFile(join(dir, "b.txt"), "B1\n", "utf-8");
+      const { handlers, getTool, ctx } = setupIntegrationTest(dir);
+      const read = getTool("read");
+      const replace = getTool("replace");
+      const copy = getTool("copy");
+
+      const aText = getText(await read.execute("ra", { path: "a.txt" }, undefined, undefined, ctx));
+      const bText = getText(await read.execute("rb", { path: "b.txt" }, undefined, undefined, ctx));
+      const a1 = anchorFor(aText, "A1");
+      const a2 = anchorFor(aText, "A2");
+      const b1 = anchorFor(bText, "B1");
+      const replaceArgs = { remove_from: a1, remove_to: a1, text: ["A1\nA4\nA5"] };
+      const copyArgs = { source_from: a1, source_to: a2, anchor: b1, direction: "after" };
+      await handlers.get("message_end")!({
+        type: "message_end",
+        message: assistantMessage([toolCall("s1", "replace", replaceArgs)]),
+      }, ctx);
+      await replace.execute("s1", replaceArgs, undefined, undefined, ctx);
+
+      await handlers.get("message_end")!({
+        type: "message_end",
+        message: assistantMessage([toolCall("s2", "copy", copyArgs)]),
+      }, ctx);
+      const copied = await copy.execute("s2", copyArgs, undefined, undefined, ctx);
+      expect(getText(copied)).toContain("Successfully copied in b.txt");
+      expect(await readFile(join(dir, "b.txt"), "utf-8")).toBe("B1\nA1\nA4\nA5\nA2\n");
     });
   });
 });

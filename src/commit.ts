@@ -1,13 +1,14 @@
 import { readFile } from "node:fs/promises";
 import type { PipelineResult } from "./replace";
-import { abortIf, assertByteLimit, errCode, splitLines } from "./utils";
+import { abortIf, assertByteLimit, errCode, mapIoError, splitLines } from "./utils";
 import { buildChanged, buildNoop, type RMeta, type TResult } from "./replace-response";
 import { saveUndo } from "./replace-undo";
 import { getDiffContextLines } from "./config";
 import { safeSnapId } from "./file-reader";
 import { writeAtomic } from "./fs-write";
-import { formatAnchorReclaimNotice, takeReclaimedPaths } from "./anchor-registry";
+import { formatAnchorReclaimNotice, servedForPath, takeReclaimedPaths } from "./anchor-registry";
 import { servedHashesFromDiff, serveRows } from "./served";
+import { recordPreEditSnapshot } from "./pre-edit-snapshot";
 import { lineHashes } from "./hashline";
 import { spanForEdit } from "./replace";
 import { restoreEndings, stripBOM, toLF, type LineEnding } from "./normalize";
@@ -69,6 +70,19 @@ export async function commitEdit(pipe: PipelineResult, meta: CommitMeta): Promis
     );
   }
 
+  const served = servedForPath(mutationTargetPath);
+  recordPreEditSnapshot({
+    absolutePath: mutationTargetPath,
+    normalized: pipe.originalNormalized,
+    bom: pipe.bom,
+    originalEnding: pipe.originalEnding,
+    endingSeparators: pipe.originalSeparators,
+    fileHashes: pipe.originalHashes,
+    hadUtf8DecodeErrors: pipe.hadUtf8DecodeErrors,
+    identity: pipe.identity,
+    served: served ? new Map(served) : undefined,
+  });
+
   assertByteLimit(finalFileBytes, path);
 
   if (pipe.hadUtf8DecodeErrors) {
@@ -86,7 +100,7 @@ export async function commitEdit(pipe: PipelineResult, meta: CommitMeta): Promis
     if (code === "ENOENT") currentRaw = undefined;
     else if (code === "EACCES" || code === "EPERM") throw new Error(`[E_ACCESS] File is not readable: ${path}`);
     else if (code === "ELOOP") throw new Error(`[E_ACCESS] Too many symbolic links while resolving: ${path}`);
-    else throw error;
+    else throw mapIoError(error, "read", path);
   }
   if (currentRaw === undefined) {
     throw new Error(`[E_OP_ABORTED] Edit aborted: the file was deleted after the edit started.`);

@@ -50,6 +50,37 @@ describe("insert anchor preservation", () => {
     });
   });
 
+  it("solo insert-before with identical content puts the fresh anchor on the added row", async () => {
+    await withTempFile("dup-before.txt", "aaa\nbbb\nccc\n", async ({ cwd }) => {
+      const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
+      const text = getText(await readTool.execute("r1", { path: "dup-before.txt" }, undefined, undefined, ctx));
+      const bHash = anchorFor(text, "bbb");
+      const result = await getTool("insert").execute(
+        "i1",
+        { anchor: bHash, direction: "before", text: ["bbb"] },
+        undefined,
+        undefined,
+        ctx,
+      );
+      const diff = (result.details as { diff?: string }).diff ?? "";
+      const addedRow = diff.split("\n").find((row) => row.startsWith("+"));
+      expect(addedRow).toBeDefined();
+      const addedAnchor = /^\+([A-Za-z]{4})│/.exec(addedRow!)?.[1];
+      expect(addedAnchor).toBeDefined();
+      expect(addedAnchor).not.toBe(bHash);
+      expect(diff.split("\n").some((row) => row.startsWith(" ") && row.includes(`│bbb`) && row.includes(bHash))).toBe(true);
+      const ok = await getTool("replace").execute(
+        "e1",
+        { remove_from: addedAnchor!, remove_to: addedAnchor!, text: ["BBB"] },
+        undefined,
+        undefined,
+        ctx,
+      );
+      expect(ok.content[0].text).toContain("Successfully replaced");
+      expect(await readFile(join(cwd, "dup-before.txt"), "utf-8")).toBe("aaa\nBBB\nbbb\nccc\n");
+    });
+  });
+
   it("batched insert-before preserves the anchor line's anchor", async () => {
     await withTempFile("batch-before.txt", "aaa\nbbb\nccc\n", async ({ cwd }) => {
       const { ctx, readTool, getTool, handlers } = setupIntegrationTest(cwd);

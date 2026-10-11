@@ -4,6 +4,7 @@ import { toDisplayPath } from "./paths";
 import { readConfig, getDiffContextLines } from "./config";
 import { throwIfStrictInput, tryResolveEditTarget } from "./edit-common";
 import { readNormFile, safeSnapId } from "./file-reader";
+import { clearPreEditSnapshots, recordPreEditSnapshot } from "./pre-edit-snapshot";
 import { resolveInCwd, writeAtomic, type FileIdentity } from "./fs-write";
 import {
   AnchorMismatchError,
@@ -27,7 +28,7 @@ import { saveUndo } from "./replace-undo";
 import { buildChanged, buildNoop, type RMetrics, type TResult } from "./replace-response";
 import { toEditVerb, withStructuredText, type EditStructured } from "./structured";
 import { serveRows, servedHashesFromDiff } from "./served";
-import { abortIf, assertByteLimit, assertLineLimit, errCode, isRec, splitLines } from "./utils";
+import { abortIf, assertByteLimit, assertLineLimit, errCode, isRec, mapIoError, splitLines } from "./utils";
 
 export interface PlannedMember {
   batchKey: number;
@@ -255,6 +256,7 @@ export function resetBatchStateForTests(): void {
   abortedMembers.clear();
   placeholderResults.clear();
   nextBatchKey = 1;
+  clearPreEditSnapshots();
 }
 
 function normalizeEditArgs(name: string, args: unknown): NormalizedEditArgs | undefined {
@@ -371,7 +373,9 @@ function enforceCap(): void {
 }
 
 export async function planAssistantMessage(message: unknown, cwd: string): Promise<void> {
-  if (!isRec(message) || message.role !== "assistant" || !Array.isArray(message.content)) return;
+  if (!isRec(message) || message.role !== "assistant") return;
+  clearPreEditSnapshots();
+  if (!Array.isArray(message.content)) return;
   const calls: EditCall[] = [];
   for (const block of message.content) {
     if (!isRec(block) || block.type !== "toolCall") continue;
@@ -931,12 +935,24 @@ async function finishBatch(member: PlannedMember, signal?: AbortSignal): Promise
     const snapshotId = await safeSnapId(paths.absolutePath, "noop edit");
     return combinedNoop(paths.displayPath, member, runtime, snapshotId);
   }
+
+  recordPreEditSnapshot({
+    absolutePath: runtime.target,
+    normalized: base.content,
+    bom: base.bom,
+    originalEnding: base.ending,
+    endingSeparators: base.separators,
+    fileHashes: base.hashes,
+    hadUtf8DecodeErrors: base.hadUtf8DecodeErrors,
+    identity: base.identity,
+    served: runtime.served ? new Map(runtime.served) : undefined,
+  });
   abortIf(signal);
   let currentRaw: string;
   try {
     currentRaw = await readFile(runtime.target, "utf-8");
   } catch (error) {
-    if (errCode(error) !== "ENOENT") throw error;
+    if (errCode(error) !== "ENOENT") throw mapIoError(error, "read", runtime.target);
     discardBatchState(runtime);
     throw new Error(`[E_OP_ABORTED] Batch ${runtime.display} aborted: the file was deleted after the batch started.`);
   }
@@ -962,7 +978,7 @@ async function finishBatch(member: PlannedMember, signal?: AbortSignal): Promise
     try {
       sourceRaw = await readFile(source.mutationTargetPath, "utf-8");
     } catch (error) {
-      if (errCode(error) !== "ENOENT") throw error;
+      if (errCode(error) !== "ENOENT") throw mapIoError(error, "read", source.displayPath);
       sourceRaw = undefined;
     }
     if (sourceRaw === undefined || toLF(stripBOM(sourceRaw).text) !== source.pipe.originalNormalized) {
@@ -1196,4 +1212,5 @@ export async function finalizeTurn(toolCallIds: string[]): Promise<void> {
     }
     batches.delete(key);
   }
+  clearPreEditSnapshots();
 }

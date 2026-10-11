@@ -94,6 +94,35 @@ export function errCode(error: unknown): string | undefined {
 	return undefined;
 }
 
+const IO_ERROR_CODES: Record<string, string> = {
+  ENOENT: "E_NOT_FOUND",
+  EACCES: "E_ACCESS",
+  EPERM: "E_ACCESS",
+  EROFS: "E_ACCESS",
+  EISDIR: "E_ACCESS",
+  ENOTDIR: "E_ACCESS",
+  EEXIST: "E_ACCESS",
+  ELOOP: "E_ACCESS",
+  ENOSPC: "E_ACCESS",
+  EDQUOT: "E_ACCESS",
+  EMFILE: "E_ACCESS",
+  ENFILE: "E_ACCESS",
+  ENAMETOOLONG: "E_ACCESS",
+};
+
+export function ioErrorCode(error: unknown): string | undefined {
+  const code = errCode(error);
+  return code !== undefined ? IO_ERROR_CODES[code] : undefined;
+}
+
+export function mapIoError(error: unknown, action: string, path: string): Error {
+  if (error instanceof Error && /\[[EWH]_[A-Z0-9_]+\]/.test(error.message)) return error;
+  const mapped = ioErrorCode(error);
+  if (mapped === undefined) return error instanceof Error ? error : new Error(String(error));
+  const detail = error instanceof Error ? error.message : String(error);
+  return new Error(`[${mapped}] Cannot ${action} ${path}: ${detail}`);
+}
+
 export function isModeUnsupported(error: unknown): boolean {
 	const code = errCode(error);
 	return code === "EPERM" || code === "ENOTSUP" || code === "EOPNOTSUPP" || code === "EINVAL" || code === "ENOSYS";
