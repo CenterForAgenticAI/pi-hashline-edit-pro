@@ -299,6 +299,10 @@ describe("edit prompt flag variants", () => {
     expect(loadGuide("../tool-prompts/replace-match-guidelines.md").some((g) => g.includes("fragment of the line"))).toBe(true);
   });
 
+  it("keeps the replace_match wide-range guideline", () => {
+    expect(loadGuide("../tool-prompts/replace-match-guidelines.md").some((g) => g.includes("first and last matching lines"))).toBe(true);
+  });
+
   it("withGrepPrompts drops copy and move when Copy/move is off", () => {
     const on = withGrepPrompts(grepBase, DEFAULT_EDIT_FLAGS);
     expect(on.description).toContain("replace, insert, copy, or move");
