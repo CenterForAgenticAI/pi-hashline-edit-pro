@@ -134,13 +134,14 @@ export function assertInsertReq(request: unknown): asserts request is InsertReq 
   assertNoNul([request.text]);
 }
 
-const TRANSFER_KEYS = new Set(["path", "source_from", "source_to", "insert_after"]);
+const TRANSFER_KEYS = new Set(["path", "source_from", "source_to", "anchor", "direction"]);
 
 export interface TransferReq {
   path?: string;
   source_from: string;
   source_to: string;
-  insert_after: string;
+  anchor: string;
+  direction: "before" | "after";
 }
 
 export function assertTransferReq(request: unknown): asserts request is TransferReq {
@@ -157,8 +158,11 @@ export function assertTransferReq(request: unknown): asserts request is Transfer
   if (typeof request.source_to !== "string" || request.source_to.length === 0) {
     throw new Error('[E_BAD_SHAPE] Copy/move request requires a "source_to" string (4-char anchor from read output).');
   }
-  if (typeof request.insert_after !== "string" || request.insert_after.length === 0) {
-    throw new Error('[E_BAD_SHAPE] Copy/move request requires an "insert_after" string (4-char anchor from read output).');
+  if (typeof request.anchor !== "string" || request.anchor.length === 0) {
+    throw new Error('[E_BAD_SHAPE] Copy/move request requires an "anchor" string (4-char anchor from read output).');
+  }
+  if (request.direction !== "before" && request.direction !== "after") {
+    throw new Error('[E_BAD_SHAPE] Copy/move request "direction" must be "before" or "after" (the anchor is the destination line).');
   }
 }
 

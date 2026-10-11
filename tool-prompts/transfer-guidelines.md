@@ -1,4 +1,4 @@
-- `copy`/`move`: for a block transfer, only the source's two boundary rows and the destination line need serving; to append at the end, use the destination's last served line as `insert_after`.
-- `copy`/`move`: `insert_after` must sit outside the source range; `source_to` places the block right after itself.
-- `copy`/`move`: `source_from` and `source_to` may live in a different file than `insert_after`; an empty destination file is seeded with the copied or moved lines.
+- `copy`/`move`: for a block transfer, only the source's two boundary rows and the destination line need serving; to append at the end, use the destination's last served line as `anchor` with `direction: "after"`.
+- `copy`/`move`: the destination position must sit outside the source range; `anchor` set to `source_to` with `direction: "after"` places the block right after itself.
+- `copy`/`move`: `source_from` and `source_to` may live in a different file than `anchor`; an empty destination file is seeded with the copied or moved lines.
 - `move`: a batched cross-file move does not display the source file's diff; its removal commits with the batch, and the source file needs a read for fresh anchors.

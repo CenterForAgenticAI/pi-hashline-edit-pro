@@ -53,7 +53,8 @@ export type TransferKind = "copy" | "move";
 interface TransferRefs {
   sourceFrom: Anchor;
   sourceTo: Anchor;
-  insertAfter: Anchor;
+  anchor: Anchor;
+  direction: "before" | "after";
 }
 
 export interface TransferPlan {
@@ -70,6 +71,7 @@ interface PairFileCommit {
   absolutePath: string;
   mutationTargetPath: string;
   foldedAnchorLines: number;
+  anchorCarry?: number;
   endingOverrides?: (LineEnding | undefined)[];
 }
 
@@ -88,12 +90,13 @@ export function parseTransferAnchors(req: TransferReq): { refs: TransferRefs; wa
   const warnings: string[] = [];
   const from = stripAnchorRow(req.source_from.trim(), "source_from entry", warnings);
   const to = stripAnchorRow(req.source_to.trim(), "source_to entry", warnings);
-  const after = stripAnchorRow(req.insert_after.trim(), "insert_after entry", warnings);
+  const destination = stripAnchorRow(req.anchor.trim(), "anchor entry", warnings);
   return {
     refs: {
       sourceFrom: parseHashRef(from),
       sourceTo: parseHashRef(to),
-      insertAfter: parseHashRef(after),
+      anchor: parseHashRef(destination),
+      direction: req.direction,
     },
     warnings,
   };
@@ -119,13 +122,14 @@ export function buildTransferEdit(input: {
   const toLine = resolveAnchorLine(refs.sourceTo, fileLines, preload.fileHashes, displayPath);
   const sourceStart = Math.min(fromLine, toLine);
   const sourceEnd = Math.max(fromLine, toLine);
-  const insertLine = resolveAnchorLine(refs.insertAfter, fileLines, preload.fileHashes, displayPath);
+  const anchorLine = resolveAnchorLine(refs.anchor, fileLines, preload.fileHashes, displayPath);
+  const insertLine = refs.direction === "after" ? anchorLine : anchorLine - 1;
   if (insertLine >= sourceStart && insertLine < sourceEnd) {
     throw new Error(
-      `[E_BAD_SHAPE] "insert_after" resolves to line ${insertLine}, inside the source range (lines ${sourceStart}-${sourceEnd}). Use a line before source_from, or source_to to place the block right after itself.`,
+      `[E_BAD_SHAPE] "anchor" resolves to line ${anchorLine}, which places the block inside the source range (lines ${sourceStart}-${sourceEnd}). Use a line outside the source range.`,
     );
   }
-  assertBoundaryLinesServed(fileLines, preload.fileHashes, served, insertLine, insertLine, displayPath);
+  assertBoundaryLinesServed(fileLines, preload.fileHashes, served, anchorLine, anchorLine, displayPath);
   assertBoundaryLinesServed(fileLines, preload.fileHashes, served, sourceStart, sourceStart, displayPath);
   assertBoundaryLinesServed(fileLines, preload.fileHashes, served, sourceEnd, sourceEnd, displayPath);
   const sourceLines = fileLines.slice(sourceStart - 1, sourceEnd);
@@ -133,13 +137,17 @@ export function buildTransferEdit(input: {
   if (kind === "copy") {
     return {
       editParams: {
-        remove_from: preload.fileHashes[insertLine - 1]!,
-        remove_to: preload.fileHashes[insertLine - 1]!,
-        text: [fileLines[insertLine - 1]!, ...sourceLines],
+        remove_from: preload.fileHashes[anchorLine - 1]!,
+        remove_to: preload.fileHashes[anchorLine - 1]!,
+        text: refs.direction === "after"
+          ? [fileLines[anchorLine - 1]!, ...sourceLines]
+          : [...sourceLines, fileLines[anchorLine - 1]!],
       },
       foldedAnchorLines: 1,
-      anchorCarry: 0,
-      endingOverrides: [undefined, ...sourceEndings],
+      anchorCarry: refs.direction === "after" ? 0 : sourceLines.length,
+      endingOverrides: refs.direction === "after"
+        ? [undefined, ...sourceEndings]
+        : [...sourceEndings, undefined],
     };
   }
   if (insertLine < sourceStart) {
@@ -178,7 +186,7 @@ function describeTransferTargets(sourcePath: string, destinationPath: string): s
 
 async function resolveTransferTargets(req: TransferReq, cwd: string): Promise<{ sourcePath: string; destinationPath: string }> {
   const sourcePath = resolveEditTarget(req.source_from, req.source_to);
-  const destinationPath = resolveEditTarget(req.insert_after);
+  const destinationPath = resolveEditTarget(req.anchor);
   await assertPathOption({
     providedPath: req.path,
     cwd,
@@ -207,6 +215,7 @@ interface CrossTransferPreparation {
   destinationDisplay: string;
   destinationEdit: HTEdit;
   destinationFolded: number;
+  anchorCarry?: number;
   endingOverrides: (LineEnding | undefined)[];
   sourceEdit?: HTEdit;
 }
@@ -263,15 +272,15 @@ async function prepareCrossTransfer(input: {
     throw error;
   }
 
-  let insertLine = 0;
+  let anchorLine = 0;
   try {
-    insertLine = resolveAnchorLine(refs.insertAfter, destinationLines, destinationPreload.fileHashes, destinationDisplay);
+    anchorLine = resolveAnchorLine(refs.anchor, destinationLines, destinationPreload.fileHashes, destinationDisplay);
   } catch (error) {
     await adopt(destinationPreload.absolutePath, error);
     throw error;
   }
   try {
-    assertBoundaryLinesServed(destinationLines, destinationPreload.fileHashes, destinationServed, insertLine, insertLine, destinationDisplay);
+    assertBoundaryLinesServed(destinationLines, destinationPreload.fileHashes, destinationServed, anchorLine, anchorLine, destinationDisplay);
   } catch (error) {
     await adopt(destinationPreload.absolutePath, error);
     throw error;
@@ -284,23 +293,33 @@ async function prepareCrossTransfer(input: {
         remove_to: destinationPreload.fileHashes[0]!,
         text: [...moved],
       }
-    : {
-        remove_from: destinationPreload.fileHashes[insertLine - 1]!,
-        remove_to: destinationPreload.fileHashes[insertLine - 1]!,
-        text: [destinationLines[insertLine - 1]!, ...moved],
-      };
+    : refs.direction === "after"
+      ? {
+          remove_from: destinationPreload.fileHashes[anchorLine - 1]!,
+          remove_to: destinationPreload.fileHashes[anchorLine - 1]!,
+          text: [destinationLines[anchorLine - 1]!, ...moved],
+        }
+      : {
+          remove_from: destinationPreload.fileHashes[anchorLine - 1]!,
+          remove_to: destinationPreload.fileHashes[anchorLine - 1]!,
+          text: [...moved, destinationLines[anchorLine - 1]!],
+        };
   const destinationFolded = destinationPreload.normalized.length === 0 ? 0 : 1;
   const sourceEndings = endingsForRange(sourcePreload.endingSeparators, sourceStart, sourceEnd);
-  const endingOverrides = destinationFolded === 1 ? offsetEndings(1, sourceEndings) : sourceEndings;
+  const endingOverrides = destinationFolded === 0
+    ? sourceEndings
+    : refs.direction === "after"
+      ? offsetEndings(1, sourceEndings)
+      : sourceEndings;
   if (kind === "copy") {
-    return { sourcePreload, destinationPreload, sourceDisplay, destinationDisplay, destinationEdit, destinationFolded, endingOverrides };
+    return { sourcePreload, destinationPreload, sourceDisplay, destinationDisplay, destinationEdit, destinationFolded, ...(destinationFolded === 1 ? { anchorCarry: refs.direction === "after" ? 0 : moved.length } : {}), endingOverrides };
   }
   const sourceEdit: HTEdit = {
     remove_from: sourcePreload.fileHashes[sourceStart - 1]!,
     remove_to: sourcePreload.fileHashes[sourceEnd - 1]!,
     text: [],
   };
-  return { sourcePreload, destinationPreload, sourceDisplay, destinationDisplay, destinationEdit, destinationFolded, sourceEdit, endingOverrides };
+  return { sourcePreload, destinationPreload, sourceDisplay, destinationDisplay, destinationEdit, destinationFolded, ...(destinationFolded === 1 ? { anchorCarry: refs.direction === "after" ? 0 : moved.length } : {}), sourceEdit, endingOverrides };
 }
 
 function pairEntry(pipe: PipelineResult, separators: LineEnding[] | undefined): UndoEntry {
@@ -328,6 +347,7 @@ async function commitMovePair(input: {
   ]);
   const destinationSpan = input.destination.pipe.spans?.[0];
   const sourceSpan = input.source.pipe.spans?.[0];
+  if (destinationSpan && input.destination.anchorCarry !== undefined) destinationSpan.carry = input.destination.anchorCarry;
   const destinationSeparators = destinationSpan
     ? separatorsForSpans(input.destination.pipe.originalSeparators, input.destination.pipe.originalHashes.length, [destinationSpan], input.destination.pipe.result, input.destination.pipe.originalEnding, splitLines(input.destination.pipe.originalNormalized))
     : undefined;
@@ -553,7 +573,7 @@ async function executeCrossFile(
         absolutePath: destination.absolute,
         mutationTargetPath: destination.resolved,
         editAnchors: [prepared.destinationEdit.remove_from, prepared.destinationEdit.remove_to],
-        ...(prepared.destinationFolded === 1 ? { anchorCarry: 0 } : {}),
+        ...(prepared.anchorCarry !== undefined ? { anchorCarry: prepared.anchorCarry } : {}),
         endingOverrides: prepared.endingOverrides,
         signal,
         verb: "copied",
@@ -576,6 +596,7 @@ async function executeCrossFile(
         absolutePath: destination.absolute,
         mutationTargetPath: destination.resolved,
         foldedAnchorLines: prepared.destinationFolded,
+        ...(prepared.anchorCarry !== undefined ? { anchorCarry: prepared.anchorCarry } : {}),
         endingOverrides: prepared.endingOverrides,
       },
       signal,
@@ -619,6 +640,7 @@ function planTransferBatchMember(kind: TransferKind): BatchMemberPlanner {
       warnings: [...warnings, ...resWarnings],
       planned,
       foldedLines: transferPlan.foldedAnchorLines,
+      direction: refs.direction,
       ...(transferPlan.anchorCarry !== undefined ? { carryIndex: transferPlan.anchorCarry } : {}),
       ...(transferPlan.servedOverride !== undefined ? { servedOverride: transferPlan.servedOverride } : {}),
       ...(transferPlan.endingOverrides !== undefined ? { contentSeparators: transferPlan.endingOverrides } : {}),
@@ -681,7 +703,7 @@ async function executeBatchCrossCopy(
       hedit,
       warnings: [...warnings, ...resWarnings],
       foldedLines: prepared.destinationFolded,
-      ...(prepared.destinationFolded === 1 ? { carryIndex: 0 } : {}),
+      ...(prepared.anchorCarry !== undefined ? { carryIndex: prepared.anchorCarry } : {}),
       contentSeparators: prepared.endingOverrides,
     },
   });
@@ -746,7 +768,7 @@ async function executeBatchCrossMove(
       hedit,
       warnings: [...warnings, ...resWarnings, ...sourceWarnings],
       foldedLines: prepared.destinationFolded,
-      ...(prepared.destinationFolded === 1 ? { carryIndex: 0 } : {}),
+      ...(prepared.anchorCarry !== undefined ? { carryIndex: prepared.anchorCarry } : {}),
       contentSeparators: prepared.endingOverrides,
       sourceMove: {
         displayPath: prepared.sourceDisplay,
@@ -820,7 +842,7 @@ export async function transferPreview(kind: TransferKind, request: unknown, cwd:
   }
 }
 
-function getTransferInput(args: unknown): { path?: string; source_from?: string; source_to?: string; insert_after?: string } | null {
+function getTransferInput(args: unknown): { path?: string; source_from?: string; source_to?: string; anchor?: string; direction?: string } | null {
   let normalized: unknown;
   try {
     normalized = normReq(args);
@@ -831,7 +853,8 @@ function getTransferInput(args: unknown): { path?: string; source_from?: string;
   if (
     typeof normalized.source_from !== "string" ||
     typeof normalized.source_to !== "string" ||
-    typeof normalized.insert_after !== "string"
+    typeof normalized.anchor !== "string" ||
+    typeof normalized.direction !== "string"
   ) {
     return null;
   }
@@ -839,7 +862,8 @@ function getTransferInput(args: unknown): { path?: string; source_from?: string;
     ...(typeof normalized.path === "string" ? { path: normalized.path } : {}),
     source_from: normalized.source_from,
     source_to: normalized.source_to,
-    insert_after: normalized.insert_after,
+    anchor: normalized.anchor,
+    direction: normalized.direction,
   };
 }
 
@@ -851,10 +875,14 @@ const transferSourceToSchema = Type.String({
   description:
     "4-char anchor of the LAST source line to copy.",
 });
-const transferInsertAfterSchema = Type.String({
+const transferAnchorSchema = Type.String({
   description:
-    "4-char anchor of the destination line; the block goes after it and may live in another file.",
+    "4-char anchor of the destination line; the block lands before or after it and it may live in another file.",
 });
+const transferDirectionSchema = Type.Union(
+  [Type.Literal("after"), Type.Literal("before")],
+  { description: '"after" places the block below the anchor line, "before" above it' },
+);
 const transferPathRequiredSchema = Type.String({
   description:
     "Path to the source or destination file the anchors were served for; required and must match anchor ownership.",
@@ -864,7 +892,8 @@ const transferToolSchema = Type.Object(
   {
     source_from: transferSourceFromSchema,
     source_to: transferSourceToSchema,
-    insert_after: transferInsertAfterSchema,
+    anchor: transferAnchorSchema,
+    direction: transferDirectionSchema,
   },
   { additionalProperties: true },
 );
@@ -876,7 +905,8 @@ export function buildTransferToolSchema(requirePath: boolean): typeof transferTo
       path: transferPathRequiredSchema,
       source_from: transferSourceFromSchema,
       source_to: transferSourceToSchema,
-      insert_after: transferInsertAfterSchema,
+      anchor: transferAnchorSchema,
+      direction: transferDirectionSchema,
     },
     { additionalProperties: true },
   ) as typeof transferToolSchema;

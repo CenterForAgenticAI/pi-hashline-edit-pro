@@ -189,11 +189,12 @@ type NormalizedEditArgs =
   | { kind: "replace"; removeFrom: string; removeTo?: string; path?: string }
   | { kind: "insert"; anchor: string; path?: string }
   | { kind: "replace_match"; replaceFrom: string; replaceTo?: string; path?: string }
-  | { kind: "copy" | "move"; sourceFrom: string; sourceTo?: string; insertAfter?: string; path?: string };
+  | { kind: "copy" | "move"; sourceFrom: string; sourceTo?: string; anchor?: string; direction?: string; path?: string };
 
 const MAX_TRACKED_BATCHES = 256;
 const BATCH_DISCARDED_NOTE = "Nothing was written; the whole batch was discarded.";
 const BATCHABLE_CALLS = new Set(["replace", "insert", "replace_match", "copy", "move"]);
+const MERGEABLE_PIECE_KINDS = new Set<BatchKind>(["insert", "copy", "move"]);
 
 const plan = new Map<string, PlannedMember>();
 const batches = new Map<number, BatchState>();
@@ -267,7 +268,8 @@ function normalizeEditArgs(name: string, args: unknown): NormalizedEditArgs | un
       kind: name,
       sourceFrom: normalized.source_from,
       ...(typeof normalized.source_to === "string" ? { sourceTo: normalized.source_to } : {}),
-      ...(typeof normalized.insert_after === "string" ? { insertAfter: normalized.insert_after } : {}),
+      ...(typeof normalized.anchor === "string" ? { anchor: normalized.anchor } : {}),
+      ...(typeof normalized.direction === "string" ? { direction: normalized.direction } : {}),
       ...(path ? { path } : {}),
     };
   }
@@ -332,7 +334,7 @@ async function resolveBatchCallTarget(
     const sourceTarget = normalized.sourceTo !== undefined
       ? tryResolveEditTarget(normalized.sourceFrom, normalized.sourceTo)
       : tryResolveEditTarget(normalized.sourceFrom);
-    const destinationTarget = normalized.insertAfter !== undefined ? tryResolveEditTarget(normalized.insertAfter) : undefined;
+    const destinationTarget = normalized.anchor !== undefined ? tryResolveEditTarget(normalized.anchor) : undefined;
     if (sourceTarget === undefined) return undefined;
     if (normalized.kind === "move") {
       if (sourceTarget === destinationTarget) return { target: sourceTarget, sourceTarget };
@@ -811,7 +813,7 @@ function changesEnding(piece: BatchPiece, baseSeparators: LineEnding[]): boolean
 function mergeInsertPairs(pieces: BatchPiece[]): BatchPiece[] {
   const byAnchor = new Map<number, BatchPiece[]>();
   for (const piece of pieces) {
-    if (piece.kind !== "insert" || piece.start !== piece.end || piece.foldedLines === 0) continue;
+    if (!MERGEABLE_PIECE_KINDS.has(piece.kind) || piece.start !== piece.end || piece.foldedLines === 0) continue;
     const group = byAnchor.get(piece.start) ?? [];
     group.push(piece);
     byAnchor.set(piece.start, group);

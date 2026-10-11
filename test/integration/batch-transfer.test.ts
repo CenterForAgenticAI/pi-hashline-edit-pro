@@ -557,3 +557,29 @@ describe("batched cross-file move", () => {
     });
   });
 });
+
+describe("batched transfer direction", () => {
+  it("merges a before and an after copy on one anchor into a single insertion", async () => {
+    await withTempFile("sample.txt", "alpha\nbeta\ngamma\n", async ({ cwd, path }) => {
+      const { handlers, getTool, ctx } = setupIntegrationTest(cwd);
+      const read = getTool("read");
+      const copy = getTool("copy");
+
+      const text = getText(await read.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx));
+      const alpha = anchorFor(text, "alpha");
+      const beta = anchorFor(text, "beta");
+      const gamma = anchorFor(text, "gamma");
+      const beforeArgs = { source_from: alpha, source_to: alpha, anchor: gamma, direction: "before" };
+      const afterArgs = { source_from: beta, source_to: beta, anchor: gamma, direction: "after" };
+      const message = assistantMessage([toolCall("c1", "copy", beforeArgs), toolCall("c2", "copy", afterArgs)]);
+      await handlers.get("message_end")!({ type: "message_end", message }, ctx);
+
+      const first = await copy.execute("c1", beforeArgs, undefined, undefined, ctx);
+      expect(getText(first)).toBe("In batch 1 (queued)");
+
+      const last = await copy.execute("c2", afterArgs, undefined, undefined, ctx);
+      expect(getText(last)).toContain("Batch 1: 2 edits applied as one commit");
+      expect(await readFile(path, "utf-8")).toBe("alpha\nbeta\nalpha\ngamma\nbeta\n");
+    });
+  });
+});
