@@ -50,12 +50,12 @@ describe("anchor reclaim warnings", () => {
     });
   });
 
-  it("adds a note to anchor_grep output", async () => {
+  it("adds a note to grep output", async () => {
     await withTempFile("sample.txt", "alpha\nbeta\n", async ({ cwd }) => {
       const { ctx, getTool } = setupIntegrationTest(cwd);
       const spy = vi.spyOn(registry, "takeReclaimedPaths").mockReturnValueOnce([FREED]);
       try {
-        const result = await getTool("anchor_grep").execute(
+        const result = await getTool("grep").execute(
           "g1",
           { pattern: "beta", path: "sample.txt" },
           undefined,

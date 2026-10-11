@@ -140,7 +140,7 @@ describe("grep glob question mark", () => {
       await writeFile(join(dir, "a1.ts"), "needle one\n", "utf-8");
       await writeFile(join(dir, "a12.ts"), "needle two\n", "utf-8");
       const { ctx, getTool } = setupIntegrationTest(dir);
-      const grepTool = getTool("anchor_grep");
+      const grepTool = getTool("grep");
       const result = await grepTool.execute("g1", { pattern: "needle", glob: "a?.ts" }, undefined, undefined, ctx);
       const text = getText(result);
       expect(text).toContain("a1.ts");
@@ -157,7 +157,7 @@ describe("grep regex compatibility", () => {
     await withTempDir("grep-kref-", async (dir) => {
       await writeFile(join(dir, "s.txt"), "hello\n", "utf-8");
       const { ctx, getTool } = setupIntegrationTest(dir);
-      const grepTool = getTool("anchor_grep");
+      const grepTool = getTool("grep");
       expect(await toolError(() => grepTool.execute("g1", { pattern: "\\k<foo>", path: "s.txt" }, undefined, undefined, ctx))).toContain("[E_BAD_SHAPE]");
     });
   });
@@ -165,7 +165,7 @@ describe("grep regex compatibility", () => {
     await withTempDir("grep-alt-", async (dir) => {
       await writeFile(join(dir, "s.txt"), "ab\n", "utf-8");
       const { ctx, getTool } = setupIntegrationTest(dir);
-      const grepTool = getTool("anchor_grep");
+      const grepTool = getTool("grep");
       const result = await grepTool.execute("g1", { pattern: "(a|b)+", path: "s.txt" }, undefined, undefined, ctx);
       expect(getText(result)).toContain("│ab");
     });
@@ -174,7 +174,7 @@ describe("grep regex compatibility", () => {
     await withTempDir("grep-twoq-", async (dir) => {
       await writeFile(join(dir, "s.txt"), "aaabbb\n", "utf-8");
       const { ctx, getTool } = setupIntegrationTest(dir);
-      const grepTool = getTool("anchor_grep");
+      const grepTool = getTool("grep");
       const result = await grepTool.execute("g1", { pattern: "a{1,2}b{3,4}", path: "s.txt" }, undefined, undefined, ctx);
       expect(getText(result)).toContain("│aaabbb");
     });
@@ -183,7 +183,7 @@ describe("grep regex compatibility", () => {
     await withTempDir("grep-oneq-", async (dir) => {
       await writeFile(join(dir, "s.txt"), "aab\n", "utf-8");
       const { ctx, getTool } = setupIntegrationTest(dir);
-      const grepTool = getTool("anchor_grep");
+      const grepTool = getTool("grep");
       const result = await grepTool.execute("g1", { pattern: "a{1,2}b", path: "s.txt" }, undefined, undefined, ctx);
       expect(getText(result)).toContain("aab");
     });
@@ -192,7 +192,7 @@ describe("grep regex compatibility", () => {
     await withTempDir("grep-class-", async (dir) => {
       await writeFile(join(dir, "s.txt"), "a*\n", "utf-8");
       const { ctx, getTool } = setupIntegrationTest(dir);
-      const grepTool = getTool("anchor_grep");
+      const grepTool = getTool("grep");
       const result = await grepTool.execute("g1", { pattern: "[a*]+", path: "s.txt" }, undefined, undefined, ctx);
       expect(getText(result)).toContain("a*");
     });
@@ -201,7 +201,7 @@ describe("grep regex compatibility", () => {
     await withTempDir("grep-lazy-", async (dir) => {
       await writeFile(join(dir, "s.txt"), "aab\n", "utf-8");
       const { ctx, getTool } = setupIntegrationTest(dir);
-      const grepTool = getTool("anchor_grep");
+      const grepTool = getTool("grep");
       const result = await grepTool.execute("g1", { pattern: "a*?b", path: "s.txt" }, undefined, undefined, ctx);
       expect(getText(result)).toContain("aab");
     });
@@ -210,7 +210,7 @@ describe("grep regex compatibility", () => {
     await withTempDir("grep-bound-ok-", async (dir) => {
       await writeFile(join(dir, "s.txt"), "aaa\n", "utf-8");
       const { ctx, getTool } = setupIntegrationTest(dir);
-      const grepTool = getTool("anchor_grep");
+      const grepTool = getTool("grep");
       const ok = await grepTool.execute("g1", { pattern: "a{1000}", path: "s.txt" }, undefined, undefined, ctx);
       expect(getText(ok)).toContain("No matches found.");
       const okMetrics = (ok as { details?: { metrics?: { matches?: number } } }).details?.metrics;
@@ -221,7 +221,7 @@ describe("grep regex compatibility", () => {
     await withTempDir("grep-bound-bad-", async (dir) => {
       await writeFile(join(dir, "s.txt"), "aaa\n", "utf-8");
       const { ctx, getTool } = setupIntegrationTest(dir);
-      const grepTool = getTool("anchor_grep");
+      const grepTool = getTool("grep");
       const result = await grepTool.execute("g1", { pattern: "a{1001}", path: "s.txt" }, undefined, undefined, ctx);
       expect(getText(result)).toBe("No matches found.");
     });

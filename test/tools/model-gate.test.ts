@@ -8,7 +8,7 @@ import { makePiStub, withTempDir } from "../support/fixtures";
 const OPENAI = { provider: "openai", id: "gpt-5.1-codex", api: "openai-codex-responses", input: [] };
 const ANTHROPIC = { provider: "anthropic", id: "claude-sonnet-4", api: "anthropic-messages", input: [] };
 
-const ANCHOR_TOOLS = ["read", "replace", "replace_match", "insert", "copy", "move", "anchor_grep", "undo_last_change"];
+const ANCHOR_TOOLS = ["read", "replace", "replace_match", "insert", "copy", "move", "grep", "undo_last_change"];
 
 async function writeConfig(dir: string, config: Record<string, unknown>): Promise<void> {
   const configDir = join(dir, ".config", "pi-hashline-edit-pro");

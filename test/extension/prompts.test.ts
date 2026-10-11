@@ -301,6 +301,7 @@ describe("edit prompt flag variants", () => {
 
   it("keeps the replace_match wide-range guideline", () => {
     expect(loadGuide("../tool-prompts/replace-match-guidelines.md").some((g) => g.includes("first and last matching lines"))).toBe(true);
+    expect(loadGuide("../tool-prompts/replace-match-guidelines.md").some((g) => g.includes("every matching line in a range"))).toBe(true);
   });
 
   it("withGrepPrompts drops copy and move when Copy/move is off", () => {
@@ -314,7 +315,7 @@ describe("edit prompt flag variants", () => {
 
   it("withGrepPrompts keeps the anchor-first search guideline", () => {
     const result = withGrepPrompts(grepBase, DEFAULT_EDIT_FLAGS);
-    expect(result.guidelines.some((guideline) => guideline.includes("prefer it over shell"))).toBe(true);
+    expect(result.guidelines.some((guideline) => guideline.includes("not bash `rg`/`grep`"))).toBe(true);
   });
 
   it("withReadPrompts lists only the enabled edit tools in its first guideline", () => {

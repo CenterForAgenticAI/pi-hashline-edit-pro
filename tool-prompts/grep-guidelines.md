@@ -1,1 +1,1 @@
-- `anchor_grep`: prefer it over shell `rg`/`grep` for searching, so hits carry anchors and need no `read`; use `literal: true` when the pattern contains regex metacharacters.
+- `grep`: for searching file contents, use this tool, not bash `rg`/`grep`; shell hits carry no anchors, so every edit from one costs a second `read`; set `literal: true` when the pattern contains regex metacharacters.

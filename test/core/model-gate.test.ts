@@ -5,7 +5,7 @@ const codex = { provider: "openai", id: "gpt-5.1-codex", api: "openai-codex-resp
 
 describe("ANCHOR_TOOL_NAMES", () => {
   it("lists read and the seven anchored edit tools", () => {
-    expect(ANCHOR_TOOL_NAMES).toEqual(["read", "replace", "replace_match", "insert", "copy", "move", "anchor_grep", "undo_last_change"]);
+    expect(ANCHOR_TOOL_NAMES).toEqual(["read", "replace", "replace_match", "insert", "copy", "move", "grep", "undo_last_change"]);
   });
 });
 

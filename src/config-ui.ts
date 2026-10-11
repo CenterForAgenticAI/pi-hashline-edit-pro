@@ -33,7 +33,7 @@ export function configRows(config: Config): ConfigRow[] {
     { key: "autoReadAll", group: "Auto-read all", depth: 0, label: "Auto-read all", hint: "Attach project files when a session starts", enabled: (config.autoReadAll ?? "off") !== "off", mode: config.autoReadAll ?? "off", cycle: ["off", "outline", "full"] },
     { key: "autoReadAllRequireGit", group: "Auto-read all", depth: 1, dependsOn: "autoReadAll", gated: true, label: "Git repos only", hint: "Attach only inside a git repository", enabled: config.autoReadAllRequireGit !== false },
     { key: "autoReadAllIgnore", group: "Auto-read all", depth: 1, dependsOn: "autoReadAll", label: "Ignore folders/files", hint: "Folders, files, or globs that auto-read all skips (comma-separated)", enabled: (config.autoReadAllIgnore ?? []).length > 0, entries: config.autoReadAllIgnore ?? [] },
-    { key: "anchorGrepEnabled", group: "Tools", depth: 0, label: "Anchor grep", hint: "Use anchor_grep instead of the built-in grep", enabled: config.anchorGrepEnabled === true },
+    { key: "anchorGrepEnabled", group: "Tools", depth: 0, label: "Anchor grep", hint: "Use the anchored grep in place of pi's own grep", enabled: config.anchorGrepEnabled === true },
     { key: "copyMoveEnabled", group: "Tools", depth: 0, label: "Copy/move", hint: "Enable the copy and move tools", enabled: config.copyMoveEnabled !== false },
     { key: "replaceMatchEnabled", group: "Tools", depth: 0, label: "Replace match", hint: "Enable the replace_match tool", enabled: config.replaceMatchEnabled !== false },
     { key: "requirePath", group: "Edit behavior", depth: 0, label: "Require path", hint: "Edit tools must also send a matching path", enabled: config.requirePath === true },

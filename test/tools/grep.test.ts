@@ -21,15 +21,15 @@ describe("grep tool", () => {
   it("registers a tool named grep", () => {
     const { pi, getTool } = makeFakePiRegistry();
     register(pi);
-    const tool = getTool("anchor_grep");
+    const tool = getTool("grep");
     expect(tool).toBeDefined();
-    expect(tool.name).toBe("anchor_grep");
+    expect(tool.name).toBe("grep");
   });
 
   it("returns matching lines with the same anchors as read", async () => {
     await withTempFile("sample.ts", "alpha\nbeta\ngamma\n", async ({ cwd }) => {
       const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
-      const grepTool = getTool("anchor_grep");
+      const grepTool = getTool("grep");
       const readResult = await readTool.execute("r1", { path: "sample.ts" }, undefined, undefined, ctx);
       const readHash = extractHash(getText(readResult).split("\n").find((l) => l.includes("│beta"))!);
 
@@ -49,7 +49,7 @@ describe("grep tool", () => {
   it("serves grep anchors so a replace edits immediately", async () => {
     await withTempFile("sample.ts", "alpha\nbeta\ngamma\n", async ({ cwd, path }) => {
       const { ctx, getTool } = setupIntegrationTest(cwd);
-      const grepTool = getTool("anchor_grep");
+      const grepTool = getTool("grep");
       const editTool = getTool("replace");
 
       const result = await grepTool.execute(
@@ -75,7 +75,7 @@ describe("grep tool", () => {
       await readTool.execute("r1", { path: "sample.ts" }, undefined, undefined, ctx);
       await writeFile(path, "alpha\nBETA-EXTERNAL\ngamma\n", "utf-8");
 
-      const grepTool = getTool("anchor_grep");
+      const grepTool = getTool("grep");
       const result = await grepTool.execute(
         "g1",
         { pattern: "BETA-EXTERNAL", path: "sample.ts" },
@@ -99,7 +99,7 @@ describe("grep tool", () => {
       await readTool.execute("r1", { path: "sample.ts" }, undefined, undefined, ctx);
       await writeFile(path, "alpha\nbeta\ngamma\n", "utf-8");
 
-      const grepTool = getTool("anchor_grep");
+      const grepTool = getTool("grep");
       const result = await grepTool.execute(
         "g1",
         { pattern: "gamma", path: "sample.ts" },
@@ -120,7 +120,7 @@ describe("grep tool", () => {
   it("does not persist hash snapshots while searching", async () => {
     await withTempFile("sample.ts", "alpha\nbeta\n", async ({ cwd }) => {
       const { ctx, getTool } = setupIntegrationTest(cwd);
-      const grepTool = getTool("anchor_grep");
+      const grepTool = getTool("grep");
 
       await grepTool.execute(
         "g1",
@@ -138,7 +138,7 @@ describe("grep tool", () => {
   it("includes context lines with anchors", async () => {
     await withTempFile("sample.ts", "alpha\nbeta\ngamma\ndelta\n", async ({ cwd }) => {
       const { ctx, getTool } = setupIntegrationTest(cwd);
-      const grepTool = getTool("anchor_grep");
+      const grepTool = getTool("grep");
 
       const result = await grepTool.execute(
         "g1",
@@ -156,7 +156,7 @@ describe("grep tool", () => {
   it("matches regex patterns by default and literals with literal", async () => {
     await withTempFile("sample.ts", "axb\n", async ({ cwd }) => {
       const { ctx, getTool } = setupIntegrationTest(cwd);
-      const grepTool = getTool("anchor_grep");
+      const grepTool = getTool("grep");
 
       const regexResult = await grepTool.execute(
         "g1",
@@ -177,7 +177,7 @@ describe("grep tool", () => {
   it("accepts nested quantified regexes through ripgrep's linear engine", async () => {
     await withTempFile("sample.ts", `${"a".repeat(10_000)}!\n`, async ({ cwd }) => {
       const { ctx, getTool } = setupIntegrationTest(cwd);
-      const grepTool = getTool("anchor_grep");
+      const grepTool = getTool("grep");
 
       const result = await grepTool.execute("g1", { pattern: "(a+)+!", path: "sample.ts" }, undefined, undefined, ctx);
       const metrics = (result as { details?: { metrics?: { matches?: number } } }).details?.metrics;
@@ -189,7 +189,7 @@ describe("grep tool", () => {
   it("rejects regex backreferences but permits the same text literally", async () => {
     await withTempFile("sample.ts", "(a+)\\1\n", async ({ cwd }) => {
       const { ctx, getTool } = setupIntegrationTest(cwd);
-      const grepTool = getTool("anchor_grep");
+      const grepTool = getTool("grep");
 
       expect(await toolError(() => grepTool.execute("g1", { pattern: "(a+)\\1", path: "sample.ts" }, undefined, undefined, ctx))).toContain("[E_GREP_FAILED]");
 
@@ -205,7 +205,7 @@ describe("grep tool", () => {
   it("accepts multiple variable quantifiers that ripgrep evaluates in linear time", async () => {
     await withTempFile("sample.ts", "aaab\n", async ({ cwd }) => {
       const { ctx, getTool } = setupIntegrationTest(cwd);
-      const grepTool = getTool("anchor_grep");
+      const grepTool = getTool("grep");
 
       const result = await grepTool.execute("g1", { pattern: "a*a*a*b", path: "sample.ts" }, undefined, undefined, ctx);
       expect(getText(result)).toContain("│aaab");
@@ -215,7 +215,7 @@ describe("grep tool", () => {
   it("supports case-insensitive search", async () => {
     await withTempFile("sample.ts", "ALPHA\n", async ({ cwd }) => {
       const { ctx, getTool } = setupIntegrationTest(cwd);
-      const grepTool = getTool("anchor_grep");
+      const grepTool = getTool("grep");
 
       const result = await grepTool.execute(
         "g1",
@@ -234,7 +234,7 @@ describe("grep tool", () => {
       await writeFile(join(dir, "node_modules", "pkg", "b.ts"), "needle in node_modules\n", "utf-8");
 
       const { ctx, getTool } = setupIntegrationTest(dir);
-      const grepTool = getTool("anchor_grep");
+      const grepTool = getTool("grep");
       const result = await grepTool.execute(
         "g1",
         { pattern: "needle" },
@@ -266,7 +266,7 @@ async function withSystemTempDir(prefix: string, run: (dir: string) => Promise<v
       await writeFile(join(dir, "ok.ts"), "needle in root\n", "utf-8");
 
       const { ctx, getTool } = setupIntegrationTest(dir);
-      const grepTool = getTool("anchor_grep");
+      const grepTool = getTool("grep");
       const result = await grepTool.execute(
         "g1",
         { pattern: "needle" },
@@ -285,7 +285,7 @@ async function withSystemTempDir(prefix: string, run: (dir: string) => Promise<v
       await writeFile(join(dir, "ok.ts"), "needle in root\n", "utf-8");
 
       const { ctx, getTool } = setupIntegrationTest(dir);
-      const grepTool = getTool("anchor_grep");
+      const grepTool = getTool("grep");
       const result = await grepTool.execute(
         "g1",
         { pattern: "needle" },
@@ -305,7 +305,7 @@ async function withSystemTempDir(prefix: string, run: (dir: string) => Promise<v
       await writeFile(join(dir, ".gitignore"), "node_modules\n", "utf-8");
 
       const { ctx, getTool } = setupIntegrationTest(dir);
-      const grepTool = getTool("anchor_grep");
+      const grepTool = getTool("grep");
       const result = await grepTool.execute(
         "g1",
         { pattern: "needle" },
@@ -324,7 +324,7 @@ async function withSystemTempDir(prefix: string, run: (dir: string) => Promise<v
       await writeFile(join(dir, "img.png"), png);
 
       const { ctx, getTool } = setupIntegrationTest(dir);
-      const grepTool = getTool("anchor_grep");
+      const grepTool = getTool("grep");
       const result = await grepTool.execute(
         "g1",
         { pattern: "needle" },
@@ -339,7 +339,7 @@ async function withSystemTempDir(prefix: string, run: (dir: string) => Promise<v
   it("caps matches at the limit with a hint", async () => {
     await withTempFile("sample.ts", Array.from({ length: 20 }, (_, i) => `line ${i}`).join("\n") + "\n", async ({ cwd }) => {
       const { ctx, getTool } = setupIntegrationTest(cwd);
-      const grepTool = getTool("anchor_grep");
+      const grepTool = getTool("grep");
 
       const result = await grepTool.execute(
         "g1",
@@ -359,7 +359,7 @@ async function withSystemTempDir(prefix: string, run: (dir: string) => Promise<v
       await writeFile(join(dir, "b.txt"), "needle\n", "utf-8");
 
       const { ctx, getTool } = setupIntegrationTest(dir);
-      const grepTool = getTool("anchor_grep");
+      const grepTool = getTool("grep");
       const result = await grepTool.execute(
         "g1",
         { pattern: "needle", glob: "*.ts" },
@@ -378,7 +378,7 @@ async function withSystemTempDir(prefix: string, run: (dir: string) => Promise<v
       await writeFile(join(dir, "top.spec.ts"), "needle\n", "utf-8");
 
       const { ctx, getTool } = setupIntegrationTest(dir);
-      const grepTool = getTool("anchor_grep");
+      const grepTool = getTool("grep");
       const result = await grepTool.execute(
         "g1",
         { pattern: "needle", glob: "*.ts" },
@@ -398,7 +398,7 @@ async function withSystemTempDir(prefix: string, run: (dir: string) => Promise<v
       await writeFile(join(dir, "c.ts"), "needle\n", "utf-8");
 
       const { ctx, getTool } = setupIntegrationTest(dir);
-      const grepTool = getTool("anchor_grep");
+      const grepTool = getTool("grep");
       const result = await grepTool.execute(
         "g1",
         { pattern: "needle", path: "lib", glob: "*.ts" },
@@ -418,7 +418,7 @@ async function withSystemTempDir(prefix: string, run: (dir: string) => Promise<v
       await writeFile(join(dir, "b.ts"), "needle\n", "utf-8");
 
       const { ctx, getTool } = setupIntegrationTest(dir);
-      const grepTool = getTool("anchor_grep");
+      const grepTool = getTool("grep");
       const result = await grepTool.execute(
         "g1",
         { pattern: "needle", glob: "/src/*.ts" },
@@ -437,7 +437,7 @@ async function withSystemTempDir(prefix: string, run: (dir: string) => Promise<v
       await writeFile(join(dir, "src", "other.ts"), "needle\n", "utf-8");
 
       const { ctx, getTool } = setupIntegrationTest(dir);
-      const grepTool = getTool("anchor_grep");
+      const grepTool = getTool("grep");
       const result = await grepTool.execute(
         "g1",
         { pattern: "needle", path: "src", glob: "/src/*.ts" },
@@ -456,7 +456,7 @@ async function withSystemTempDir(prefix: string, run: (dir: string) => Promise<v
       await writeFile(join(dir, "lib", "deep", "b.ts"), "needle\n", "utf-8");
 
       const { ctx, getTool } = setupIntegrationTest(dir);
-      const grepTool = getTool("anchor_grep");
+      const grepTool = getTool("grep");
       const result = await grepTool.execute(
         "g1",
         { pattern: "needle", path: "lib", glob: "lib/*.ts" },
@@ -474,7 +474,7 @@ async function withSystemTempDir(prefix: string, run: (dir: string) => Promise<v
       await writeFile(join(dir, "lib", "deep", "b.ts"), "needle\n", "utf-8");
 
       const { ctx, getTool } = setupIntegrationTest(dir);
-      const grepTool = getTool("anchor_grep");
+      const grepTool = getTool("grep");
       const result = await grepTool.execute(
         "g1",
         { pattern: "needle", path: "lib", glob: "deep/*.ts" },
@@ -492,7 +492,7 @@ async function withSystemTempDir(prefix: string, run: (dir: string) => Promise<v
       await writeFile(join(dir, "top.spec.ts"), "needle\n", "utf-8");
 
       const { ctx, getTool } = setupIntegrationTest(dir);
-      const grepTool = getTool("anchor_grep");
+      const grepTool = getTool("grep");
       const result = await grepTool.execute(
         "g1",
         { pattern: "needle", glob: "**/*.ts" },
@@ -510,7 +510,7 @@ async function withSystemTempDir(prefix: string, run: (dir: string) => Promise<v
       await writeFile(join(dir, "huge.ts"), Array.from({ length: 240000 }, (_, i) => `line ${i}`).join("\n"), "utf-8");
 
       const { ctx, getTool } = setupIntegrationTest(dir);
-      const grepTool = getTool("anchor_grep");
+      const grepTool = getTool("grep");
       const result = await grepTool.execute(
         "g1",
         { pattern: "needle" },
@@ -529,7 +529,7 @@ async function withSystemTempDir(prefix: string, run: (dir: string) => Promise<v
       const lines = Array.from({ length: 2500 }, (_, i) => (i % 3 === 0 ? "m" : "s"));
       await writeFile(join(dir, "many.txt"), lines.join("\n") + "\n", "utf-8");
       const { ctx, getTool } = setupIntegrationTest(dir);
-      const grepTool = getTool("anchor_grep");
+      const grepTool = getTool("grep");
       const result = await grepTool.execute(
         "g1",
         { pattern: "m", path: "many.txt", context: 2, limit: 1000 },
@@ -544,7 +544,7 @@ async function withSystemTempDir(prefix: string, run: (dir: string) => Promise<v
   it("reports no matches", async () => {
     await withTempFile("sample.ts", "alpha\nbeta\n", async ({ cwd }) => {
       const { ctx, getTool } = setupIntegrationTest(cwd);
-      const grepTool = getTool("anchor_grep");
+      const grepTool = getTool("grep");
       const result = await grepTool.execute(
         "g1",
         { pattern: "zzz", path: "sample.ts" },
@@ -558,7 +558,7 @@ async function withSystemTempDir(prefix: string, run: (dir: string) => Promise<v
   it("rejects an invalid pattern", async () => {
     await withTempFile("sample.ts", "alpha\n", async ({ cwd }) => {
       const { ctx, getTool } = setupIntegrationTest(cwd);
-      const grepTool = getTool("anchor_grep");
+      const grepTool = getTool("grep");
       expect(await toolError(() => grepTool.execute("g1", { pattern: "(", path: "sample.ts" }, undefined, undefined, ctx))).toMatch(/E_BAD_SHAPE/);
     });
   });
@@ -566,7 +566,7 @@ async function withSystemTempDir(prefix: string, run: (dir: string) => Promise<v
   it("rejects a malformed glob with a coded error", async () => {
     await withTempFile("sample.ts", "alpha\n", async ({ cwd }) => {
       const { ctx, getTool } = setupIntegrationTest(cwd);
-      const grepTool = getTool("anchor_grep");
+      const grepTool = getTool("grep");
       expect(await toolError(() => grepTool.execute("g1", { pattern: "alpha", path: "sample.ts", glob: "[z-a].ts" }, undefined, undefined, ctx))).toMatch(/\[E_BAD_SHAPE\] Invalid glob pattern/);
     });
   });
@@ -574,7 +574,7 @@ async function withSystemTempDir(prefix: string, run: (dir: string) => Promise<v
   it("codes a regex ripgrep rejects but JavaScript accepts", async () => {
     await withTempFile("sample.ts", "alpha\n", async ({ cwd }) => {
       const { ctx, getTool } = setupIntegrationTest(cwd);
-      const grepTool = getTool("anchor_grep");
+      const grepTool = getTool("grep");
       expect(await toolError(() => grepTool.execute("g1", { pattern: "(?=a)a", path: "sample.ts" }, undefined, undefined, ctx))).toMatch(/\[E_GREP_FAILED\] ripgrep exited with code 2/);
     });
   });
@@ -582,7 +582,7 @@ async function withSystemTempDir(prefix: string, run: (dir: string) => Promise<v
   it("rejects a missing path", async () => {
     await withTempFile("sample.ts", "alpha\n", async ({ cwd }) => {
       const { ctx, getTool } = setupIntegrationTest(cwd);
-      const grepTool = getTool("anchor_grep");
+      const grepTool = getTool("grep");
       expect(await toolError(() => grepTool.execute("g1", { pattern: "alpha", path: "missing.ts" }, undefined, undefined, ctx))).toMatch(/E_NOT_FOUND/);
     });
   });
@@ -590,14 +590,14 @@ async function withSystemTempDir(prefix: string, run: (dir: string) => Promise<v
   it("rejects the file_path alias", async () => {
     await withTempFile("sample.ts", "alpha\n", async ({ cwd }) => {
       const { ctx, getTool } = setupIntegrationTest(cwd);
-      const grepTool = getTool("anchor_grep");
+      const grepTool = getTool("grep");
       expect(await toolError(() => grepTool.execute("g1", { file_path: "sample.ts", pattern: "alpha" }, undefined, undefined, ctx))).toContain("[E_BAD_SHAPE]");
     });
   });
   it("names unknown fields instead of a generic schema error", async () => {
     await withTempFile("sample.ts", "alpha\n", async ({ cwd }) => {
       const { ctx, getTool } = setupIntegrationTest(cwd);
-      const grepTool = getTool("anchor_grep");
+      const grepTool = getTool("grep");
       expect(await toolError(() => grepTool.execute("g1", { pattern: "alpha", path: "sample.ts", unknown_field: "x" } as any, undefined, undefined, ctx))).toMatch(/unknown or unsupported fields: unknown_field/);
     });
   });
@@ -606,7 +606,7 @@ async function withSystemTempDir(prefix: string, run: (dir: string) => Promise<v
     const longLine = "const x = '" + "a".repeat(10000) + "';";
     await withTempFile("min.js", longLine + "\n", async ({ cwd, path }) => {
       const { ctx, getTool } = setupIntegrationTest(cwd);
-      const grepTool = getTool("anchor_grep");
+      const grepTool = getTool("grep");
       const editTool = getTool("replace");
       const result = await grepTool.execute("g1", { pattern: "const x", path: "min.js" }, undefined, undefined, ctx);
       const text = getText(result);
@@ -633,7 +633,7 @@ async function withSystemTempDir(prefix: string, run: (dir: string) => Promise<v
     const big = "a".repeat(60_000) + "NEEDLE" + "b".repeat(60_000);
     await withTempFile("bigline.txt", big + "\n", async ({ cwd }) => {
       const { ctx, getTool } = setupIntegrationTest(cwd);
-      const grepTool = getTool("anchor_grep");
+      const grepTool = getTool("grep");
       const result = await grepTool.execute("g1", { pattern: "NEEDLE", path: "bigline.txt" }, undefined, undefined, ctx);
       const text = getText(result);
       const row = text.split("\n").find((l) => /[A-Za-z]{4}│/.test(l))!;
@@ -649,7 +649,7 @@ async function withSystemTempDir(prefix: string, run: (dir: string) => Promise<v
     const lines = Array.from({ length: 700 }, (_, i) => `line ${i} ` + "x".repeat(90));
     await withTempFile("wide.txt", lines.join("\n") + "\n", async ({ cwd }) => {
       const { ctx, getTool } = setupIntegrationTest(cwd);
-      const grepTool = getTool("anchor_grep");
+      const grepTool = getTool("grep");
       const result = await grepTool.execute("g1", { pattern: "^line", path: "wide.txt", limit: 1000 }, undefined, undefined, ctx);
       const text = getText(result);
       expect(text).toContain("output truncated at 2000 rows or 50.0KB");
@@ -667,7 +667,7 @@ async function withSystemTempDir(prefix: string, run: (dir: string) => Promise<v
     const huge = "y".repeat(2 * 1024 * 1024);
     await withTempFile("huge.txt", `needle\n${huge}\n`, async ({ cwd }) => {
       const { ctx, getTool } = setupIntegrationTest(cwd);
-      const grepTool = getTool("anchor_grep");
+      const grepTool = getTool("grep");
       const started = Date.now();
       const result = await grepTool.execute("g1", { pattern: "needle", path: "huge.txt", context: 1 }, undefined, undefined, ctx);
       expect(Date.now() - started).toBeLessThan(10000);
@@ -682,7 +682,7 @@ async function withSystemTempDir(prefix: string, run: (dir: string) => Promise<v
     const huge = "z".repeat(2 * 1024 * 1024);
     await withTempFile("huge2.txt", `${huge}\n`, async ({ cwd }) => {
       const { ctx, getTool } = setupIntegrationTest(cwd);
-      const grepTool = getTool("anchor_grep");
+      const grepTool = getTool("grep");
       const started = Date.now();
       const result = await grepTool.execute("g1", { pattern: "z", path: "huge2.txt" }, undefined, undefined, ctx);
       expect(Date.now() - started).toBeLessThan(10000);
@@ -694,7 +694,7 @@ async function withSystemTempDir(prefix: string, run: (dir: string) => Promise<v
   it("accepts huge quantifiers that ripgrep evaluates in linear time", async () => {
     await withTempFile("huge2.txt", "z\n", async ({ cwd }) => {
       const { ctx, getTool } = setupIntegrationTest(cwd);
-      const grepTool = getTool("anchor_grep");
+      const grepTool = getTool("grep");
       const result = await grepTool.execute("g1", { pattern: "z{1000000}", path: "huge2.txt" }, undefined, undefined, ctx);
       expect(getText(result)).toBe("No matches found.");
     });
@@ -704,7 +704,7 @@ async function withSystemTempDir(prefix: string, run: (dir: string) => Promise<v
     const line = "😀".repeat(300) + "needleX";
     await withTempFile("emoji.txt", line + "\n", async ({ cwd }) => {
       const { ctx, getTool } = setupIntegrationTest(cwd);
-      const grepTool = getTool("anchor_grep");
+      const grepTool = getTool("grep");
       const result = await grepTool.execute("g1", { pattern: "needleX", path: "emoji.txt" }, undefined, undefined, ctx);
       const row = getText(result).split("\n").find((l) => /[A-Za-z]{4}│/.test(l))!;
       expect(row.isWellFormed()).toBe(true);
@@ -717,7 +717,7 @@ async function withSystemTempDir(prefix: string, run: (dir: string) => Promise<v
     const lines = Array.from({ length: 300 }, () => "x".repeat(600));
     await withTempFile("many.txt", lines.join("\n") + "\n", async ({ cwd }) => {
       const { ctx, getTool } = setupIntegrationTest(cwd);
-      const grepTool = getTool("anchor_grep");
+      const grepTool = getTool("grep");
       const result = await grepTool.execute("g1", { pattern: "x{600}", path: "many.txt", limit: 1000 }, undefined, undefined, ctx);
       const text = getText(result);
       const rowsShown = text.split("\n").filter((l) => /[A-Za-z]{4}│/.test(l)).length;
@@ -738,7 +738,7 @@ async function withSystemTempDir(prefix: string, run: (dir: string) => Promise<v
       await writeFile(join(dir, "a.txt"), a, "utf-8");
       await writeFile(join(dir, "b.txt"), b, "utf-8");
       const { ctx, getTool } = setupIntegrationTest(dir);
-      const grepTool = getTool("anchor_grep");
+      const grepTool = getTool("grep");
       const result = await grepTool.execute("g1", { pattern: "x{600}", limit: 1000 }, undefined, undefined, ctx);
       const details = result.details as { truncation: { totalLines: number; totalBytes: number }; metrics: { matches: number } };
       expect(details.truncation.totalLines).toBe(300);
@@ -751,7 +751,7 @@ async function withSystemTempDir(prefix: string, run: (dir: string) => Promise<v
     const line = "a".repeat(300) + "NEEDLE1234" + "b".repeat(300);
     await withTempFile("wide2.txt", line + "\n", async ({ cwd }) => {
       const { ctx, getTool } = setupIntegrationTest(cwd);
-      const grepTool = getTool("anchor_grep");
+      const grepTool = getTool("grep");
       const result = await grepTool.execute("g1", { pattern: "NEEDLE1234", path: "wide2.txt" }, undefined, undefined, ctx);
       const rows = getText(result).split("\n").filter((l) => /[A-Za-z]{4}│/.test(l));
       expect(rows).toHaveLength(1);
@@ -765,7 +765,7 @@ async function withSystemTempDir(prefix: string, run: (dir: string) => Promise<v
     const wide = "c".repeat(1000);
     await withTempFile("wide3.txt", `needle\n${wide}\n`, async ({ cwd }) => {
       const { ctx, getTool } = setupIntegrationTest(cwd);
-      const grepTool = getTool("anchor_grep");
+      const grepTool = getTool("grep");
       const result = await grepTool.execute("g1", { pattern: "needle", path: "wide3.txt", context: 1 }, undefined, undefined, ctx);
       const rows = getText(result).split("\n").filter((l) => /[A-Za-z]{4}│/.test(l));
       expect(rows).toHaveLength(2);
@@ -782,7 +782,7 @@ async function withSystemTempDir(prefix: string, run: (dir: string) => Promise<v
       await writeFile(join(dir, "a.txt"), a, "utf-8");
       await writeFile(join(dir, "b.txt"), b, "utf-8");
       const { ctx, getTool } = setupIntegrationTest(dir);
-      const grepTool = getTool("anchor_grep");
+      const grepTool = getTool("grep");
       const result = await grepTool.execute("g1", { pattern: "x{600}", limit: 300 }, undefined, undefined, ctx);
       const details = result.details as { truncation: { totalLines: number }; metrics: { matches: number; truncated: boolean } };
       expect(details.metrics.matches).toBe(300);
@@ -793,7 +793,7 @@ async function withSystemTempDir(prefix: string, run: (dir: string) => Promise<v
   });
 });
 
-describe("anchor_grep display", () => {
+describe("grep display", () => {
   const theme = {
     fg: (_area: string, text: string) => text,
     bold: (text: string) => text,
@@ -803,7 +803,7 @@ describe("anchor_grep display", () => {
   it("registers renderCall and renderResult", async () => {
     const { pi, getTool } = makeFakePiRegistry();
     register(pi);
-    const tool = getTool("anchor_grep");
+    const tool = getTool("grep");
     expect(typeof tool.renderCall).toBe("function");
     expect(typeof tool.renderResult).toBe("function");
   });
@@ -813,7 +813,7 @@ describe("anchor_grep display", () => {
     expect(fmtGrepCall({ pattern: "beta", path: "src" }, theme)).toContain("beta");
     expect(fmtGrepCall({ pattern: "beta", path: "src" }, theme)).toContain("src");
     expect(fmtGrepCall({ pattern: "beta", glob: "*.ts", literal: true }, theme)).toContain("*.ts");
-    expect(fmtGrepCall(undefined, theme)).toContain("anchor_grep");
+    expect(fmtGrepCall(undefined, theme)).toContain("grep");
   });
 
   it("renderResult shows hits without a summary line", async () => {

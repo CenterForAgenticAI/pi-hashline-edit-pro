@@ -47,7 +47,7 @@ vi.mock("node:child_process", async (importOriginal) => {
 
 function runGrep(dir: string, pattern: string): Promise<{ content: readonly unknown[]; isError?: boolean }> {
   const { ctx, getTool } = setupIntegrationTest(dir);
-  return getTool("anchor_grep").execute("g1", { pattern, path: "sample.txt" }, undefined, undefined, ctx);
+  return getTool("grep").execute("g1", { pattern, path: "sample.txt" }, undefined, undefined, ctx);
 }
 
 beforeEach(() => {
@@ -56,7 +56,7 @@ beforeEach(() => {
   state.onSpawn = null;
 });
 
-describe("anchor_grep ripgrep failure contract", () => {
+describe("grep ripgrep failure contract", () => {
   it("codes a spawn failure as [E_GREP_FAILED]", async () => {
     await withTempDir("grep-rg-spawn-", async (dir) => {
       await writeFile(join(dir, "sample.txt"), "alpha\n", "utf-8");
@@ -87,7 +87,7 @@ describe("anchor_grep ripgrep failure contract", () => {
         const spawned = new Promise<void>((resolve) => {
           state.onSpawn = resolve;
         });
-        const pending = getTool("anchor_grep")
+        const pending = getTool("grep")
           .execute("g1", { pattern: "alpha", path: "sample.txt" }, undefined, undefined, ctx)
           .then((result: { content: readonly unknown[] }) => {
             const first = result.content[0] as { text?: string } | undefined;

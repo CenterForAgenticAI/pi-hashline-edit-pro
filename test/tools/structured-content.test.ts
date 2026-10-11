@@ -36,7 +36,7 @@ function structured(result: { structuredContent?: unknown }): Structured {
 describe("structuredContent for read and replace", () => {
 	it("declares outputSchema on all eight tools", () => {
 		const { getTool } = setupIntegrationTest("/tmp");
-		for (const name of ["read", "replace", "replace_match", "insert", "copy", "move", "anchor_grep", "undo_last_change"]) {
+		for (const name of ["read", "replace", "replace_match", "insert", "copy", "move", "grep", "undo_last_change"]) {
 			expect(getTool(name).outputSchema).toBeDefined();
 		}
 	});
@@ -268,10 +268,10 @@ describe("structuredContent for read and replace", () => {
 		});
 	});
 
-	it("anchor_grep returns structured results and a structured error", async () => {
+	it("grep returns structured results and a structured error", async () => {
 		await withTempFile("sample.ts", "alpha\nbeta\n", async ({ cwd }) => {
 			const { getTool, ctx } = setupIntegrationTest(cwd);
-			const result = await getTool("anchor_grep").execute("g1", { pattern: "alpha", path: "sample.ts", context: 1 }, undefined, undefined, ctx);
+			const result = await getTool("grep").execute("g1", { pattern: "alpha", path: "sample.ts", context: 1 }, undefined, undefined, ctx);
 			const sc = structured(result);
 			expect(sc.ok).toBe(true);
 			expect(sc.kind).toBe("grep");
@@ -287,7 +287,7 @@ describe("structuredContent for read and replace", () => {
 			for (const line of file.lines) {
 				expect(line.rendered).toBe(`${line.anchor}│${line.text}`);
 			}
-			const unsupported = await getTool("anchor_grep").execute("g2", { pattern: "(\\w)\\1", path: "sample.ts" }, undefined, undefined, ctx);
+			const unsupported = await getTool("grep").execute("g2", { pattern: "(\\w)\\1", path: "sample.ts" }, undefined, undefined, ctx);
 			expect(structured(unsupported).error!.code).toBe("E_GREP_FAILED");
 		});
 	});

@@ -1,5 +1,5 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { formatSize, DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES, type TruncationResult } from "@earendil-works/pi-coding-agent";
+import { formatSize, DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES, createGrepToolDefinition, type TruncationResult } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { stat } from "node:fs/promises";
 import { dirname, isAbsolute, join, win32 } from "node:path";
@@ -408,7 +408,7 @@ export function fmtGrepCall(args: { pattern?: unknown; path?: unknown; glob?: un
   if (args?.ignoreCase === true) qualifiers.push("case-insensitive");
   if (typeof args?.context === "number") qualifiers.push(`context ${args.context}`);
   if (typeof args?.limit === "number") qualifiers.push(`limit ${args.limit}`);
-  let text = `${theme.fg("toolTitle", theme.bold("anchor_grep"))} ${pattern}`;
+  let text = `${theme.fg("toolTitle", theme.bold("grep"))} ${pattern}`;
   if (qualifiers.length > 0) text += ` ${theme.fg("dim", qualifiers.join(" "))}`;
   return text;
 }
@@ -474,8 +474,8 @@ export function regGrep(pi: ExtensionAPI, flags: EditToolFlags = DEFAULT_EDIT_FL
     guidelines: loadGuide("../tool-prompts/grep-guidelines.md"),
   }, flags);
   pi.registerTool({
-    name: "anchor_grep",
-    label: "Anchor Grep",
+    name: "grep",
+    label: "Grep",
     description: prompted.description,
     promptSnippet: prompted.snippet,
     promptGuidelines: prompted.guidelines,
@@ -678,4 +678,8 @@ export function regGrep(pi: ExtensionAPI, flags: EditToolFlags = DEFAULT_EDIT_FL
       }));
     },
   });
+}
+
+export function regVanillaGrep(pi: ExtensionAPI, cwd: string): void {
+  pi.registerTool(createGrepToolDefinition(cwd));
 }

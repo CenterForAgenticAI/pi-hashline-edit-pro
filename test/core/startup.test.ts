@@ -98,7 +98,7 @@ describe("grep huge quantifier", () => {
       const { pi } = makePiStub();
       const { default: register } = await import("../../index");
       register(pi);
-      const grepTool = getTool("anchor_grep");
+      const grepTool = getTool("grep");
       const result = await grepTool.execute("g1", { pattern: "z{1000000}", path: dir }, undefined, undefined, { cwd: dir, signal: undefined } as unknown as never);
       expect(result.content[0]?.text).toBe("No matches found.");
     });
@@ -106,21 +106,21 @@ describe("grep huge quantifier", () => {
 });
 
 
-describe("anchor_grep default", () => {
-  it("session_start keeps anchor_grep by default and disables the built-in grep", async () => {
+describe("grep default", () => {
+  it("session_start keeps grep by default and disables the built-in grep", async () => {
     await withTempDir("startup-grep-on-", async dir => {
       const home = join(dir, "home");
       await mkdir(join(home, ".config", "pi-hashline-edit-pro"), { recursive: true });
       vi.stubEnv("HOME", home);
       vi.stubEnv("XDG_CONFIG_HOME", "");
       try {
-        const { pi, handlers, getActive } = makePiStub(["read", "replace", "insert", "grep", "anchor_grep", "undo_last_change", "edit"]);
+        const { pi, handlers, getActive } = makePiStub(["read", "replace", "insert", "grep", "grep", "undo_last_change", "edit"]);
         const { default: register } = await import("../../index");
         register(pi);
         const sessionStart = handlers.get("session_start") as (a: unknown, b: unknown) => Promise<void>;
         await sessionStart({}, { cwd: dir, ui: { notify: vi.fn() } });
         expect(getActive()).not.toContain("grep");
-        expect(getActive()).toContain("anchor_grep");
+        expect(getActive()).toContain("grep");
         expect(getActive()).not.toContain("edit");
         expect(getActive()).toContain("read");
       } finally {
@@ -131,7 +131,7 @@ describe("anchor_grep default", () => {
     });
   });
 
-  it("session_start keeps anchor_grep and disables the built-in grep when anchorGrepEnabled is true", async () => {
+  it("session_start keeps grep and disables the built-in grep when anchorGrepEnabled is true", async () => {
     await withTempDir("startup-grep-off-", async dir => {
       const home = join(dir, "home");
       await mkdir(join(home, ".config", "pi-hashline-edit-pro"), { recursive: true });
@@ -143,13 +143,13 @@ describe("anchor_grep default", () => {
           join(home, ".config", "pi-hashline-edit-pro", "config.json"),
           JSON.stringify({ autoRead: true, anchorGrepEnabled: true }),
         );
-        const { pi, handlers, getActive } = makePiStub(["read", "replace", "insert", "grep", "anchor_grep", "undo_last_change", "edit"]);
+        const { pi, handlers, getActive } = makePiStub(["read", "replace", "insert", "grep", "grep", "undo_last_change", "edit"]);
         const { default: register } = await import("../../index");
         register(pi);
         const sessionStart = handlers.get("session_start") as (a: unknown, b: unknown) => Promise<void>;
         await sessionStart({}, { cwd: dir, ui: { notify: vi.fn() } });
         expect(getActive()).not.toContain("grep");
-        expect(getActive()).toContain("anchor_grep");
+        expect(getActive()).toContain("grep");
         expect(getActive()).not.toContain("edit");
       } finally {
         vi.unstubAllEnvs();
@@ -159,20 +159,20 @@ describe("anchor_grep default", () => {
     });
   });
 
-  it("hashline-config toggles anchor_grep and the built-in grep", async () => {
+  it("hashline-config toggles grep and the built-in grep", async () => {
     await withTempDir("toggle-anchor-grep-", async dir => {
       const home = join(dir, "home");
       await mkdir(join(home, ".config", "pi-hashline-edit-pro"), { recursive: true });
       vi.stubEnv("HOME", home);
       vi.stubEnv("XDG_CONFIG_HOME", "");
       try {
-        const { pi, commands, handlers, getActive } = makePiStub(["read", "replace", "insert", "grep", "anchor_grep", "undo_last_change"]);
+        const { pi, commands, handlers, getActive } = makePiStub(["read", "replace", "insert", "grep", "grep", "undo_last_change"]);
         const { default: register } = await import("../../index");
         register(pi);
         const sessionStart = handlers.get("session_start") as (a: unknown, b: unknown) => Promise<void>;
         await sessionStart({}, { cwd: dir, ui: { notify: vi.fn() } });
         expect(getActive()).not.toContain("grep");
-        expect(getActive()).toContain("anchor_grep");
+        expect(getActive()).toContain("grep");
         const overlay = await openConfigOverlay(commands, dir);
         overlay.handleInput("j");
         overlay.handleInput("j");
@@ -180,12 +180,12 @@ describe("anchor_grep default", () => {
         overlay.handleInput("j");
         overlay.handleInput("j");
         overlay.handleInput(" ");
-        await waitForConfig(async () => (await readConfig()).anchorGrepEnabled === false && !getActive().includes("anchor_grep") && getActive().includes("grep"));
-        expect(getActive()).not.toContain("anchor_grep");
+        await waitForConfig(async () => (await readConfig()).anchorGrepEnabled === false && !getActive().includes("grep") && getActive().includes("grep"));
+        expect(getActive()).not.toContain("grep");
         expect(getActive()).toContain("grep");
         overlay.handleInput(" ");
-        await waitForConfig(async () => (await readConfig()).anchorGrepEnabled === true && getActive().includes("anchor_grep") && !getActive().includes("grep"));
-        expect(getActive()).toContain("anchor_grep");
+        await waitForConfig(async () => (await readConfig()).anchorGrepEnabled === true && getActive().includes("grep") && !getActive().includes("grep"));
+        expect(getActive()).toContain("grep");
         expect(getActive()).not.toContain("grep");
       } finally {
         vi.unstubAllEnvs();
@@ -202,13 +202,13 @@ describe("anchor_grep default", () => {
       vi.stubEnv("HOME", home);
       vi.stubEnv("XDG_CONFIG_HOME", "");
       try {
-        const { pi, commands, handlers, getActive } = makePiStub(["read", "replace", "insert", "anchor_grep", "undo_last_change"]);
+        const { pi, commands, handlers, getActive } = makePiStub(["read", "replace", "insert", "grep", "undo_last_change"]);
         const { default: register } = await import("../../index");
         register(pi);
         const sessionStart = handlers.get("session_start") as (a: unknown, b: unknown) => Promise<void>;
         await sessionStart({}, { cwd: dir, ui: { notify: vi.fn() } });
         expect(getActive()).not.toContain("grep");
-        expect(getActive()).toContain("anchor_grep");
+        expect(getActive()).toContain("grep");
         const overlay = await openConfigOverlay(commands, dir);
         overlay.handleInput("j");
         overlay.handleInput("j");
@@ -216,12 +216,12 @@ describe("anchor_grep default", () => {
         overlay.handleInput("j");
         overlay.handleInput("j");
         overlay.handleInput(" ");
-        await waitForConfig(async () => (await readConfig()).anchorGrepEnabled === false && !getActive().includes("anchor_grep"));
-        expect(getActive()).not.toContain("anchor_grep");
+        await waitForConfig(async () => (await readConfig()).anchorGrepEnabled === false && !getActive().includes("grep"));
+        expect(getActive()).not.toContain("grep");
         expect(getActive()).not.toContain("grep");
         overlay.handleInput(" ");
-        await waitForConfig(async () => (await readConfig()).anchorGrepEnabled === true && getActive().includes("anchor_grep"));
-        expect(getActive()).toContain("anchor_grep");
+        await waitForConfig(async () => (await readConfig()).anchorGrepEnabled === true && getActive().includes("grep"));
+        expect(getActive()).toContain("grep");
         expect(getActive()).not.toContain("grep");
       } finally {
         vi.unstubAllEnvs();
@@ -240,7 +240,7 @@ describe("copy/move default", () => {
       vi.stubEnv("HOME", home);
       vi.stubEnv("XDG_CONFIG_HOME", "");
       try {
-        const { pi, handlers, getActive, getTool } = makePiStub(["read", "replace", "insert", "copy", "move", "anchor_grep", "undo_last_change", "edit"]);
+        const { pi, handlers, getActive, getTool } = makePiStub(["read", "replace", "insert", "copy", "move", "grep", "undo_last_change", "edit"]);
         const { default: register } = await import("../../index");
         register(pi);
         const sessionStart = handlers.get("session_start") as (a: unknown, b: unknown) => Promise<void>;
@@ -249,7 +249,7 @@ describe("copy/move default", () => {
         expect(getActive()).toContain("move");
         expect(getActive()).not.toContain("edit");
         expect(getTool("undo_last_change").description).toContain("insert, copy, or move");
-        expect(getTool("anchor_grep").description).toContain("replace, insert, copy, or move");
+        expect(getTool("grep").description).toContain("replace, insert, copy, or move");
       } finally {
         vi.unstubAllEnvs();
         const { shutdownHashStore } = await import("../../src/hash-store");
@@ -270,7 +270,7 @@ describe("copy/move default", () => {
           join(home, ".config", "pi-hashline-edit-pro", "config.json"),
           JSON.stringify({ autoRead: true, anchorGrepEnabled: true, copyMoveEnabled: false }),
         );
-        const { pi, handlers, getActive, getTool } = makePiStub(["read", "replace", "insert", "copy", "move", "anchor_grep", "undo_last_change", "edit"]);
+        const { pi, handlers, getActive, getTool } = makePiStub(["read", "replace", "insert", "copy", "move", "grep", "undo_last_change", "edit"]);
         const { default: register } = await import("../../index");
         register(pi);
         const sessionStart = handlers.get("session_start") as (a: unknown, b: unknown) => Promise<void>;
@@ -280,7 +280,7 @@ describe("copy/move default", () => {
         expect(getActive()).toContain("read");
         expect(getTool("undo_last_change").description).not.toContain("or move");
         expect(getTool("undo_last_change").description).not.toContain("copy");
-        expect(getTool("anchor_grep").description).not.toContain("copy");
+        expect(getTool("grep").description).not.toContain("copy");
       } finally {
         vi.unstubAllEnvs();
         const { shutdownHashStore } = await import("../../src/hash-store");
@@ -296,7 +296,7 @@ describe("copy/move default", () => {
       vi.stubEnv("HOME", home);
       vi.stubEnv("XDG_CONFIG_HOME", "");
       try {
-        const { pi, commands, handlers, getActive } = makePiStub(["read", "replace", "insert", "copy", "move", "anchor_grep", "undo_last_change"]);
+        const { pi, commands, handlers, getActive } = makePiStub(["read", "replace", "insert", "copy", "move", "grep", "undo_last_change"]);
         const { default: register } = await import("../../index");
         register(pi);
         const sessionStart = handlers.get("session_start") as (a: unknown, b: unknown) => Promise<void>;
@@ -380,7 +380,7 @@ describe("replace_match default", () => {
       vi.stubEnv("HOME", home);
       vi.stubEnv("XDG_CONFIG_HOME", "");
       try {
-        const { pi, commands, handlers, getActive } = makePiStub(["read", "replace", "replace_match", "insert", "anchor_grep", "undo_last_change"]);
+        const { pi, commands, handlers, getActive } = makePiStub(["read", "replace", "replace_match", "insert", "grep", "undo_last_change"]);
         const { default: register } = await import("../../index");
         register(pi);
         const sessionStart = handlers.get("session_start") as (a: unknown, b: unknown) => Promise<void>;
@@ -412,7 +412,7 @@ describe("hashline-config overlay rendering", () => {
       vi.stubEnv("XDG_CONFIG_HOME", "");
       vi.stubEnv("PI_HASHLINE_DEBUG", "1");
       try {
-        const { pi, commands, handlers } = makePiStub(["read", "replace", "insert", "grep", "anchor_grep", "undo_last_change", "edit"]);
+        const { pi, commands, handlers } = makePiStub(["read", "replace", "insert", "grep", "grep", "undo_last_change", "edit"]);
         const { default: register } = await import("../../index");
         register(pi);
         const notify = vi.fn();
@@ -453,7 +453,7 @@ describe("hashline-config overlay rendering", () => {
       vi.stubEnv("HOME", home);
       vi.stubEnv("XDG_CONFIG_HOME", "");
       try {
-        const { pi, commands, handlers, getActive } = makePiStub(["read", "replace", "insert", "grep", "anchor_grep", "undo_last_change"]);
+        const { pi, commands, handlers, getActive } = makePiStub(["read", "replace", "insert", "grep", "grep", "undo_last_change"]);
         const { default: register } = await import("../../index");
         register(pi);
         const sessionStart = handlers.get("session_start") as (a: unknown, b: unknown) => Promise<void>;
@@ -496,7 +496,7 @@ describe("hashline-config overlay rendering", () => {
         expect(config.strictInput).toBe(true);
         expect(config.diffContextLines).toBe(1);
         expect(getActive()).toContain("grep");
-        expect(getActive()).not.toContain("anchor_grep");
+        expect(getActive()).not.toContain("grep");
       } finally {
         vi.unstubAllEnvs();
         const { shutdownHashStore } = await import("../../src/hash-store");
@@ -512,7 +512,7 @@ describe("hashline-config overlay rendering", () => {
       vi.stubEnv("HOME", home);
       vi.stubEnv("XDG_CONFIG_HOME", "");
       try {
-        const { pi, commands, handlers } = makePiStub(["read", "replace", "insert", "grep", "anchor_grep", "undo_last_change"]);
+        const { pi, commands, handlers } = makePiStub(["read", "replace", "insert", "grep", "grep", "undo_last_change"]);
         const { default: register } = await import("../../index");
         register(pi);
         const sessionStart = handlers.get("session_start") as (a: unknown, b: unknown) => Promise<void>;
@@ -551,7 +551,7 @@ describe("hashline-config overlay rendering", () => {
       vi.stubEnv("XDG_CONFIG_HOME", "");
       try {
         const codex = { provider: "openai", id: "gpt-5.1-codex", api: "openai-codex-responses" };
-        const { pi, commands, handlers, getActive } = makePiStub(["read", "replace", "insert", "copy", "move", "anchor_grep", "undo_last_change", "grep"]);
+        const { pi, commands, handlers, getActive } = makePiStub(["read", "replace", "insert", "copy", "move", "grep", "undo_last_change", "grep"]);
         const { default: register } = await import("../../index");
         register(pi);
         const sessionStart = handlers.get("session_start") as (a: unknown, b: unknown) => Promise<void>;

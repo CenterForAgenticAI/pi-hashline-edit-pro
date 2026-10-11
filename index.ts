@@ -1,11 +1,11 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { createReadToolDefinition, DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES } from "@earendil-works/pi-coding-agent";
+import { createReadToolDefinition, createGrepToolDefinition, DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES } from "@earendil-works/pi-coding-agent";
 import { initHasher } from "./src/hashline";
 import { regReplaceMatch } from "./src/replace-match";
 import { regReplace } from "./src/replace";
 import { regInsert } from "./src/insert";
 import { regCopy, regMove } from "./src/copy-move";
-import { regGrep } from "./src/grep";
+import { regGrep, regVanillaGrep } from "./src/grep";
 import { regUndo, clearUndo } from "./src/replace-undo";
 import { regRead, fmtReadPreview } from "./src/read";
 import { ANCHOR_TOOL_NAMES, modelDisabled, type ModelLike } from "./src/model-gate";
@@ -67,7 +67,9 @@ export default function (pi: ExtensionAPI): void {
   let readFlavor: "anchored" | "vanilla" = "anchored";
   let readFlavorCwd: string | undefined;
   let autoReadAllInjected = false;
-  let grepWasActive = false;
+  let grepEnabled = true;
+  let grepFlavor: "anchored" | "vanilla" = "anchored";
+  let grepFlavorCwd: string | undefined;
   const baseAnchorTools = new Set<string>();
   let gateApplied = false;
 
@@ -80,7 +82,8 @@ export default function (pi: ExtensionAPI): void {
       regInsert(pi, flags);
       regCopy(pi, flags);
       regMove(pi, flags);
-      regGrep(pi, flags);
+      if (grepFlavor === "vanilla" && grepFlavorCwd !== undefined) regVanillaGrep(pi, grepFlavorCwd);
+      else regGrep(pi, flags);
       regUndo(pi, flags);
     } catch (error) {
       console.error("Failed to refresh edit tools:", error);
@@ -100,11 +103,22 @@ export default function (pi: ExtensionAPI): void {
       readFlavorCwd = undefined;
       await refreshEditTools();
     }
+    const grepFlavorWanted = grepEnabled && !gated ? "anchored" : "vanilla";
+    if (grepFlavorWanted === "vanilla") {
+      if (grepFlavor !== "vanilla" || grepFlavorCwd !== cwd) {
+        pi.registerTool(createGrepToolDefinition(cwd));
+        grepFlavor = "vanilla";
+        grepFlavorCwd = cwd;
+      }
+    } else if (grepFlavor === "vanilla") {
+      grepFlavor = "anchored";
+      grepFlavorCwd = undefined;
+      await refreshEditTools();
+    }
     if (gated) {
       const active = pi.getActiveTools().filter((tool) => tool !== "edit");
-      const gatedTools = readOnDisabledModels === "vanilla" ? ANCHOR_TOOL_NAMES.filter((tool) => tool !== "read") : ANCHOR_TOOL_NAMES;
+      const gatedTools = ANCHOR_TOOL_NAMES.filter((tool) => tool !== "grep" && (readOnDisabledModels !== "vanilla" || tool !== "read"));
       const next = active.filter((tool) => !gatedTools.includes(tool));
-      if (grepWasActive && !next.includes("grep")) next.push("grep");
       pi.setActiveTools(next);
       gateApplied = true;
       return;
@@ -122,17 +136,15 @@ export default function (pi: ExtensionAPI): void {
       if (!baseAnchorTools.has(tool)) return false;
       if (tool === "replace_match") return config.replaceMatchEnabled !== false;
       if (tool === "copy" || tool === "move") return config.copyMoveEnabled !== false;
-      if (tool === "anchor_grep") return config.anchorGrepEnabled === true;
+      if (tool === "grep") return config.anchorGrepEnabled === true;
       return true;
     });
     let next = [...new Set([...pi.getActiveTools().filter((tool) => tool !== "edit"), ...enabled])];
-    if (enabled.includes("anchor_grep") && grepWasActive) next = next.filter((tool) => tool !== "grep");
     pi.setActiveTools(next);
   }
 
   pi.on("session_start", async (_event, ctx) => withAnchorSession(ctx, async () => {
     const active = pi.getActiveTools();
-    grepWasActive = active.includes("grep");
     baseAnchorTools.clear();
     for (const tool of ANCHOR_TOOL_NAMES) {
       if (active.includes(tool)) baseAnchorTools.add(tool);
@@ -159,12 +171,14 @@ export default function (pi: ExtensionAPI): void {
     autoReadAllIgnore = config.autoReadAllIgnore ?? [];
     disableOnModels = config.disableOnModels ?? [];
     readOnDisabledModels = config.readOnDisabledModels ?? "vanilla";
+    grepEnabled = config.anchorGrepEnabled === true;
+    grepFlavor = grepEnabled ? "anchored" : "vanilla";
+    grepFlavorCwd = grepEnabled ? undefined : ctx.cwd;
     const sessionBranch = (ctx as { sessionManager?: { getBranch?: () => Array<{ type?: string; customType?: string }> } }).sessionManager?.getBranch?.() ?? [];
     autoReadAllInjected = sessionBranch.some((entry) => entry.type === "custom_message" && entry.customType === AUTO_READ_ALL_CUSTOM_TYPE);
     await refreshEditTools();
     pi.setActiveTools(
       pi.getActiveTools().filter((t) => {
-        if (config.anchorGrepEnabled ? t === "grep" : t === "anchor_grep") return false;
         if (config.copyMoveEnabled === false && (t === "copy" || t === "move")) return false;
         if (config.replaceMatchEnabled === false && t === "replace_match") return false;
         return true;
@@ -228,10 +242,11 @@ export default function (pi: ExtensionAPI): void {
             else if (key === "diffContextLines") await adjustDiffContextLines(delta ?? 1);
             else if (key === "anchorGrepEnabled") {
               const enabled = await toggleAnchorGrep();
-              const active = pi.getActiveTools();
-              pi.setActiveTools(enabled ? [...new Set([...active.filter((t) => t !== "grep"), "anchor_grep"])] : [...new Set([...active.filter((t) => t !== "anchor_grep"), ...(grepWasActive ? ["grep"] : [])])]);
-              if (enabled) baseAnchorTools.add("anchor_grep");
-              else baseAnchorTools.delete("anchor_grep");
+              grepEnabled = enabled;
+              grepFlavor = enabled ? "anchored" : "vanilla";
+              grepFlavorCwd = enabled ? undefined : ctx.cwd;
+              if (enabled) baseAnchorTools.add("grep");
+              else baseAnchorTools.delete("grep");
             }
             else if (key === "copyMoveEnabled") {
               const enabled = await toggleCopyMove();

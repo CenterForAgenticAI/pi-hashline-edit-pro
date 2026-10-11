@@ -9,15 +9,15 @@ async function registerExtension(pi: any) {
 }
 
 describe("session_start lifecycle", () => {
-  it("removes the built-in edit and grep tools while keeping anchor_grep", async () => {
+  it("removes the built-in edit and grep tools while keeping grep", async () => {
     await withTempDir("lifecycle-tools-", async (dir) => {
       const { pi, handlers } = makePiStub();
-      pi.setActiveTools(["read", "replace", "edit", "grep", "anchor_grep", "bash"]);
+      pi.setActiveTools(["read", "replace", "edit", "grep", "grep", "bash"]);
       await registerExtension(pi);
       const sessionStart = handlers.get("session_start");
       expect(sessionStart).toBeDefined();
       await sessionStart!({}, { cwd: dir, ui: { notify: vi.fn() } });
-      expect(pi.getActiveTools()).toEqual(["read", "replace", "anchor_grep", "bash"]);
+      expect(pi.getActiveTools()).toEqual(["read", "replace", "grep", "bash"]);
     });
   });
 
@@ -95,12 +95,12 @@ describe("session_start lifecycle", () => {
   });
   it("adds the codemode contract guideline only when codemode is active", async () => {
     await withTempDir("lifecycle-codemode-prompts-", async (dir) => {
-      const withCode = makePiStub(["read", "replace", "insert", "anchor_grep", "undo_last_change", "codemode"]);
+      const withCode = makePiStub(["read", "replace", "insert", "grep", "undo_last_change", "codemode"]);
       await registerExtension(withCode.pi);
       await withCode.handlers.get("session_start")!({}, { cwd: dir, ui: { notify: vi.fn() } });
       expect((withCode.getTool("read").promptGuidelines as string[]).some((g) => g.includes("failures resolve to"))).toBe(true);
 
-      const withoutCode = makePiStub(["read", "replace", "insert", "anchor_grep", "undo_last_change"]);
+      const withoutCode = makePiStub(["read", "replace", "insert", "grep", "undo_last_change"]);
       await registerExtension(withoutCode.pi);
       await withoutCode.handlers.get("session_start")!({}, { cwd: dir, ui: { notify: vi.fn() } });
       expect((withoutCode.getTool("read").promptGuidelines as string[]).some((g) => g.includes("failures resolve to"))).toBe(false);

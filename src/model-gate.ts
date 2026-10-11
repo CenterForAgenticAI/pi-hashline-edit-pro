@@ -11,7 +11,7 @@ export const ANCHOR_TOOL_NAMES: readonly string[] = [
   "insert",
   "copy",
   "move",
-  "anchor_grep",
+  "grep",
   "undo_last_change",
 ];
 

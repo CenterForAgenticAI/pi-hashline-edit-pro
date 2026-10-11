@@ -20,11 +20,11 @@ afterEach(() => {
   resetRegistryForTests();
 });
 
-describe("anchor_grep - anchor pool exhausted", () => {
+describe("grep - anchor pool exhausted", () => {
   it("reports skipped files when every match is unreadable", async () => {
     await withTempFile("sample.ts", "alpha\nbeta\ngamma\n", async ({ cwd }) => {
       const { ctx, getTool } = setupIntegrationTest(cwd);
-      const grepTool = getTool("anchor_grep");
+      const grepTool = getTool("grep");
 
       const result = await grepTool.execute(
         "g1",
