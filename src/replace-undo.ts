@@ -13,7 +13,7 @@ import { joinSeparators } from "./line-endings";
 import { genDiff, genPatch, spansFromHashes } from "./replace-diff";
 import { getDiffContextLines } from "./config";
 import { cntDiff, errCode, makePrepareArguments, splitLines } from "./utils";
-import { loadP, loadGuide } from "./prompts";
+import { loadP, loadGuidelines } from "./prompts";
 import { withUndoPrompts, DEFAULT_EDIT_FLAGS, type EditToolFlags } from "./edit-common";
 import { buildMetrics } from "./replace-response";
 import { renderEditResult, fmtCall } from "./replace-render";
@@ -115,7 +115,7 @@ export function regUndo(pi: ExtensionAPI, flags: EditToolFlags = DEFAULT_EDIT_FL
   const prompted = withUndoPrompts({
     description: loadP("../tool-prompts/undo-last-change.md"),
     snippet: loadP("../tool-prompts/undo-last-change-snippet.md"),
-    guidelines: loadGuide("../tool-prompts/undo-last-change-guidelines.md"),
+    guidelines: loadGuidelines("../tool-prompts/undo-last-change-guidelines.md"),
   }, flags);
   pi.registerTool({
     name: "undo_last_change",

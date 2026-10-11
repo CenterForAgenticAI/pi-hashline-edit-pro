@@ -6,6 +6,7 @@ import { assertRangeServed, lineChecksum, parseHashRef, stripAnchorRow } from ".
 import { readConfig } from "./config";
 import { makeRenderCall, renderEditResult, type RPreview, type FgT } from "./replace-render";
 import type { ReplaceDetails } from "./replace";
+import type { Guideline } from "./prompts";
 export const editPrepare = makePrepareArguments();
 
 export interface EditToolFlags {
@@ -46,7 +47,7 @@ export async function currentEditFlags(codemode = false): Promise<EditToolFlags>
 
 function preferenceGuideline(flags: EditToolFlags): string {
   const tools = gatedEditOps(["read", "replace", "replace_match", "insert", "copy", "move", "undo_last_change"], flags);
-  return `Prefer the hashline tools for anything that touches files: ${joinOps(tools, { backtick: true })}.`;
+  return `Prefer the hashline tools for file work: ${joinOps(tools, { backtick: true })}.`;
 }
 
 const SHARED_EDIT_OPS = ["replace", "replace_match", "insert", "copy", "move"];
@@ -61,6 +62,17 @@ const SCRIPT_TRANSFER_GUIDELINE =
 const SCRIPT_UNDO_GUIDELINE =
   "`undo_last_change`: each edit from one codemode script takes the undo slot, so only the most recent is undoable.";
 
+const READ_REREAD_ID = "read-reread";
+const READ_OUTLINE_ID = "read-outline";
+const READ_MATCH_ID = "read-match-served";
+const UNDO_WRITE_CLEARS_ID = "undo-write-clears";
+const UNDO_CROSS_FILE_MOVE_ID = "undo-cross-file-move";
+const NEUTRAL_READ_REREAD = "`read`: call again after an edit when you need anchors you lack.";
+const NEUTRAL_UNDO_WRITE_CLEARS = "`undo_last_change`: only the last `replace`/`replace_match`/`insert`/`copy`/`move` per file is undoable; a `write` clears it, so undo before any other edit or write.";
+const GREP_OPS_PHRASE = "replace, insert, copy, or move";
+const UNDO_OPS_PHRASE = "replace, replace_match, insert, copy, or move";
+const UNDO_GUIDELINE_OPS_PHRASE = "`replace`/`replace_match`/`insert`/`copy`/`move`";
+
 function operationNames(ops: string[], flags: EditToolFlags): string {
   return joinOps(gatedEditOps(ops, flags), { backtick: true, separator: "/" });
 }
@@ -69,24 +81,24 @@ function batchGuideline(flags: EditToolFlags): string {
   const tools = operationNames(SHARED_EDIT_OPS, flags);
   const outcome = flags.autoRead ? "diff" : "result";
   const script = flags.codemode ? ` ${SCRIPT_BATCH_GUIDELINE}` : "";
-  return `${tools}: same-file calls in one message are grouped into one batch; earlier calls reply \`In batch N (queued)\` and the last applied call shows the combined ${outcome}, with one undo for the whole batch. A call whose own request is invalid (anchors, shape, or \`old_string\`) fails on its own; any failure once the batch runs aborts the whole batch.${script}`;
+  return `${tools}: same-file calls in one message commit as one batch; earlier calls reply \`In batch N (queued)\`, the last shows the combined ${outcome}, and one undo reverts all. A request-invalid call (anchors, shape, or \`old_string\`) fails alone; a failure while the batch runs aborts it.${script}`;
 }
 
 function diffGuideline(flags: EditToolFlags): string {
   const tools = operationNames(SHARED_DIFF_OPS, flags);
-  return `${tools}: in the post-edit diff, \`-anchor│\` rows are dead anchors; \`+anchor│\` and \` anchor│\` rows are live anchors for the next edit.`;
+  return `${tools}: in the post-edit diff, \`-\` rows are dead anchors; \`+\` and \` \` rows carry live anchors for the next edit.`;
 }
 
 function pathGuideline(flags: EditToolFlags): string {
   const tools = operationNames(SHARED_EDIT_OPS, flags);
   return flags.requirePath
     ? `${tools}: pass \`path\` matching the file the anchors were served for; it is required and must match anchor ownership.`
-    : `${tools}: path resolution is anchor-only; \`path\` is unnecessary and must match anchor ownership when passed.`;
+    : `${tools}: anchors resolve the file; \`path\` is optional but must match anchor ownership when passed.`;
 }
 
 function payloadGuideline(flags: EditToolFlags): string {
   const tools = operationNames(SHARED_PAYLOAD_OPS, flags);
-  return `${tools}: escapes in the tool call are decoded once when the call is parsed, and the tool then writes \`text\` as-is, never decoding again — \`\\uXXXX\` is the character, \`\\\\uXXXX\` the literal text.`;
+  return `${tools}: \`text\` is written exactly as received; the tool-call parser decodes escapes once — \`\\uXXXX\` is the character, \`\\\\uXXXX\` the literal text.`;
 }
 
 function strictInputGuideline(flags: EditToolFlags): string {
@@ -109,43 +121,45 @@ function finalizePrompts(
   return { description, snippet, guidelines: [...guidelines, ...shared] };
 }
 
-export function withReplacePrompts(base: { description: string; snippet: string; guidelines: string[] }, flags: EditToolFlags): { description: string; snippet: string; guidelines: string[] } {
+export function withReplacePrompts(base: { description: string; snippet: string; guidelines: Guideline[] }, flags: EditToolFlags): { description: string; snippet: string; guidelines: string[] } {
   let description = base.description;
-  const guidelines = [preferenceGuideline(flags), ...base.guidelines];
+  const guidelines = [preferenceGuideline(flags), ...base.guidelines.map((guideline) => guideline.text)];
   if (!flags.replaceMatchEnabled) {
-    description = description.replace(/\n?To change only part of a line without retyping the rest, use `replace_match` instead; it preserves every character the request does not name\./, "");
+    description = description
+      .split(/(?<=\.)\s+/)
+      .filter((sentence) => !sentence.includes("`replace_match`"))
+      .join(" ");
   }
   return finalizePrompts(description, base.snippet, guidelines, flags);
 }
 
-function readGuidelineApplies(guideline: string, flags: EditToolFlags): boolean {
-  if (!flags.autoReadAllOutline && guideline.includes("[limit N]")) return false;
-  if (!flags.replaceMatchEnabled && guideline.includes("`replace_match`")) return false;
+function readGuidelineApplies(guideline: Guideline, flags: EditToolFlags): boolean {
+  if (guideline.id === READ_OUTLINE_ID) return flags.autoReadAllOutline;
+  if (guideline.id === READ_MATCH_ID) return flags.replaceMatchEnabled;
   return true;
 }
 
-export function withReadPrompts(base: { description: string; snippet: string; guidelines: string[] }, flags: EditToolFlags): { description: string; snippet: string; guidelines: string[] } {
+export function withReadPrompts(base: { description: string; snippet: string; guidelines: Guideline[] }, flags: EditToolFlags): { description: string; snippet: string; guidelines: string[] } {
   const preference = preferenceGuideline(flags);
   const script = flags.codemode ? [RESULT_CONTRACT_GUIDELINE] : [];
-  const baseGuidelines = base.guidelines.filter((guideline) => readGuidelineApplies(guideline, flags));
+  const applicable = base.guidelines.filter((guideline) => readGuidelineApplies(guideline, flags));
   if (flags.autoReadAllActive) {
-    const rewritten = baseGuidelines
-      .filter((guideline) => !guideline.includes("call again after an edit"))
+    const rewritten = applicable.filter((guideline) => guideline.id !== READ_REREAD_ID).map((guideline) => guideline.text);
     return { description: base.description, snippet: base.snippet, guidelines: [preference, ...rewritten, ...script] };
   }
-  if (flags.autoRead) return { description: base.description, snippet: base.snippet, guidelines: [preference, ...baseGuidelines, ...script] };
-  const guidelines = [preference, ...baseGuidelines, ...script];
-  const mapped = guidelines.map((guideline) => guideline.startsWith("`read`: call again after an edit") ? "`read`: call again after an edit when you need anchors you lack." : guideline);
-  return { description: base.description, snippet: base.snippet, guidelines: mapped };
+  const guidelines = applicable.map((guideline) =>
+    guideline.id === READ_REREAD_ID && !flags.autoRead ? NEUTRAL_READ_REREAD : guideline.text,
+  );
+  return { description: base.description, snippet: base.snippet, guidelines: [preference, ...guidelines, ...script] };
 }
 
-export function withInsertPrompts(base: { description: string; snippet: string; guidelines: string[] }, flags: EditToolFlags): { description: string; snippet: string; guidelines: string[] } {
-  const guidelines = [preferenceGuideline(flags), ...base.guidelines];
+export function withInsertPrompts(base: { description: string; snippet: string; guidelines: Guideline[] }, flags: EditToolFlags): { description: string; snippet: string; guidelines: string[] } {
+  const guidelines = [preferenceGuideline(flags), ...base.guidelines.map((guideline) => guideline.text)];
   return finalizePrompts(base.description, base.snippet, guidelines, flags);
 }
 
-export function withReplaceMatchPrompts(base: { description: string; snippet: string; guidelines: string[] }, flags: EditToolFlags): { description: string; snippet: string; guidelines: string[] } {
-  const guidelines = [preferenceGuideline(flags), ...base.guidelines];
+export function withReplaceMatchPrompts(base: { description: string; snippet: string; guidelines: Guideline[] }, flags: EditToolFlags): { description: string; snippet: string; guidelines: string[] } {
+  const guidelines = [preferenceGuideline(flags), ...base.guidelines.map((guideline) => guideline.text)];
   return finalizePrompts(base.description, base.snippet, guidelines, flags);
 }
 
@@ -166,35 +180,34 @@ function joinOps(ops: string[], options?: { backtick?: boolean; separator?: "/" 
   return formatted.length === 2 ? `${head} or ${last}` : `${head}, or ${last}`;
 }
 
-export function withGrepPrompts(base: { description: string; snippet: string; guidelines: string[] }, flags: EditToolFlags): { description: string; snippet: string; guidelines: string[] } {
-  const guidelines = [preferenceGuideline(flags), ...base.guidelines];
+export function withGrepPrompts(base: { description: string; snippet: string; guidelines: Guideline[] }, flags: EditToolFlags): { description: string; snippet: string; guidelines: string[] } {
+  const guidelines = [preferenceGuideline(flags), ...base.guidelines.map((guideline) => guideline.text)];
   if (flags.codemode) guidelines.push(RESULT_CONTRACT_GUIDELINE);
-  if (flags.copyMoveEnabled) return { ...base, guidelines };
-  return { ...base, guidelines, description: base.description.replaceAll("replace, insert, copy, or move", joinOps(gatedEditOps(["replace", "insert", "copy", "move"], flags))) };
+  if (flags.copyMoveEnabled) return { description: base.description, snippet: base.snippet, guidelines };
+  const description = base.description.replaceAll(GREP_OPS_PHRASE, joinOps(gatedEditOps(["replace", "insert", "copy", "move"], flags)));
+  return { description, snippet: base.snippet, guidelines };
 }
 
-export function withUndoPrompts(base: { description: string; snippet: string; guidelines: string[] }, flags: EditToolFlags): { description: string; snippet: string; guidelines: string[] } {
+export function withUndoPrompts(base: { description: string; snippet: string; guidelines: Guideline[] }, flags: EditToolFlags): { description: string; snippet: string; guidelines: string[] } {
   const ops = gatedEditOps(["replace", "replace_match", "insert", "copy", "move"], flags);
-  let description = base.description;
-  let snippet = base.snippet;
   const script = flags.codemode ? [RESULT_CONTRACT_GUIDELINE, SCRIPT_UNDO_GUIDELINE] : [];
-  let guidelines = [preferenceGuideline(flags), ...base.guidelines, ...script];
-  if (!flags.autoRead) {
-    guidelines = guidelines.map((guideline) => guideline.includes("a `write` clears the history") ? "`undo_last_change`: only the last `replace`/`replace_match`/`insert`/`copy`/`move` per file is undoable; a `write` clears it, so undo before any other edit or write." : guideline);
-  }
+  let description = base.description;
+  let guidelines = [
+    preferenceGuideline(flags),
+    ...base.guidelines
+      .filter((guideline) => flags.copyMoveEnabled || guideline.id !== UNDO_CROSS_FILE_MOVE_ID)
+      .map((guideline) => (guideline.id === UNDO_WRITE_CLEARS_ID && !flags.autoRead ? NEUTRAL_UNDO_WRITE_CLEARS : guideline.text)),
+    ...script,
+  ];
   if (ops.length !== 5) {
-    description = description.replaceAll("replace, replace_match, insert, copy, or move", joinOps(ops));
-    snippet = snippet.replaceAll("`replace`, `replace_match`, `insert`, `copy`, or `move`", joinOps(ops, { backtick: true }));
-    guidelines = guidelines.map((guideline) => guideline.replaceAll("`replace`/`replace_match`/`insert`/`copy`/`move`", joinOps(ops, { backtick: true, separator: "/" })));
+    description = description.replaceAll(UNDO_OPS_PHRASE, joinOps(ops));
+    guidelines = guidelines.map((guideline) => guideline.replaceAll(UNDO_GUIDELINE_OPS_PHRASE, joinOps(ops, { backtick: true, separator: "/" })));
   }
-  if (!flags.copyMoveEnabled) {
-    guidelines = guidelines.filter((guideline) => !guideline.includes("cross-file `move`"));
-  }
-  return { description, snippet, guidelines };
+  return { description, snippet: base.snippet, guidelines };
 }
 
-export function withTransferPrompts(base: { description: string; snippet: string; guidelines: string[] }, flags: EditToolFlags): { description: string; snippet: string; guidelines: string[] } {
-  const guidelines = [preferenceGuideline(flags), ...base.guidelines, ...(flags.codemode ? [SCRIPT_TRANSFER_GUIDELINE] : [])];
+export function withTransferPrompts(base: { description: string; snippet: string; guidelines: Guideline[] }, flags: EditToolFlags): { description: string; snippet: string; guidelines: string[] } {
+  const guidelines = [preferenceGuideline(flags), ...base.guidelines.map((guideline) => guideline.text), ...(flags.codemode ? [SCRIPT_TRANSFER_GUIDELINE] : [])];
   return finalizePrompts(base.description, base.snippet, guidelines, flags, { stringPayload: false });
 }
 

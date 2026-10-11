@@ -6,10 +6,11 @@ import { commitEdit } from "./commit";
 import { batchMemberFor, executeBatchMember, noteBatchFailure, registerBatchPlanner, type BatchMemberPlan, type BatchPlannerInput } from "./batch";
 import { readNormFile, type NormFile } from "./file-reader";
 import { MAX_HASH_LINES, parseHashRef, parsePayloadText, planEdit, preserveDeletionSeparators, resEdit, resolveAnchorLine, type Anchor, type HTEdit, type StripWarningLocation } from "./hashline";
+import { TEXT_ENDING_NOTE } from "./constants";
 import type { LineEnding } from "./normalize";
 import { stripAnchorRow } from "./hashline/resolve";
 import { withAnchorSession } from "./anchor-registry";
-import { loadP, loadGuide } from "./prompts";
+import { loadP, loadGuidelines } from "./prompts";
 import { assertInsertReq, normReq, type InsertReq } from "./payload-contract";
 import { isRec, literalEscapeHints, splitLines } from "./utils";
 import { queuedEdit, editToolBase, editRenderCallWrapper, editRenderResultWrapper, resolveEditTargetWithRequirement, throwIfStrictInput, withInsertPrompts, DEFAULT_EDIT_FLAGS, type EditToolFlags } from "./edit-common";
@@ -19,7 +20,7 @@ export { assertInsertReq, type InsertReq };
 
 const insertAnchorSchema = Type.String({
   description:
-    "4-char anchor of the line to insert next to (never the row content).",
+    "4-char anchor of the line to insert next to.",
 });
 
 const insertDirectionSchema = Type.Union(
@@ -28,7 +29,7 @@ const insertDirectionSchema = Type.Union(
 );
 const insertTextSchema = Type.String({
   description:
-    'The exact text to insert; an empty string inserts one blank line. A trailing line break sets the newline of the last line written instead of adding a blank line; a lone newline writes one blank line. Never include the anchor line.',
+    `The exact text to insert; an empty string inserts one blank line. ${TEXT_ENDING_NOTE} Never include the anchor line.`,
 });
 
 const insertPathRequiredSchema = Type.String({
@@ -192,7 +193,7 @@ export function buildInsertToolDef(flags: EditToolFlags = DEFAULT_EDIT_FLAGS): I
   const prompted = withInsertPrompts({
     description: loadP("../tool-prompts/insert.md"),
     snippet: loadP("../tool-prompts/insert-snippet.md"),
-    guidelines: loadGuide("../tool-prompts/insert-guidelines.md"),
+    guidelines: loadGuidelines("../tool-prompts/insert-guidelines.md"),
   }, flags);
   return {
     name: "insert",

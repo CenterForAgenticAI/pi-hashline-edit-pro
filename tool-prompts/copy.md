@@ -1,3 +1,3 @@
-Copy a range of lines to another position, targeted by 4-character anchors from any served anchor│content row. Give `source_from` and `source_to` as bare anchors marking the first and last line to copy in the source file, and `anchor` with `direction` (`"before"` or `"after"`) naming the destination line and the side the copy goes on; the anchor may live in another file. The source lines stay in place, and the copied lines are written exactly as the source file holds them.
+Duplicate a range of lines at another anchor, in this or another file. The source rows and anchors stay live; the copied lines get fresh anchors in the destination's post-edit diff and keep their source line endings.
 
-A copy always duplicates the content its source anchors were served from, so a same-message edit to the source file does not change what is copied.
+A copy duplicates the content its source anchors were served from, so a same-message edit to the source file does not change what is copied.

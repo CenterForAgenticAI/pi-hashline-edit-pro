@@ -12,7 +12,7 @@ import { readNormFile, type NormFile } from "./file-reader";
 import { editToolSchema, buildEditToolSchema, type ReqParams, type RawReqParams, assertReq, normReq } from "./payload-contract";
 import { literalEscapeHints, makePrepareArguments, splitLines } from "./utils";
 import { editResultSchema, withStructuredErrors } from "./structured";
-import { loadP, loadGuide } from "./prompts";
+import { loadP, loadGuidelines } from "./prompts";
 import { type FileIdentity } from "./fs-write";
 import { applyEdit,
   lineHashes,
@@ -292,7 +292,7 @@ export function buildToolDef(flags: EditToolFlags = DEFAULT_EDIT_FLAGS): ToolDef
   const prompted = withReplacePrompts({
     description: loadP("../tool-prompts/replace.md"),
     snippet: loadP("../tool-prompts/replace-snippet.md"),
-    guidelines: loadGuide("../tool-prompts/replace-guidelines.md"),
+    guidelines: loadGuidelines("../tool-prompts/replace-guidelines.md"),
   }, flags);
   const parameters = buildEditToolSchema(flags.requirePath);
   return {

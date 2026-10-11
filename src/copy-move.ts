@@ -20,7 +20,7 @@ import {
 } from "./hashline";
 import { formatAnchorReclaimNotice, servedForPath, takeReclaimedPaths, withAnchorSession } from "./anchor-registry";
 import { batchMemberFor, batchServedFor, ensureBatchBase, executeBatchMember, noteBatchFailure, pendingBatchMemberFor, registerBatchPlanner, type BatchBase, type BatchMemberPlanner, type PlannedMember } from "./batch";
-import { loadP, loadGuide } from "./prompts";
+import { loadP, loadGuidelines } from "./prompts";
 import { assertTransferReq, normReq, type TransferReq } from "./payload-contract";
 import { abortIf, assertByteLimit, isRec, splitLines } from "./utils";
 import { toDisplayPath } from "./paths";
@@ -869,7 +869,7 @@ function getTransferInput(args: unknown): { path?: string; source_from?: string;
 
 const transferSourceFromSchema = Type.String({
   description:
-    "4-char anchor of the FIRST source line to copy (never the row content).",
+    "4-char anchor of the FIRST source line to copy.",
 });
 const transferSourceToSchema = Type.String({
   description:
@@ -920,8 +920,8 @@ export function buildTransferToolDef(kind: TransferKind, flags: EditToolFlags = 
       description: loadP(`../tool-prompts/${kind}.md`),
       snippet: loadP(`../tool-prompts/${kind}-snippet.md`),
       guidelines: [
-        ...loadGuide(`../tool-prompts/${kind}-guidelines.md`),
-        ...loadGuide("../tool-prompts/transfer-guidelines.md"),
+        ...loadGuidelines(`../tool-prompts/${kind}-guidelines.md`),
+        ...loadGuidelines("../tool-prompts/transfer-guidelines.md"),
       ],
     },
     flags,

@@ -11,7 +11,7 @@ import { globToRegex } from "./glob";
 import { MAX_HASH_LINES, fmtRow, HASH_LEN, HASH_SEP, HASH_CLASS } from "./hashline";
 import { ANCHOR_POOL_EXHAUSTED_PREFIX, MAX_GREP_LINE_BYTES } from "./constants";
 import { toCwd, toDisplayPath } from "./paths";
-import { loadP, loadGuide } from "./prompts";
+import { loadP, loadGuidelines } from "./prompts";
 import { normReq } from "./payload-contract";
 import { DEFAULT_EDIT_FLAGS, withGrepPrompts, type EditToolFlags } from "./edit-common";
 import { abortIf, clipLine, errCode, isRec, makePrepareArguments, rejectUnknownFields, truncateToBytes, visLines, gutterWidth } from "./utils";
@@ -477,7 +477,7 @@ export function regGrep(pi: ExtensionAPI, flags: EditToolFlags = DEFAULT_EDIT_FL
   const prompted = withGrepPrompts({
     description: loadP("../tool-prompts/grep.md"),
     snippet: loadP("../tool-prompts/grep-snippet.md"),
-    guidelines: loadGuide("../tool-prompts/grep-guidelines.md"),
+    guidelines: loadGuidelines("../tool-prompts/grep-guidelines.md"),
   }, flags);
   pi.registerTool({
     name: "grep",

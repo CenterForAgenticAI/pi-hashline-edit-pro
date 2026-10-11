@@ -1,1 +1,1 @@
-Single-level undo: reverts a file's last `replace`, `replace_match`, `insert`, `copy`, or `move`
+Revert a file's most recent edit (single level)

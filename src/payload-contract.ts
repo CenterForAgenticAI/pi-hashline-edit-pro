@@ -1,15 +1,15 @@
 import { Type } from "typebox";
 import { isRec, normalizeRequest, rejectUnknownFields, assertNoNul } from "./utils";
-import { TEXT_NOT_STRING_MSG, NEW_CONTENT_NOT_STRING_MSG } from "./constants";
+import { TEXT_ENDING_NOTE, TEXT_NOT_STRING_MSG, NEW_CONTENT_NOT_STRING_MSG } from "./constants";
 
 const textSchema = Type.String({
   description:
-    'The exact text to write in place of the removed range. "" deletes the range. A trailing line break sets the newline of the last line written instead of adding a blank line; a lone newline writes one blank line.',
+    `The exact text to write in place of the removed range. "" deletes the range. ${TEXT_ENDING_NOTE}`,
 });
 
 const removeFromSchema = Type.String({
   description:
-    "4-char anchor of the FIRST line to remove (never the row content).",
+    "4-char anchor of the FIRST line to remove.",
 });
 
 const removeToSchema = Type.String({
@@ -226,7 +226,7 @@ export function getReplaceMatchInput(args: unknown): { path?: string; replace_fr
 
 const replaceMatchFromSchema = Type.String({
   description:
-    "4-char anchor of the FIRST line of the range searched (never the row content).",
+    "4-char anchor of the FIRST line of the range searched.",
 });
 const replaceMatchToSchema = Type.String({
   description:
@@ -238,7 +238,7 @@ const replaceMatchOldStringSchema = Type.String({
 });
 const replaceMatchNewStringSchema = Type.String({
   description:
-    'The exact replacement for every matched occurrence. "" deletes the matches. A trailing line break sets the newline of the last line written instead of adding a blank line; a lone newline writes one blank line; the rest of the range is kept byte-for-byte.',
+    `The exact replacement for every matched occurrence. "" deletes the matches. ${TEXT_ENDING_NOTE} The rest of the range is kept byte-for-byte.`,
 });
 const replaceMatchPathRequiredSchema = Type.String({
   description:

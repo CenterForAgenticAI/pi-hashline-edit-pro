@@ -16,7 +16,7 @@ import { readNormFile, safeSnapId } from "./file-reader";
 import { lineHashes, fmtRegion, fmtRow, HASH_SEP, MAX_HASH_LINES, parseHashRef, resolveAnchorLine, AnchorMismatchError } from "./hashline";
 import { toCwd } from "./paths";
 import { abortIf, isRec, makePrepareArguments, numberedRead, visLines, splitLines } from "./utils";
-import { loadP, loadGuide } from "./prompts";
+import { loadP, loadGuidelines, type Guideline } from "./prompts";
 import { withReadPrompts, DEFAULT_EDIT_FLAGS, type EditToolFlags } from "./edit-common";
 import { valAccess } from "./validation";
 import { withAnchorSession, adoptAnchors, ownerOf, ownersDifferingOnlyByCase, formatAnchorReclaimNotice, takeReclaimedPaths } from "./anchor-registry";
@@ -26,8 +26,8 @@ import { Text } from "@earendil-works/pi-tui";
 import { anchoredLine, readResultSchema, withStructuredErrors, type AnchoredLine, type ReadResult } from "./structured";
 const R_DESC = loadP("../tool-prompts/read.md");
 const R_SNIPPET = loadP("../tool-prompts/read-snippet.md");
-function readGuide(): string[] {
-  return loadGuide("../tool-prompts/read-guidelines.md");
+function readGuide(): Guideline[] {
+  return loadGuidelines("../tool-prompts/read-guidelines.md");
 }
 function normPosInt(
 	value: number | undefined,
@@ -300,13 +300,8 @@ export function regRead(pi: ExtensionAPI, flags: EditToolFlags = DEFAULT_EDIT_FL
 			}),
 			offset: Type.Optional(
 				Type.Union([
-					Type.Integer({
-						minimum: 1,
-						description: "Line number to start reading from (1-indexed)",
-					}),
-					Type.String({
-						description: "4-char anchor of a served line to start reading from",
-					}),
+					Type.Integer({ minimum: 1 }),
+					Type.String(),
 				], { description: "Line number (1-indexed) or a served anchor to start reading from" }),
 			),
 			limit: Type.Optional(

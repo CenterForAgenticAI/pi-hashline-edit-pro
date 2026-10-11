@@ -6,7 +6,7 @@ import { readNormFile, type NormFile } from "./file-reader";
 import { fmtRegion, MAX_HASH_LINES, parseHashRef, planEdit, preserveDeletionSeparators, resEdit, resolveAnchorLine, stripAnchorRow, type Anchor } from "./hashline";
 import { servedForPath, withAnchorSession } from "./anchor-registry";
 import { batchMemberFor, executeBatchMember, noteBatchFailure, registerBatchPlanner, type BatchMemberPlan, type BatchPlannerInput } from "./batch";
-import { loadP, loadGuide } from "./prompts";
+import { loadP, loadGuidelines } from "./prompts";
 import {
   assertReplaceMatchReq,
   buildReplaceMatchToolSchema,
@@ -177,7 +177,7 @@ export function buildReplaceMatchToolDef(flags: EditToolFlags = DEFAULT_EDIT_FLA
   const prompted = withReplaceMatchPrompts({
     description: loadP("../tool-prompts/replace-match.md"),
     snippet: loadP("../tool-prompts/replace-match-snippet.md"),
-    guidelines: loadGuide("../tool-prompts/replace-match-guidelines.md"),
+    guidelines: loadGuidelines("../tool-prompts/replace-match-guidelines.md"),
   }, flags);
   return {
     name: "replace_match",
