@@ -374,6 +374,12 @@ describe("edit prompt flag variants", () => {
     expect(result.guidelines.some((g) => g.includes("path resolution is anchor-only; `path` is unnecessary and must match anchor ownership when passed."))).toBe(true);
   });
 
+  it("keeps the end-append transfer guideline", () => {
+    const guidelines = loadGuide("../tool-prompts/transfer-guidelines.md");
+    expect(guidelines.some((g) => g.includes("to append to the end of a file, anchor that file's last line"))).toBe(true);
+    expect(guidelines.some((g) => g.includes("not a marker line and not the block's own end"))).toBe(true);
+  });
+
   it("withTransferPrompts adds the require-path and strict-input notices", () => {
     const base = {
       description: loadP("../tool-prompts/move.md"),
