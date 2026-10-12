@@ -9,10 +9,10 @@ import { initRegistry, resetRegistryForTests } from "../../src/anchor-registry";
 import { resetBatchStateForTests } from "../../src/batch";
 import { errCode } from "../../src/utils";
 import { HashlineConfigOverlay } from "../../src/config-ui";
-const envRestores: Array<() => void> = [];
+import { drainEnvRestores, pushEnvRestore } from "./env-restores";
 
 afterEach(() => {
-  while (envRestores.length > 0) envRestores.pop()!();
+  drainEnvRestores();
   resetRegistryForTests();
   resetBatchStateForTests();
 });
@@ -153,7 +153,7 @@ export async function withTempDir(
 }
 export async function makeTempDir(prefix: string): Promise<string> {
   const dir = await mkdtemp(join(await getWritableTempRoot(), prefix));
-  envRestores.push(withHome(dir));
+  pushEnvRestore(withHome(dir));
   return dir;
 }
 export function makeFakePiRegistry() {

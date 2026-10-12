@@ -232,7 +232,9 @@ export function abortedBatchMessageFor(toolCallId: string): string | undefined {
 }
 
 export function batchMemberFor(toolCallId: string): PlannedMember | undefined {
-  return plan.get(toolCallId);
+  const member = plan.get(toolCallId);
+  if (!member || !batches.has(member.batchKey)) return undefined;
+  return member;
 }
 
 export function pendingBatchMemberFor(path: string): PlannedMember | undefined {

@@ -28,7 +28,6 @@ export const heavyTestFiles = [
 export function buildTestConfig(extraExcludes: string[] = []) {
   return defineConfig({
     test: {
-      setupFiles: ["./test/support/registry-cleanup.ts"],
       testTimeout: 15000,
       projects: [
         {
@@ -43,7 +42,7 @@ export function buildTestConfig(extraExcludes: string[] = []) {
         {
           test: {
             name: "shared",
-            setupFiles: ["./test/support/env-isolation.ts"],
+            setupFiles: ["./test/support/registry-cleanup.ts", "./test/support/env-isolation.ts"],
             include: ["test/**/*.test.ts"],
             exclude: [...mockIsolatedFiles, ...extraExcludes],
             isolate: false,
