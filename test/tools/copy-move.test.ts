@@ -764,6 +764,20 @@ describe("source line endings", () => {
       expect(await readFile(path, "utf-8")).toBe("a\r\nb\na\r\nc\r\n");
     });
   });
+
+  it("keeps a lone-CR source ending before an LF empty line", async () => {
+    await withTempDir("transfer-endings-lone-cr-", async (dir) => {
+      await writeFile(join(dir, "a.ts"), "alpha\r", "utf-8");
+      await writeFile(join(dir, "b.ts"), "one\n\ntwo\n", "utf-8");
+      const { ctx, readTool, getTool } = setupIntegrationTest(dir);
+      const aText = getText(await readTool.execute("r1", { path: "a.ts" }, undefined, undefined, ctx));
+      const bText = getText(await readTool.execute("r2", { path: "b.ts" }, undefined, undefined, ctx));
+      const alpha = anchorFor(aText, "alpha");
+      const one = anchorFor(bText, "one");
+      await getTool("copy").execute("c1", { source_from: alpha, source_to: alpha, direction: "after", anchor: one }, undefined, undefined, ctx);
+      expect(await readFile(join(dir, "b.ts"), "utf-8")).toBe("one\nalpha\r\r\ntwo\n");
+    });
+  });
 });
 
 describe("copy and move direction", () => {

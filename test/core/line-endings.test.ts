@@ -49,6 +49,15 @@ describe("joinSeparators", () => {
 		expect(joinSeparators("a\nb\n", splitSeparators("a\r\nb\r\n"))).toBe("a\r\nb\r\n");
 		expect(joinSeparators("a\nb", splitSeparators("a\rb"))).toBe("a\rb");
 	});
+
+	it("keeps the empty line after a lone CR by promoting its LF separator", () => {
+		expect(joinSeparators("a\n\nb", ["\r", "\n"])).toBe("a\r\r\nb");
+		expect(joinSeparators("a\n\nb", ["\r"])).toBe("a\r\r\nb");
+		expect(joinSeparators("a\n\n", ["\r"])).toBe("a\r\r\n");
+		expect(joinSeparators("a\n\n\nb", ["\r", "\n", "\n"])).toBe("a\r\r\n\nb");
+		expect(joinSeparators("a\n\nb", ["\r", "\r\n"])).toBe("a\r\r\nb");
+		expect(joinSeparators("a\nx\nb", ["\r", "\n"])).toBe("a\rx\nb");
+	});
 });
 
 describe("countNewlines", () => {

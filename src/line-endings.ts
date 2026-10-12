@@ -35,9 +35,13 @@ export function splitSeparators(raw: string): LineEnding[] {
 export function joinSeparators(content: string, separators: readonly LineEnding[]): string {
 	let out = "";
 	let separatorIndex = 0;
-	for (const char of content) {
+	for (let index = 0; index < content.length; index += 1) {
+		const char = content[index]!;
 		if (char === "\n") {
-			out += separators[separatorIndex] ?? "\n";
+			const separator = separators[separatorIndex] ?? "\n";
+			const emptyLineBefore = content[index - 1] === "\n";
+			const followsLoneCr = separator === "\n" && separators[separatorIndex - 1] === "\r" && emptyLineBefore;
+			out += followsLoneCr ? "\r\n" : separator;
 			separatorIndex += 1;
 		} else {
 			out += char;

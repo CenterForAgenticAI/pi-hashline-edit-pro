@@ -94,4 +94,22 @@ describe("mixed line endings", () => {
 			expect(await readFile(path, "utf-8")).toBe("old\r\nkeep\n");
 		});
 	});
+
+	it("keeps the empty line between a lone CR and an LF separator through replace", async () => {
+		await withTempFile("sample.txt", "a\rb\r\n\nc", async ({ cwd, path }) => {
+			const { ctx, readTool, editTool } = setupIntegrationTest(cwd);
+			const text = getText(await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx));
+			const b = anchorFor(text, "b");
+			await editTool.execute(
+				"e1",
+				{ remove_from: b, remove_to: b, text: "" },
+				undefined,
+				undefined,
+				ctx,
+			);
+			expect(await readFile(path, "utf-8")).toBe("a\r\r\nc");
+			const reread = getText(await readTool.execute("r2", { path: "sample.txt" }, undefined, undefined, ctx));
+			expect(reread.split("\n")).toHaveLength(3);
+		});
+	});
 });
