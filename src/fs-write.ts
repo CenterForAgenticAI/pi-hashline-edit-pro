@@ -18,13 +18,18 @@ import { errCode, isModeUnsupported, mapIoError } from "./utils";
 export interface FileIdentity {
   dev: number;
   ino: number;
+  mtimeMs?: number;
+  size?: number;
 }
 
 function sameIdentity(
   actual: FileIdentity,
   expected: FileIdentity,
 ): boolean {
-  return actual.dev === expected.dev && actual.ino === expected.ino;
+  if (actual.dev !== expected.dev || actual.ino !== expected.ino) return false;
+  if (expected.mtimeMs !== undefined && actual.mtimeMs !== expected.mtimeMs) return false;
+  if (expected.size !== undefined && actual.size !== expected.size) return false;
+  return true;
 }
 
 function pathChanged(path: string): Error {

@@ -61,7 +61,7 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "@earendil-works/pi-coding-agent": "^1.0.3",
+    "@earendil-works/pi-coding-agent": "^1.2.0",
     "@eslint/js": "^10.0.1",
     "@types/node": "^24",
     "@vitest/coverage-v8": "^4.1.11",

@@ -433,6 +433,10 @@ export async function buildAutoReadAllInjection(cwd: string, budgetBytes: number
   let bytes = 0;
   let completeFiles = 0;
   for (const file of discovery.files) {
+    if (sections.length > 0 && bytes >= budgetBytes) {
+      omitted.push(file);
+      continue;
+    }
     if (!outline && sections.length > 0) {
       const size = await candidateFileBytes(cwd, file);
       if (size !== undefined && bytes + size > budgetBytes) {
@@ -462,8 +466,9 @@ export async function buildAutoReadAllInjection(cwd: string, budgetBytes: number
   return { text, files: sections.length, bytes, omitted, completeFiles };
 }
 
-export function autoReadAllBudget(model: { contextWindow?: number } | undefined): number {
+export function autoReadAllBudget(model: { contextWindow?: number } | undefined, mode: AutoReadAllMode = "full"): number {
   const contextWindow = typeof model?.contextWindow === "number" && model.contextWindow > 0 ? model.contextWindow : 0;
   const fromContext = Math.floor(contextWindow * 1.5);
-  return Math.min(AUTO_READ_ALL_MAX_BUDGET_BYTES, Math.max(AUTO_READ_ALL_MIN_BUDGET_BYTES, fromContext));
+  const budget = Math.max(AUTO_READ_ALL_MIN_BUDGET_BYTES, fromContext);
+  return mode === "outline" ? budget : Math.min(AUTO_READ_ALL_MAX_BUDGET_BYTES, budget);
 }

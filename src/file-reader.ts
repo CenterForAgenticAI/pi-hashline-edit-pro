@@ -101,8 +101,8 @@ export async function readNormFile(
   const fileHashes = await lineHashes(normalized, resolvedPath, undefined, options?.store, options?.noPersist !== true, options?.allocation === "shadow");
   let identity = file.identity;
   if (!identity) {
-    const { dev, ino } = await stat(resolvedPath);
-    identity = { dev, ino };
+    const { dev, ino, mtimeMs, size } = await stat(resolvedPath);
+    identity = { dev, ino, mtimeMs, size };
   }
   return {
     absolutePath: resolvedPath,

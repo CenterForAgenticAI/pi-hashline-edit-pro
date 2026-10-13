@@ -311,6 +311,28 @@ describe("buildAutoReadAllInjection", () => {
     }
   });
 
+  it("attaches outlines within the context-derived outline budget", async () => {
+    const cwd = await makeTempDir("pi-hashline-auto-read-all-outline-budget-");
+    try {
+      initGitRepo(cwd);
+      const source = Array.from({ length: 200 }, (_, i) => `export function f${i}() { return ${i}; }`).join("\n") + "\n";
+      await writeFile(join(cwd, "one.ts"), source);
+      await writeFile(join(cwd, "two.ts"), source);
+
+      const full = await buildAutoReadAllInjection(cwd, 3000, "full");
+      expect(full!.files).toBe(1);
+      expect(full!.omitted).toEqual(["two.ts"]);
+
+      const outline = await buildAutoReadAllInjection(cwd, autoReadAllBudget({ contextWindow: 400_000 }, "outline"), "outline");
+      expect(outline!.files).toBe(2);
+      expect(outline!.omitted).toEqual([]);
+      expect(outline!.text).toContain("=== one.ts");
+      expect(outline!.text).toContain("=== two.ts");
+    } finally {
+      await cleanupCwd(cwd);
+    }
+  });
+
   it("attaches anchor-stamped outlines in outline mode", async () => {
     const cwd = await makeTempDir("pi-hashline-auto-read-all-outline-");
     try {
@@ -388,13 +410,19 @@ describe("autoReadAllBudget", () => {
   it("clamps small and unknown context windows to the minimum", () => {
     expect(autoReadAllBudget(undefined)).toBe(200_000);
     expect(autoReadAllBudget({ contextWindow: 128_000 })).toBe(200_000);
+    expect(autoReadAllBudget(undefined, "outline")).toBe(200_000);
   });
 
   it("scales with the context window", () => {
     expect(autoReadAllBudget({ contextWindow: 400_000 })).toBe(600_000);
+    expect(autoReadAllBudget({ contextWindow: 400_000 }, "outline")).toBe(600_000);
   });
 
-  it("clamps very large context windows to the maximum", () => {
+  it("clamps very large context windows to the maximum in full mode", () => {
     expect(autoReadAllBudget({ contextWindow: 4_000_000 })).toBe(2_000_000);
+  });
+
+  it("lets outline mode follow the context window past the full-mode ceiling", () => {
+    expect(autoReadAllBudget({ contextWindow: 4_000_000 }, "outline")).toBe(6_000_000);
   });
 });

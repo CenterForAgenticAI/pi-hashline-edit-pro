@@ -62,4 +62,17 @@ describe("hash store sqlite engine fallback", () => {
     shutdownHashStore();
     expect(state.closes).toBe(1);
   });
+
+  it("reports E_STORE_UNAVAILABLE from loadHashStore when no engine loads", async () => {
+    vi.resetModules();
+    vi.doMock("node:sqlite", () => {
+      throw new Error("node:sqlite is not a built-in module");
+    });
+    vi.doMock("bun:sqlite", () => {
+      throw new Error("bun:sqlite is not a built-in module");
+    });
+
+    const { loadHashStore } = await import("../../src/hash-store");
+    await expect(loadHashStore()).rejects.toThrow("[E_STORE_UNAVAILABLE]");
+  });
 });

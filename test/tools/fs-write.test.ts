@@ -121,6 +121,42 @@ describe("writeAtomic", () => {
     });
   });
 
+  it("rejects a write when the file changed in place after it was read", async () => {
+    await withTempDir("fs-write-test-", async (dir) => {
+      const filePath = join(dir, "inplace.txt");
+      await writeFile(filePath, "original content");
+      const before = await stat(filePath);
+
+      await writeFile(filePath, "changed in place, longer");
+
+      await expect(
+        writeAtomic(filePath, "replacement", {
+          dev: before.dev,
+          ino: before.ino,
+          mtimeMs: before.mtimeMs,
+          size: before.size,
+        }),
+      ).rejects.toThrow("[E_PATH_CHANGED]");
+      expect(await readFile(filePath, "utf-8")).toBe("changed in place, longer");
+    });
+  });
+
+  it("accepts a write when the file is unchanged since it was read", async () => {
+    await withTempDir("fs-write-test-", async (dir) => {
+      const filePath = join(dir, "unchanged.txt");
+      await writeFile(filePath, "original content");
+      const before = await stat(filePath);
+
+      await writeAtomic(filePath, "replacement", {
+        dev: before.dev,
+        ino: before.ino,
+        mtimeMs: before.mtimeMs,
+        size: before.size,
+      });
+      expect(await readFile(filePath, "utf-8")).toBe("replacement");
+    });
+  });
+
   it("overwrites a file held open for reading", async () => {
     await withTempDir("fs-write-test-", async (dir) => {
       const filePath = join(dir, "held.txt");

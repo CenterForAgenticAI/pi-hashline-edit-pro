@@ -89,7 +89,7 @@ export async function loadFileKindAndText(
   const fileHandle = await fsOpen(filePath, "r");
   try {
     const openedStats = await fileHandle.stat();
-    const identity = { dev: openedStats.dev, ino: openedStats.ino };
+    const identity = { dev: openedStats.dev, ino: openedStats.ino, mtimeMs: openedStats.mtimeMs, size: openedStats.size };
     const buffer = Buffer.alloc(SNIFF_BYTES);
     const { bytesRead } = await fileHandle.read(
       buffer,

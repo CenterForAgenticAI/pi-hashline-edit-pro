@@ -111,9 +111,19 @@ async function selectSqliteEngine(): Promise<{ engine: SqliteEngine; open: (path
   throw new Error(`[E_STORE_UNAVAILABLE] No SQLite runtime available (node:sqlite and bun:sqlite both failed to load): ${detail}`);
 }
 
-const selectedEngine = await selectSqliteEngine();
-const sqliteEngine: SqliteEngine = selectedEngine.engine;
-const openDbFn = selectedEngine.open;
+type EngineSelection = { engine: SqliteEngine; open: (path: string) => RawDb };
+let engineSelection: EngineSelection | undefined;
+let engineSelectionError: unknown;
+try {
+  engineSelection = await selectSqliteEngine();
+} catch (error) {
+  engineSelectionError = error;
+}
+function requireEngine(): EngineSelection {
+  if (engineSelection !== undefined) return engineSelection;
+  if (engineSelectionError instanceof Error) throw engineSelectionError;
+  throw new Error("[E_STORE_UNAVAILABLE] No SQLite runtime available.");
+}
 
 interface Prepared {
   get: (...params: SqlParams) => Record<string, unknown> | undefined;
@@ -151,7 +161,7 @@ let storeEpoch = 0;
 const liveDbs = new Set<RawDb>();
 
 function openDb(storePath: string): { db: RawDb; stmts: Prepared } {
-  const db = openDbFn(storePath);
+  const db = requireEngine().open(storePath);
   liveDbs.add(db);
   try {
     return buildStore(db);
@@ -285,6 +295,7 @@ function shutdownDb(db: RawDb): void {
 async function openStore(storePath: string): Promise<HashStore> {
   if (cachedDb) shutdownHashStore();
   const epoch = storeEpoch;
+  const engine = requireEngine();
   await initHasher();
   await mkdir(hashStoreDir(), { recursive: true, mode: 0o700 });
   if (process.platform !== "win32") {
@@ -362,13 +373,13 @@ async function openStore(storePath: string): Promise<HashStore> {
     }
   }
 
-  return { stmts, engine: sqliteEngine };
+  return { stmts, engine: engine.engine };
 }
 
 export function loadHashStore(): Promise<HashStore> {
   const storePath = hashStorePath();
   if (cachedDb && cachedDb.path === storePath && cachedDb.db.isOpen) {
-    return Promise.resolve({ stmts: cachedDb.stmts, engine: sqliteEngine });
+    return Promise.resolve({ stmts: cachedDb.stmts, engine: requireEngine().engine });
   }
   if (opening && opening.path === storePath) {
     return opening.promise;

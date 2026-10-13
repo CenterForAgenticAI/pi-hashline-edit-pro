@@ -210,7 +210,7 @@ export default function (pi: ExtensionAPI): void {
     if (modelDisabled(ctx.model, disableOnModels)) return;
     autoReadAllInjected = true;
     try {
-      const injection = await buildAutoReadAllInjection(ctx.cwd, autoReadAllBudget(ctx.model), autoReadAll, autoReadAllIgnore, autoReadAllRequireGit);
+      const injection = await buildAutoReadAllInjection(ctx.cwd, autoReadAllBudget(ctx.model, autoReadAll), autoReadAll, autoReadAllIgnore, autoReadAllRequireGit);
       if (!injection) return;
       if (ctx.hasUI) ctx.ui.notify(`Auto-read all: ${isOutlineAutoReadAll(autoReadAll) ? "outlined" : "attached"} ${injection.files} file(s)`, "info");
       return { message: { customType: AUTO_READ_ALL_CUSTOM_TYPE, content: injection.text, display: false } };
