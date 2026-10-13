@@ -160,7 +160,9 @@ export function withInsertPrompts(base: { description: string; snippet: string; 
 
 export function withReplaceMatchPrompts(base: { description: string; snippet: string; guidelines: Guideline[] }, flags: EditToolFlags): { description: string; snippet: string; guidelines: string[] } {
   const guidelines = [preferenceGuideline(flags), ...base.guidelines.map((guideline) => guideline.text)];
-  return finalizePrompts(base.description, base.snippet, guidelines, flags);
+  const prompted = finalizePrompts(base.description, base.snippet, guidelines, flags);
+  if (flags.strictInput) prompted.guidelines.push("`replace_match`: strict-input mode rejects an `old_string` that covers the whole range or retypes unchanged text.");
+  return prompted;
 }
 
 function gatedEditOps(ops: string[], flags: EditToolFlags): string[] {
@@ -299,13 +301,13 @@ export async function resolveEditTargetWithRequirement(input: PathRequirementInp
   return anchorTarget;
 }
 
-const AUTO_FIX_WARNING_CODES = ["[W_BAD_SHAPE]", "[W_BAD_REF]", "[W_INVALID_PATCH]", "[W_BARE_HASH_PREFIX]"];
+const STRICT_INPUT_REJECT_CODES = ["[W_BAD_SHAPE]", "[W_BAD_REF]", "[W_INVALID_PATCH]", "[W_BARE_HASH_PREFIX]", "[W_REPLACE_MATCH_WHOLE_RANGE]", "[W_REPLACE_MATCH_RETYPE]"];
 export async function throwIfStrictInput(warnings: string[]): Promise<void> {
-  const fixes = warnings.filter((warning) => AUTO_FIX_WARNING_CODES.some((code) => warning.startsWith(code)));
+  const fixes = warnings.filter((warning) => STRICT_INPUT_REJECT_CODES.some((code) => warning.startsWith(code)));
   if (fixes.length === 0) return;
   const { strictInput } = await readConfig();
   if (strictInput === true) {
-    throw new Error(`[E_BAD_SHAPE] Strict-input mode rejects auto-fixable input:\n${fixes.join("\n")}`);
+    throw new Error(`[E_BAD_SHAPE] Strict-input mode rejects auto-fixable input and replace_match retyping warnings:\n${fixes.join("\n")}`);
   }
 }
 

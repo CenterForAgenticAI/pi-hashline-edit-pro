@@ -41,6 +41,14 @@ describe("throwIfStrictInput", () => {
       await expect(throwIfStrictInput(['[H_LITERAL_ESCAPE] "lines" contains the literal escaped text "\\u200b"'])).resolves.toBeUndefined();
     });
   });
+
+  it("rejects replace_match retype warnings when strict input is on", async () => {
+    await withTempDir("pi-hashline-edit-common-test-", async () => {
+      await writeConfig({ autoRead: true, anchorGrepEnabled: true, strictInput: true });
+      await expect(throwIfStrictInput(["[W_REPLACE_MATCH_RETYPE] retyped"])).rejects.toThrow("[E_BAD_SHAPE]");
+      await expect(throwIfStrictInput(["[W_REPLACE_MATCH_WHOLE_RANGE] whole range"])).rejects.toThrow("[E_BAD_SHAPE]");
+    });
+  });
 });
 
 describe("currentEditFlags", () => {

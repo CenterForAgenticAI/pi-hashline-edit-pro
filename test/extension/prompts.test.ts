@@ -302,6 +302,12 @@ describe("edit prompt flag variants", () => {
   it("keeps the replace_match wide-range guideline", () => {
     expect(loadGuide("../tool-prompts/replace-match-guidelines.md").some((g) => g.includes("first and last matching lines"))).toBe(true);
     expect(loadGuide("../tool-prompts/replace-match-guidelines.md").some((g) => g.includes("every matching line in a range"))).toBe(true);
+    expect(loadGuide("../tool-prompts/replace-match-guidelines.md").some((g) => g.includes("use `replace` with the same anchors"))).toBe(true);
+  });
+
+  it("withReplaceMatchPrompts documents strict rejection of retyped payloads", () => {
+    const strict = withReplaceMatchPrompts(withinBase, { ...DEFAULT_EDIT_FLAGS, strictInput: true });
+    expect(strict.guidelines.some((g) => g.includes("rejects an `old_string` that covers the whole range"))).toBe(true);
   });
 
   it("withGrepPrompts drops copy and move when Copy/move is off", () => {

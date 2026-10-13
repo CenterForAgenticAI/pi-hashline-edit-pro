@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { lineHashes } from "../../src/hashline";
+import { writeConfig } from "../../src/config";
 import { replaceMatchPreview } from "../../src/replace-match";
 import { anchorFor, extractHash, getText, setupIntegrationTest, useTestHome, withTempFile, toolError } from "../support/fixtures";
 
@@ -86,6 +87,8 @@ describe("replace_match", () => {
       const result = await getTool("replace_match").execute("w1", { replace_from: first, replace_to: last, old_string: "legacy", new_string: "stable" }, undefined, undefined, ctx);
       expect(getText(result)).toContain("Successfully replaced");
       expect(await readFile(path, "utf-8")).toBe("stable\nkeep\nstable\nlegacy\n");
+      expect(result.details.warnings).toContainEqual(expect.stringContaining("[W_REPLACE_MATCH_MULTI]"));
+      expect(result.details.warnings).toContainEqual(expect.stringContaining("matched 2 occurrences"));
     });
   });
 
@@ -275,6 +278,89 @@ describe("replace_match", () => {
       );
       expect(getText(result)).toContain("Successfully replaced");
       expect(await readFile(path, "utf-8")).toBe("a\nB\n\nc\n");
+    });
+  });
+
+  it("warns when old_string covers the whole range", async () => {
+    await withTempFile("block.txt", "top\nfoo\nbar\nbottom\n", async ({ cwd }) => {
+      const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
+      const text = getText(await readTool.execute("r1", { path: "block.txt" }, undefined, undefined, ctx));
+      const foo = anchorFor(text, "foo");
+      const bar = anchorFor(text, "bar");
+      const result = await getTool("replace_match").execute(
+        "w1",
+        { replace_from: foo, replace_to: bar, old_string: "foo\nbar", new_string: "one\ntwo\nthree" },
+        undefined, undefined, ctx,
+      );
+      expect(result.details.warnings).toContainEqual(expect.stringContaining("[W_REPLACE_MATCH_WHOLE_RANGE]"));
+      expect(result.details.warnings).toContainEqual(expect.stringContaining(`remove_from "${foo}"`));
+    });
+  });
+
+  it("warns when old_string retypes unchanged text", async () => {
+    const content = "top\nconst legacyCheckout = createCheckout({ retries: 3 });\nconst legacyReturn = createReturn({ retries: 3 });\nbottom\n";
+    await withTempFile("checkout.ts", content, async ({ cwd, path }) => {
+      const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
+      const text = getText(await readTool.execute("r1", { path: "checkout.ts" }, undefined, undefined, ctx));
+      const first = anchorOf(text, "legacyCheckout");
+      const second = anchorOf(text, "legacyReturn");
+      const result = await getTool("replace_match").execute(
+        "w1",
+        {
+          replace_from: first,
+          replace_to: second,
+          old_string: "const legacyCheckout = createCheckout({ retries: 3 });\nconst legacyReturn = createReturn({ retries: 3 });",
+          new_string: "const stableCheckout = createCheckout({ retries: 3 });\nconst legacyReturn = createReturn({ retries: 3 });",
+        },
+        undefined, undefined, ctx,
+      );
+      expect(result.details.warnings).toContainEqual(expect.stringContaining("[W_REPLACE_MATCH_RETYPE]"));
+      expect(result.details.warnings).toContainEqual(expect.stringContaining('Send old_string "legacy" and new_string "stable" instead.'));
+      expect(await readFile(path, "utf-8")).toContain("stableCheckout");
+    });
+  });
+
+  it("rejects a retyped old_string in strict-input mode", async () => {
+    const content = "top\nconst legacyCheckout = createCheckout({ retries: 3 });\nconst legacyReturn = createReturn({ retries: 3 });\nbottom\n";
+    await withTempFile("checkout.ts", content, async ({ cwd, path }) => {
+      await writeConfig({ autoRead: true, anchorGrepEnabled: true, strictInput: true });
+      const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
+      const text = getText(await readTool.execute("r1", { path: "checkout.ts" }, undefined, undefined, ctx));
+      const first = anchorOf(text, "legacyCheckout");
+      const second = anchorOf(text, "legacyReturn");
+      const message = await toolError(() => getTool("replace_match").execute(
+        "w1",
+        {
+          replace_from: first,
+          replace_to: second,
+          old_string: "const legacyCheckout = createCheckout({ retries: 3 });\nconst legacyReturn = createReturn({ retries: 3 });",
+          new_string: "const stableCheckout = createCheckout({ retries: 3 });\nconst legacyReturn = createReturn({ retries: 3 });",
+        },
+        undefined, undefined, ctx,
+      ));
+      expect(message).toContain("[E_BAD_SHAPE]");
+      expect(message).toContain("Strict-input mode");
+      expect(await readFile(path, "utf-8")).toBe(content);
+    });
+  });
+
+  it("names the first mismatch when old_string looks like a retyped copy", async () => {
+    await withTempFile("routes.json", ROUTES, async ({ cwd }) => {
+      const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
+      const text = getText(await readTool.execute("r1", { path: "routes.json" }, undefined, undefined, ctx));
+      const anchor = anchorOf(text, '"checkout-5"');
+      const message = await toolError(() => getTool("replace_match").execute(
+        "w1",
+        {
+          replace_from: anchor,
+          replace_to: anchor,
+          old_string: '    {"id": "checkout-5", "feature": "legacyCheckouX", "retries": 3},',
+          new_string: "x",
+        },
+        undefined, undefined, ctx,
+      ));
+      expect(message).toContain("the first mismatch is at line 3");
+      expect(message).toContain("use replace with the same anchors");
     });
   });
 });

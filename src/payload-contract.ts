@@ -234,7 +234,7 @@ const replaceMatchToSchema = Type.String({
 });
 const replaceMatchOldStringSchema = Type.String({
   description:
-    "The exact text to find inside the selected line(s), copied from the served row. Every occurrence inside the range is replaced; the text around each match is left untouched. Matching uses LF line breaks and excludes the last line's terminator.",
+    "The exact text to find inside the selected line(s), copied from the served row: only the fragment that changes, never text that `new_string` leaves unchanged. Every occurrence inside the range is replaced; the text around each match is left untouched. Matching uses LF line breaks and excludes the last line's terminator. For a whole-line or whole-range rewrite use `replace` with the same anchors.",
 });
 const replaceMatchNewStringSchema = Type.String({
   description:

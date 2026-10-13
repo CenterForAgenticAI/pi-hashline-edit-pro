@@ -1,2 +1,3 @@
-- `replace_match`: `old_string` is usually a fragment of the line, not the whole line; every occurrence inside the range is replaced, so scope the range with anchors when only some occurrences should change.
-- `replace_match`: when you intend to change every matching line in a range, anchor the first and last matching lines of that range so one call replaces them all, instead of one call per line.
+- `replace_match`: `old_string` is only the fragment of the line that changes — never the whole line or range, and never text that `new_string` leaves unchanged; every occurrence inside the range is replaced, so scope the range with anchors when only some occurrences should change.
+- `replace_match`: when the same changed fragment appears on every matching line in a range, anchor the first and last matching lines so one call replaces them all instead of one call per line.
+- `replace_match`: when the change covers whole lines or the whole range, use `replace` with the same anchors and the new text.

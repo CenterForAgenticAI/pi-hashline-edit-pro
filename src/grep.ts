@@ -633,7 +633,6 @@ export function regGrep(pi: ExtensionAPI, flags: EditToolFlags = DEFAULT_EDIT_FL
         if (limitTruncated) notes.push(`[grep: showing first ${limit} matches; increase limit to see more.]`);
         if (linesReplaced > 0) notes.push(`[grep: ${linesReplaced} line(s) exceed ${formatSize(MAX_GREP_LINE_BYTES)} and are shown as truncated fragments; use read to see the full lines.]`);
         if (poolSkipped > 0) notes.push(`[grep: ${poolSkipped} file(s) skipped because the session's anchor pool is exhausted; narrow the search.]`);
-        if (context > 0 && hits.length > 0) notes.push('[grep: match rows are "line:│", context rows are "line-│".]');
         const truncated = limitTruncated || rowTruncated;
         const truncation: TruncationResult | undefined = rowTruncated
           ? {

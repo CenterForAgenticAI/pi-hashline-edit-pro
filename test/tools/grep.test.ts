@@ -153,7 +153,7 @@ describe("grep tool", () => {
       expect(text).toMatch(/^\d+:│ \w{4}│beta$/m);
       expect(text).toMatch(/^\d+-│ \w{4}│alpha$/m);
       expect(text).toMatch(/^\d+-│ \w{4}│gamma$/m);
-      expect(text).toContain("match rows are");
+      expect(text).not.toContain("match rows are");
     });
   });
 
