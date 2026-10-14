@@ -87,8 +87,6 @@ describe("replace_match", () => {
       const result = await getTool("replace_match").execute("w1", { replace_from: first, replace_to: last, old_string: "legacy", new_string: "stable" }, undefined, undefined, ctx);
       expect(getText(result)).toContain("Successfully replaced");
       expect(await readFile(path, "utf-8")).toBe("stable\nkeep\nstable\nlegacy\n");
-      expect(result.details.warnings).toContainEqual(expect.stringContaining("[W_REPLACE_MATCH_MULTI]"));
-      expect(result.details.warnings).toContainEqual(expect.stringContaining("matched 2 occurrences"));
     });
   });
 

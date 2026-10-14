@@ -150,10 +150,6 @@ function wholeRangeWarning(oldText: string, rangeText: string, lineCount: number
   return `[W_REPLACE_MATCH_WHOLE_RANGE] "old_string" is the entire selected range (${formatMatchRange(start, end)}); the anchors already identify it. Use replace with remove_from "${startHash}", remove_to "${endHash}" and the new text, or send only the fragment that changes.`;
 }
 
-function multiMatchWarning(count: number, start: number, end: number, displayPath: string): string {
-  return `[W_REPLACE_MATCH_MULTI] "old_string" matched ${count} occurrences in ${formatMatchRange(start, end)} of ${displayPath}; every one was replaced. Narrow the range or send a longer fragment if you meant only one.`;
-}
-
 function describeChar(char: string | undefined): string {
   if (char === undefined) return "the end of the text";
   const codePoint = char.codePointAt(0)!;
@@ -225,7 +221,6 @@ export function buildReplaceMatchEdit(
     const wholeRange = wholeRangeWarning(oldText, rangeText, rangeLines.length, start, end, startRef.hash, endRef.hash);
     if (wholeRange !== undefined) warnings.push(wholeRange);
   }
-  if (count > 1) warnings.push(multiMatchWarning(count, start, end, displayPath));
   return {
     editParams: {
       remove_from: startRef.hash,

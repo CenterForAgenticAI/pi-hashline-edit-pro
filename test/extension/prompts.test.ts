@@ -296,12 +296,12 @@ describe("edit prompt flag variants", () => {
     for (const file of ["replace.md", "replace-match.md", "insert.md", "copy.md", "move.md", "read.md", "grep.md", "undo-last-change.md"]) {
       expect(loadP(`../tool-prompts/${file}`)).not.toContain("Example:");
     }
-    expect(loadGuide("../tool-prompts/replace-match-guidelines.md").some((g) => g.includes("fragment of the line"))).toBe(true);
+    expect(loadGuide("../tool-prompts/replace-match-guidelines.md").some((g) => g.includes("only the fragment that changes"))).toBe(true);
   });
 
-  it("keeps the replace_match wide-range guideline", () => {
-    expect(loadGuide("../tool-prompts/replace-match-guidelines.md").some((g) => g.includes("first and last matching lines"))).toBe(true);
-    expect(loadGuide("../tool-prompts/replace-match-guidelines.md").some((g) => g.includes("every matching line in a range"))).toBe(true);
+  it("keeps the replace_match whole-line and multi-line guidelines", () => {
+    expect(loadGuide("../tool-prompts/replace-match-guidelines.md").some((g) => g.includes("everything on the line except indentation and trailing punctuation"))).toBe(true);
+    expect(loadGuide("../tool-prompts/replace-match-guidelines.md").some((g) => g.includes("intended multi-line use"))).toBe(true);
     expect(loadGuide("../tool-prompts/replace-match-guidelines.md").some((g) => g.includes("use `replace` with the same anchors"))).toBe(true);
   });
 
