@@ -13,7 +13,7 @@ vi.mock("node:fs/promises", async (importOriginal) => {
           throw Object.assign(new Error("permission denied"), { code: "EACCES" });
         }
         const stats = await (actual.stat as any)(target, options);
-        if (state.replaceInode && state.lockStats > 1) return Object.assign(stats, { ino: stats.ino + 1 });
+        if (state.replaceInode && state.lockStats > 1) return Object.assign(stats, { ino: Number.isSafeInteger(stats.ino) ? stats.ino + 1 : 0 });
         return stats;
       }
       return (actual.stat as any)(target, options);

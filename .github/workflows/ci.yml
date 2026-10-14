@@ -31,7 +31,16 @@ jobs:
 
       - name: Install ripgrep (Windows)
         if: matrix.os == 'windows-latest'
-        run: choco install ripgrep -y
+        shell: pwsh
+        run: |
+          $chocoBin = if ($env:ChocolateyInstall) { Join-Path $env:ChocolateyInstall "bin" } else { "C:\ProgramData\chocolatey\bin" }
+          $rg = Join-Path $chocoBin "rg.exe"
+          for ($attempt = 1; $attempt -le 3; $attempt++) {
+            choco install ripgrep --no-progress -y
+            if (Test-Path $rg) { break }
+            Start-Sleep -Seconds 15
+          }
+          & $rg --version
 
       - name: Install dependencies
         run: npm ci
