@@ -33,7 +33,7 @@ import {
   setDisableOnModelsFromText,
 } from "./src/config";
 import { loadHashStore, pruneMissing } from "./src/hash-store";
-import { initRegistry, gcRegistrySidecars, clearRegistry, freeAnchors, freeAnchorsForPaths, sessionKeyFor, withAnchorSession, releaseRegistrySession, formatAnchorReclaimNotice, takeReclaimedPaths } from "./src/anchor-registry";
+import { type AnchorSessionContext, initRegistry, gcRegistrySidecars, clearRegistry, freeAnchors, freeAnchorsForPaths, sessionKeyFor, withAnchorSession, releaseRegistrySession, formatAnchorReclaimNotice, takeReclaimedPaths } from "./src/anchor-registry";
 import { serveRows } from "./src/served";
 import { finalizeTurn, planAssistantMessage } from "./src/batch";
 import { currentEditFlags } from "./src/edit-common";
@@ -72,6 +72,7 @@ export default function (pi: ExtensionAPI): void {
   let grepFlavorCwd: string | undefined;
   const baseAnchorTools = new Set<string>();
   let gateApplied = false;
+  const pendingRegistrySessionKeys: Array<string | undefined> = [];
 
   async function refreshEditTools(): Promise<void> {
     try {
@@ -144,7 +145,12 @@ export default function (pi: ExtensionAPI): void {
     pi.setActiveTools([...new Set([...base, ...enabled])]);
   }
 
-  pi.on("session_start", async (_event, ctx) => withAnchorSession(ctx, async () => {
+  async function withRegistrySession<T>(ctx: AnchorSessionContext | undefined, fn: () => Promise<T> | T): Promise<T> {
+    pendingRegistrySessionKeys.push(sessionKeyFor(ctx));
+    return withAnchorSession(ctx, fn);
+  }
+
+  pi.on("session_start", async (_event, ctx) => withRegistrySession(ctx, async () => {
     const active = pi.getActiveTools();
     baseAnchorTools.clear();
     for (const tool of ANCHOR_TOOL_NAMES) {
@@ -191,9 +197,9 @@ export default function (pi: ExtensionAPI): void {
     }
   }));
 
-  pi.on("session_shutdown", async (_event, ctx) => {
+  pi.on("session_shutdown", async () => {
     try {
-      const key = sessionKeyFor(ctx);
+      const key = pendingRegistrySessionKeys.shift();
       if (key !== undefined) releaseRegistrySession(key);
     } catch (error) {
       console.error("Failed to release anchor registry session:", error);
