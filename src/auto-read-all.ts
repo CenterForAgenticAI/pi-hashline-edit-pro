@@ -3,6 +3,7 @@ import { lstat, open, readdir } from "node:fs/promises";
 import { join, relative, resolve, sep } from "node:path";
 import { formatSize } from "@earendil-works/pi-coding-agent";
 import {
+  AUTO_READ_ALL_DIR_BUDGET_SHARE,
   AUTO_READ_ALL_MAX_BUDGET_BYTES,
   AUTO_READ_ALL_MAX_FILE_BYTES,
   AUTO_READ_ALL_MAX_FILES,
@@ -108,6 +109,137 @@ function isExcludedByPattern(baseLower: string): boolean {
     || baseLower.startsWith("coreui-icons.")
     || baseLower === "coreui.css";
 }
+
+const MANIFEST_BASE_NAMES = new Set([
+  "package.json",
+  "tsconfig.json",
+  "jsconfig.json",
+  "pyproject.toml",
+  "setup.py",
+  "setup.cfg",
+  "requirements.txt",
+  "pipfile",
+  "cargo.toml",
+  "go.mod",
+  "gemfile",
+  "rakefile",
+  "makefile",
+  "gnumakefile",
+  "cmakelists.txt",
+  "meson.build",
+  "build.gradle",
+  "build.gradle.kts",
+  "settings.gradle",
+  "settings.gradle.kts",
+  "pom.xml",
+  "mix.exs",
+  "composer.json",
+  "dockerfile",
+  "docker-compose.yml",
+  "docker-compose.yaml",
+  "compose.yml",
+  "compose.yaml",
+  "readme.md",
+  "readme.rst",
+  "readme.txt",
+  "readme",
+]);
+
+const SOURCE_TOP_LEVEL_NAMES = new Set([
+  "src",
+  "source",
+  "lib",
+  "libs",
+  "app",
+  "apps",
+  "packages",
+  "server",
+  "client",
+  "web",
+  "api",
+  "cmd",
+  "internal",
+  "pkg",
+  "core",
+  "modules",
+  "components",
+  "services",
+  "plugins",
+  "include",
+]);
+
+const NON_SOURCE_TOP_LEVEL_NAMES = new Set([
+  "test",
+  "tests",
+  "spec",
+  "specs",
+  "__tests__",
+  "__mocks__",
+  "docs",
+  "doc",
+  "documentation",
+  "examples",
+  "example",
+  "samples",
+  "sample",
+  "fixtures",
+  "benchmark",
+  "benchmarks",
+  "bench",
+  "e2e",
+  "scripts",
+  "assets",
+  "static",
+  "public",
+  "coverage",
+  "migrations",
+  "locales",
+  "i18n",
+  "styles",
+]);
+
+function topSegmentOf(path: string): string | undefined {
+  const index = path.indexOf("/");
+  return index < 0 ? undefined : path.slice(0, index);
+}
+
+function detectSourceTopLevel(files: readonly string[]): Set<string> {
+  const counts = new Map<string, number>();
+  for (const file of files) {
+    const top = topSegmentOf(file)?.toLowerCase();
+    if (top === undefined || NON_SOURCE_TOP_LEVEL_NAMES.has(top)) continue;
+    counts.set(top, (counts.get(top) ?? 0) + 1);
+  }
+  let dominant: string | undefined;
+  let dominantCount = 0;
+  for (const [name, count] of counts) {
+    if (count > dominantCount) {
+      dominant = name;
+      dominantCount = count;
+    }
+  }
+  const source = new Set(SOURCE_TOP_LEVEL_NAMES);
+  if (dominant !== undefined) source.add(dominant);
+  return source;
+}
+
+function priorityOf(file: string, changed: ReadonlySet<string>, sourceTopLevel: ReadonlySet<string>): number {
+  if (changed.has(file)) return 0;
+  if (MANIFEST_BASE_NAMES.has(baseNameOf(file).toLowerCase())) return 1;
+  const top = topSegmentOf(file)?.toLowerCase();
+  if (top !== undefined && sourceTopLevel.has(top)) return 2;
+  return 3;
+}
+
+function rankFiles(files: readonly string[], changed: ReadonlySet<string>, sourceTopLevel: ReadonlySet<string>): string[] {
+  return [...files].sort((a, b) => {
+    const byPriority = priorityOf(a, changed, sourceTopLevel) - priorityOf(b, changed, sourceTopLevel);
+    if (byPriority !== 0) return byPriority;
+    if (a === b) return 0;
+    return a < b ? -1 : 1;
+  });
+}
+
 export function normalizeAutoReadAllIgnoreList(entries: readonly string[] | undefined): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
@@ -228,6 +360,36 @@ async function listFromGit(cwd: string): Promise<string[] | undefined> {
   return result.stdout.split("\0").filter((entry) => entry.length > 0);
 }
 
+async function listChangedFiles(cwd: string): Promise<Set<string>> {
+  const changed = new Set<string>();
+  const prefixResult = await runCommand("git", ["rev-parse", "--show-prefix"], cwd);
+  const prefix = prefixResult.code === 0 ? toPosix(prefixResult.stdout.trim()) : "";
+  const result = await runCommand("git", ["status", "--porcelain", "-z", "-uall"], cwd);
+  if (result.code !== 0) return changed;
+  const fields = result.stdout.split("\0");
+  for (let index = 0; index < fields.length; index += 1) {
+    const field = fields[index];
+    if (field === undefined || field.length < 4) continue;
+    const status = field.slice(0, 2);
+    addChangedPath(changed, field.slice(3), prefix);
+    if (status.includes("R") || status.includes("C")) {
+      index += 1;
+      const source = fields[index];
+      if (source !== undefined && source.length > 0) addChangedPath(changed, source, prefix);
+    }
+  }
+  return changed;
+}
+
+function addChangedPath(changed: Set<string>, path: string, prefix: string): void {
+  const posix = toPosix(path);
+  if (prefix.length > 0 && posix.startsWith(prefix)) {
+    changed.add(posix.slice(prefix.length));
+    return;
+  }
+  changed.add(posix);
+}
+
 async function listFromRg(cwd: string): Promise<string[] | undefined> {
   let rgPath: string;
   try {
@@ -331,16 +493,19 @@ export async function discoverAutoReadAllFiles(cwd: string, mode: AutoReadAllMod
   const unique = [...new Set(candidates.map(toPosix))].sort();
   const includable: string[] = [];
   let skippedByName = 0;
-  for (const file of unique) {
-    const baseLower = baseNameOf(file).toLowerCase();
-    if (EXCLUDED_NAME_SET.has(baseLower) || isExcludedBySegment(file) || isExcludedByPattern(baseLower) || isExcludedByCustomIgnore(file, customIgnore)) skippedByName += 1;
-    else includable.push(file);
-  }
-  const scanWindow = includable.slice(0, AUTO_READ_ALL_MAX_FILES * SCAN_LIMIT_MULTIPLIER);
-  const sized: string[] = [];
   let skippedBinary = 0;
   let skippedLarge = 0;
   let skippedOther = 0;
+  for (const file of unique) {
+    const baseLower = baseNameOf(file).toLowerCase();
+    if (EXCLUDED_NAME_SET.has(baseLower) || isExcludedBySegment(file) || isExcludedByPattern(baseLower) || isExcludedByCustomIgnore(file, customIgnore)) skippedByName += 1;
+    else if (IMAGE_EXTENSIONS.has(extensionOf(file))) skippedBinary += 1;
+    else includable.push(file);
+  }
+  const changed = source === "git" ? await listChangedFiles(cwd) : new Set<string>();
+  const sourceTopLevel = detectSourceTopLevel(includable);
+  const scanWindow = rankFiles(includable, changed, sourceTopLevel).slice(0, AUTO_READ_ALL_MAX_FILES * SCAN_LIMIT_MULTIPLIER);
+  const sized: string[] = [];
 
   await forEachLimit(scanWindow, SCAN_CONCURRENCY, async (file) => {
     let stats;
@@ -358,10 +523,6 @@ export async function discoverAutoReadAllFiles(cwd: string, mode: AutoReadAllMod
       skippedLarge += 1;
       return;
     }
-    if (IMAGE_EXTENSIONS.has(extensionOf(file))) {
-      skippedBinary += 1;
-      return;
-    }
     sized.push(file);
   });
 
@@ -372,8 +533,7 @@ export async function discoverAutoReadAllFiles(cwd: string, mode: AutoReadAllMod
     else if (nul) skippedBinary += 1;
     else textual.push(file);
   });
-  textual.sort();
-  const files = textual.slice(0, AUTO_READ_ALL_MAX_FILES);
+  const files = rankFiles(textual, changed, sourceTopLevel).slice(0, AUTO_READ_ALL_MAX_FILES);
 
   return { files, source, discovered: unique.length, skippedBinary, skippedLarge, skippedOther, skippedByName };
 }
@@ -430,34 +590,52 @@ export async function buildAutoReadAllInjection(cwd: string, budgetBytes: number
   const outline = isOutlineAutoReadAll(mode);
   const sections: AutoReadAllSection[] = [];
   const omitted: string[] = [];
+  const backlog: string[] = [];
+  const usedByDir = new Map<string, number>();
+  const dirBudget = Math.max(1, Math.floor(budgetBytes * AUTO_READ_ALL_DIR_BUDGET_SHARE));
   let bytes = 0;
   let completeFiles = 0;
-  for (const file of discovery.files) {
+
+  const take = async (file: string, respectDirBudget: boolean): Promise<void> => {
     if (sections.length > 0 && bytes >= budgetBytes) {
       omitted.push(file);
-      continue;
+      return;
     }
-    if (!outline && sections.length > 0) {
+    const group = topSegmentOf(file) ?? ".";
+    const used = usedByDir.get(group) ?? 0;
+    if (sections.length > 0) {
       const size = await candidateFileBytes(cwd, file);
       if (size !== undefined && bytes + size > budgetBytes) {
         omitted.push(file);
-        continue;
+        return;
+      }
+      if (respectDirBudget && size !== undefined && used + size > dirBudget) {
+        backlog.push(file);
+        return;
       }
     }
     const section = await renderFile(file, cwd, outline);
     if (section === undefined) {
       omitted.push(file);
-      continue;
+      return;
     }
     const sectionBytes = Buffer.byteLength(section.text, "utf-8") + 1;
     if (sections.length > 0 && bytes + sectionBytes > budgetBytes) {
       omitted.push(file);
-      continue;
+      return;
+    }
+    if (sections.length > 0 && respectDirBudget && used + sectionBytes > dirBudget) {
+      backlog.push(file);
+      return;
     }
     sections.push(section);
     bytes += sectionBytes;
+    usedByDir.set(group, used + sectionBytes);
     if (section.complete) completeFiles += 1;
-  }
+  };
+
+  for (const file of discovery.files) await take(file, true);
+  for (const file of backlog) await take(file, false);
   if (sections.length === 0) return undefined;
   const sectionTexts = sections.map((section) => section.text);
   const coverage = `[coverage: ${completeFiles} complete]`;

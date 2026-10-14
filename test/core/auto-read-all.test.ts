@@ -20,6 +20,11 @@ function initGitRepo(cwd: string): void {
   execFileSync("git", ["init", "-q"], { cwd });
 }
 
+function commitAll(cwd: string): void {
+  execFileSync("git", ["add", "-A"], { cwd });
+  execFileSync("git", ["-c", "user.email=test@example.com", "-c", "user.name=test", "commit", "-qm", "init"], { cwd });
+}
+
 describe("discoverAutoReadAllFiles", () => {
   it("lists tracked and untracked files while skipping ignored, binary, image, and oversized files", async () => {
     const cwd = await makeTempDir("pi-hashline-auto-read-all-git-");
@@ -424,5 +429,96 @@ describe("autoReadAllBudget", () => {
 
   it("lets outline mode follow the context window past the full-mode ceiling", () => {
     expect(autoReadAllBudget({ contextWindow: 4_000_000 }, "outline")).toBe(6_000_000);
+  });
+});
+
+describe("auto-read-all ranking", () => {
+  it("orders changed files, manifests, source, and the rest", async () => {
+    const cwd = await makeTempDir("pi-hashline-auto-read-all-rank-");
+    try {
+      initGitRepo(cwd);
+      await mkdir(join(cwd, "docs"), { recursive: true });
+      await mkdir(join(cwd, "src", "core"), { recursive: true });
+      await mkdir(join(cwd, "test"), { recursive: true });
+      await mkdir(join(cwd, "zzz"), { recursive: true });
+      await writeFile(join(cwd, "docs", "guide.md"), "# guide\n");
+      await writeFile(join(cwd, "src", "core", "app.ts"), "export const app = 1;\n");
+      await writeFile(join(cwd, "test", "app.test.ts"), "test('app', () => {});\n");
+      await writeFile(join(cwd, "zzz", "changed.ts"), "export const changed = 1;\n");
+      await writeFile(join(cwd, "package.json"), "{ \"name\": \"rank\" }\n");
+      commitAll(cwd);
+      await writeFile(join(cwd, "zzz", "changed.ts"), "export const changed = 2;\n");
+
+      const discovery = await discoverAutoReadAllFiles(cwd, "full");
+      expect(discovery.files).toEqual(["zzz/changed.ts", "package.json", "src/core/app.ts", "docs/guide.md", "test/app.test.ts"]);
+    } finally {
+      await cleanupCwd(cwd);
+    }
+  });
+
+  it("treats the dominant top-level directory as source without a known source dir", async () => {
+    const cwd = await makeTempDir("pi-hashline-auto-read-all-dominant-");
+    try {
+      initGitRepo(cwd);
+      await mkdir(join(cwd, "aaa"), { recursive: true });
+      await mkdir(join(cwd, "engine"), { recursive: true });
+      await writeFile(join(cwd, "aaa", "one.ts"), "export const one = 1;\n");
+      await writeFile(join(cwd, "engine", "core.ts"), "export const core = 1;\n");
+      await writeFile(join(cwd, "engine", "types.ts"), "export type T = 1;\n");
+      await writeFile(join(cwd, "engine", "util.ts"), "export const util = 1;\n");
+      commitAll(cwd);
+
+      const discovery = await discoverAutoReadAllFiles(cwd, "full");
+      expect(discovery.files).toEqual(["engine/core.ts", "engine/types.ts", "engine/util.ts", "aaa/one.ts"]);
+    } finally {
+      await cleanupCwd(cwd);
+    }
+  });
+
+  it("caps a single top-level directory's first-pass budget share", async () => {
+    const cwd = await makeTempDir("pi-hashline-auto-read-all-fair-");
+    try {
+      initGitRepo(cwd);
+      await mkdir(join(cwd, "aaa"), { recursive: true });
+      await mkdir(join(cwd, "zzz"), { recursive: true });
+      await writeFile(join(cwd, "aaa", "a1.txt"), `${"a".repeat(199)}\n`);
+      await writeFile(join(cwd, "aaa", "a2.txt"), `${"b".repeat(199)}\n`);
+      await writeFile(join(cwd, "aaa", "a3.txt"), `${"c".repeat(199)}\n`);
+      await writeFile(join(cwd, "aaa", "a4.txt"), `${"d".repeat(199)}\n`);
+      await writeFile(join(cwd, "zzz", "z1.txt"), `${"e".repeat(199)}\n`);
+
+      const injection = await buildAutoReadAllInjection(cwd, 700, "full");
+      expect(injection).toBeDefined();
+      expect(injection!.text).toContain("=== aaa/a1.txt ===");
+      expect(injection!.text).toContain("=== aaa/a2.txt ===");
+      expect(injection!.text).toContain("=== zzz/z1.txt ===");
+      expect(injection!.text).not.toContain("=== aaa/a3.txt ===");
+      expect(injection!.text).not.toContain("=== aaa/a4.txt ===");
+      expect(injection!.omitted).toEqual(["aaa/a3.txt", "aaa/a4.txt"]);
+    } finally {
+      await cleanupCwd(cwd);
+    }
+  });
+
+  it("ranks changed files when the working directory is a repository subdirectory", async () => {
+    const cwd = await makeTempDir("pi-hashline-auto-read-all-subdir-");
+    try {
+      initGitRepo(cwd);
+      await mkdir(join(cwd, "sub", "src"), { recursive: true });
+      await mkdir(join(cwd, "sub", "docs"), { recursive: true });
+      await mkdir(join(cwd, "sub", "zzz"), { recursive: true });
+      await writeFile(join(cwd, "sub", "src", "app.ts"), "export const app = 1;\n");
+      await writeFile(join(cwd, "sub", "docs", "guide.md"), "# guide\n");
+      await writeFile(join(cwd, "sub", "zzz", "other.ts"), "export const other = 1;\n");
+      commitAll(cwd);
+      execFileSync("git", ["mv", "sub/docs/guide.md", "sub/docs/handbook.md"], { cwd });
+      await writeFile(join(cwd, "sub", "zzz", "other.ts"), "export const other = 2;\n");
+      const sub = join(cwd, "sub");
+
+      const discovery = await discoverAutoReadAllFiles(sub, "full");
+      expect(discovery.files).toEqual(["docs/handbook.md", "zzz/other.ts", "src/app.ts"]);
+    } finally {
+      await cleanupCwd(cwd);
+    }
   });
 });
