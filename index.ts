@@ -46,6 +46,11 @@ import { valAccess } from "./src/validation";
 import { splitLines } from "./src/utils";
 import { AUTO_READ_ALL_CUSTOM_TYPE } from "./src/constants";
 
+interface PendingRegistrySession {
+  key: string | undefined;
+  alive: () => boolean;
+}
+
 export default function (pi: ExtensionAPI): void {
   regRead(pi);
 
@@ -72,7 +77,7 @@ export default function (pi: ExtensionAPI): void {
   let grepFlavorCwd: string | undefined;
   const baseAnchorTools = new Set<string>();
   let gateApplied = false;
-  const pendingRegistrySessionKeys: Array<string | undefined> = [];
+  const pendingRegistrySessions: PendingRegistrySession[] = [];
 
   async function refreshEditTools(): Promise<void> {
     try {
@@ -145,8 +150,32 @@ export default function (pi: ExtensionAPI): void {
     pi.setActiveTools([...new Set([...base, ...enabled])]);
   }
 
+  function captureRegistrySession(ctx: AnchorSessionContext | undefined): void {
+    const key = sessionKeyFor(ctx);
+    const entry: PendingRegistrySession = {
+      key,
+      alive: () => {
+        try {
+          void ctx?.sessionManager;
+          return true;
+        } catch {
+          return false;
+        }
+      },
+    };
+    const index = key === undefined ? -1 : pendingRegistrySessions.findIndex((candidate) => candidate.key === key);
+    if (index >= 0) pendingRegistrySessions[index] = entry;
+    else pendingRegistrySessions.push(entry);
+  }
+
+  function releaseCapturedRegistrySession(key: string): void {
+    const index = pendingRegistrySessions.findIndex((entry) => entry.key === key);
+    if (index >= 0) pendingRegistrySessions.splice(index, 1);
+    releaseRegistrySession(key);
+  }
+
   async function withRegistrySession<T>(ctx: AnchorSessionContext | undefined, fn: () => Promise<T> | T): Promise<T> {
-    pendingRegistrySessionKeys.push(sessionKeyFor(ctx));
+    captureRegistrySession(ctx);
     return withAnchorSession(ctx, fn);
   }
 
@@ -197,19 +226,38 @@ export default function (pi: ExtensionAPI): void {
     }
   }));
 
-  pi.on("session_shutdown", async () => {
+  pi.on("session_shutdown", async (_event, ctx) => {
     try {
-      const key = pendingRegistrySessionKeys.shift();
-      if (key !== undefined) releaseRegistrySession(key);
+      let key: string | undefined;
+      let readable = true;
+      try {
+        key = sessionKeyFor(ctx);
+      } catch {
+        readable = false;
+      }
+      if (readable && key !== undefined) {
+        releaseCapturedRegistrySession(key);
+        return;
+      }
+      if (readable) {
+        const dead = pendingRegistrySessions.findIndex((entry) => entry.key === undefined && !entry.alive());
+        const fallback = pendingRegistrySessions.findIndex((entry) => entry.key === undefined);
+        const index = dead >= 0 ? dead : fallback;
+        if (index >= 0) pendingRegistrySessions.splice(index, 1);
+        return;
+      }
+      const dead = pendingRegistrySessions.findIndex((entry) => !entry.alive());
+      const entry = dead >= 0 ? pendingRegistrySessions.splice(dead, 1)[0] : pendingRegistrySessions.shift();
+      if (entry?.key !== undefined) releaseRegistrySession(entry.key);
     } catch (error) {
       console.error("Failed to release anchor registry session:", error);
     }
   });
-  pi.on("model_select", async (event, ctx) => withAnchorSession(ctx, async () => {
+  pi.on("model_select", async (event, ctx) => withRegistrySession(ctx, async () => {
     await syncModelGate(event.model, ctx.cwd);
   }));
 
-  pi.on("before_agent_start", async (_event, ctx) => withAnchorSession(ctx, async () => {
+  pi.on("before_agent_start", async (_event, ctx) => withRegistrySession(ctx, async () => {
     await syncModelGate(ctx.model, ctx.cwd);
     if (autoReadAll === "off" || autoReadAllInjected) return;
     if (modelDisabled(ctx.model, disableOnModels)) return;
@@ -287,12 +335,12 @@ export default function (pi: ExtensionAPI): void {
 
   pi.registerCommand("clear-anchors", {
     description: "Clear the session's anchor claims (path-free resolution state); anchors are re-claimed on the next read",
-    handler: async (_args, ctx) => withAnchorSession(ctx, async () => {
+    handler: async (_args, ctx) => withRegistrySession(ctx, async () => {
       clearRegistry();
       ctx.ui.notify(`Anchor claims cleared for this session`, "info");
     }),
   });
-  pi.on("message_end", async (event, ctx) => withAnchorSession(ctx, async () => {
+  pi.on("message_end", async (event, ctx) => withRegistrySession(ctx, async () => {
     try {
       await planAssistantMessage(event.message, ctx.cwd);
     } catch (error) {
@@ -307,7 +355,7 @@ export default function (pi: ExtensionAPI): void {
       console.error("Failed to finalize edit batch:", error);
     }
   });
-  pi.on("tool_result", async (event, ctx) => withAnchorSession(ctx, async () => {
+  pi.on("tool_result", async (event, ctx) => withRegistrySession(ctx, async () => {
     if (event.isError) return;
     const gated = modelDisabled(ctx.model, disableOnModels);
 

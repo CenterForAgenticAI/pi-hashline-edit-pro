@@ -216,4 +216,127 @@ describe("session_shutdown lifecycle", () => {
       expect(await withAnchorSession(secondCtx, () => ownerOf(secondAnchor))).toBeUndefined();
     });
   });
+  it("releases the session named by a live shutdown ctx instead of the oldest queued session", async () => {
+    await withTempDir("lifecycle-exact-shutdown-", async (dir) => {
+      const { rm, writeFile } = await import("fs/promises");
+      const { join } = await import("path");
+      const firstSessionFile = join(dir, "first.jsonl");
+      const secondSessionFile = join(dir, "second.jsonl");
+      await writeFile(firstSessionFile, "", "utf-8");
+      await writeFile(secondSessionFile, "", "utf-8");
+      const { pi, handlers } = makePiStub();
+      await registerExtension(pi);
+      const firstCtx = { cwd: dir, ui: { notify: vi.fn() }, sessionManager: { getSessionFile: () => firstSessionFile, getSessionId: () => "exact-first" } };
+      const secondCtx = { cwd: dir, ui: { notify: vi.fn() }, sessionManager: { getSessionFile: () => secondSessionFile, getSessionId: () => "exact-second" } };
+      await handlers.get("session_start")!({}, firstCtx);
+      await handlers.get("session_start")!({}, secondCtx);
+      const { allocateAnchor, ownerOf, sessionKeyFor, withAnchorSession } = await import("../../src/anchor-registry");
+      const { sessionClaimsDir } = await import("../../src/paths");
+      const firstAnchor = await withAnchorSession(firstCtx, () => allocateAnchor("a.ts", "ck-a"));
+      const secondAnchor = await withAnchorSession(secondCtx, () => allocateAnchor("b.ts", "ck-b"));
+      await rm(join(sessionClaimsDir(), `${sessionKeyFor(firstCtx)!}.registry.jsonl`), { force: true });
+      await rm(join(sessionClaimsDir(), `${sessionKeyFor(secondCtx)!}.registry.jsonl`), { force: true });
+      await handlers.get("session_shutdown")!({ type: "session_shutdown", reason: "new" }, secondCtx);
+      expect(await withAnchorSession(firstCtx, () => ownerOf(firstAnchor))).toBeDefined();
+      expect(await withAnchorSession(secondCtx, () => ownerOf(secondAnchor))).toBeUndefined();
+    });
+  });
+
+  it("releases a disposed queued session when the shutdown ctx is stale", async () => {
+    await withTempDir("lifecycle-probe-shutdown-", async (dir) => {
+      const { rm, writeFile } = await import("fs/promises");
+      const { join } = await import("path");
+      const firstSessionFile = join(dir, "first.jsonl");
+      const secondSessionFile = join(dir, "second.jsonl");
+      await writeFile(firstSessionFile, "", "utf-8");
+      await writeFile(secondSessionFile, "", "utf-8");
+      const { pi, handlers } = makePiStub();
+      await registerExtension(pi);
+      let secondDisposed = false;
+      const firstCtx = { cwd: dir, ui: { notify: vi.fn() }, sessionManager: { getSessionFile: () => firstSessionFile, getSessionId: () => "probe-first" } };
+      const secondCtx = {
+        cwd: dir,
+        ui: { notify: vi.fn() },
+        get sessionManager() {
+          if (secondDisposed) throw new Error("This extension ctx is stale after session replacement or reload.");
+          return { getSessionFile: () => secondSessionFile, getSessionId: () => "probe-second" };
+        },
+      };
+      await handlers.get("session_start")!({}, firstCtx);
+      await handlers.get("session_start")!({}, secondCtx);
+      const { allocateAnchor, ownerOf, sessionKeyFor, withAnchorSession } = await import("../../src/anchor-registry");
+      const { sessionClaimsDir } = await import("../../src/paths");
+      const firstAnchor = await withAnchorSession(firstCtx, () => allocateAnchor("a.ts", "ck-a"));
+      const secondAnchor = await withAnchorSession(secondCtx, () => allocateAnchor("b.ts", "ck-b"));
+      await rm(join(sessionClaimsDir(), `${sessionKeyFor(firstCtx)!}.registry.jsonl`), { force: true });
+      await rm(join(sessionClaimsDir(), `${sessionKeyFor(secondCtx)!}.registry.jsonl`), { force: true });
+      secondDisposed = true;
+      const staleCtx = {
+        cwd: dir,
+        get sessionManager(): never {
+          throw new Error("This extension ctx is stale after session replacement or reload.");
+        },
+      };
+      await handlers.get("session_shutdown")!({ type: "session_shutdown", reason: "quit" }, staleCtx);
+      secondDisposed = false;
+      expect(await withAnchorSession(firstCtx, () => ownerOf(firstAnchor))).toBeDefined();
+      expect(await withAnchorSession(secondCtx, () => ownerOf(secondAnchor))).toBeUndefined();
+    });
+  });
+
+  it("keeps a keyed session when a keyless session with a live ctx shuts down", async () => {
+    await withTempDir("lifecycle-keyless-shutdown-", async (dir) => {
+      const { rm, writeFile } = await import("fs/promises");
+      const { join } = await import("path");
+      const sessionFile = join(dir, "session.jsonl");
+      await writeFile(sessionFile, "", "utf-8");
+      const { pi, handlers } = makePiStub();
+      await registerExtension(pi);
+      const keyedCtx = { cwd: dir, ui: { notify: vi.fn() }, sessionManager: { getSessionFile: () => sessionFile, getSessionId: () => "keyed" } };
+      const keylessCtx = { cwd: dir, ui: { notify: vi.fn() } };
+      await handlers.get("session_start")!({}, keyedCtx);
+      await handlers.get("session_start")!({}, keylessCtx);
+      const { allocateAnchor, ownerOf, sessionKeyFor, withAnchorSession } = await import("../../src/anchor-registry");
+      const { sessionClaimsDir } = await import("../../src/paths");
+      const anchor = await withAnchorSession(keyedCtx, () => allocateAnchor("a.ts", "ck"));
+      await rm(join(sessionClaimsDir(), `${sessionKeyFor(keyedCtx)!}.registry.jsonl`), { force: true });
+      await handlers.get("session_shutdown")!({ type: "session_shutdown", reason: "quit" }, keylessCtx);
+      expect(await withAnchorSession(keyedCtx, () => ownerOf(anchor))).toBeDefined();
+    });
+  });
+
+  it("captures a session lazily and releases it on a stale shutdown", async () => {
+    await withTempDir("lifecycle-lazy-capture-", async (dir) => {
+      const { rm, writeFile } = await import("fs/promises");
+      const { join } = await import("path");
+      const sessionFile = join(dir, "session.jsonl");
+      await writeFile(sessionFile, "", "utf-8");
+      const { pi, handlers } = makePiStub();
+      await registerExtension(pi);
+      let disposed = false;
+      const ctx = {
+        cwd: dir,
+        ui: { notify: vi.fn() },
+        get sessionManager() {
+          if (disposed) throw new Error("This extension ctx is stale after session replacement or reload.");
+          return { getSessionFile: () => sessionFile, getSessionId: () => "lazy-capture" };
+        },
+      };
+      const { allocateAnchor, ownerOf, sessionKeyFor, withAnchorSession } = await import("../../src/anchor-registry");
+      const { sessionClaimsDir } = await import("../../src/paths");
+      await handlers.get("message_end")!({ type: "message_end", message: { role: "user", content: [] } }, ctx);
+      const anchor = await withAnchorSession(ctx, () => allocateAnchor("a.ts", "ck"));
+      await rm(join(sessionClaimsDir(), `${sessionKeyFor(ctx)!}.registry.jsonl`), { force: true });
+      disposed = true;
+      const staleCtx = {
+        cwd: dir,
+        get sessionManager(): never {
+          throw new Error("This extension ctx is stale after session replacement or reload.");
+        },
+      };
+      await handlers.get("session_shutdown")!({ type: "session_shutdown", reason: "quit" }, staleCtx);
+      disposed = false;
+      expect(await withAnchorSession(ctx, () => ownerOf(anchor))).toBeUndefined();
+    });
+  });
 });
