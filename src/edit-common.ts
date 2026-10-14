@@ -47,7 +47,7 @@ export async function currentEditFlags(codemode = false): Promise<EditToolFlags>
 
 function preferenceGuideline(flags: EditToolFlags): string {
   const tools = gatedEditOps(["read", "replace", "replace_match", "insert", "copy", "move", "undo_last_change"], flags);
-  return `Prefer the hashline tools for every file read and edit: ${joinOps(tools, { backtick: true })}.`;
+  return `Remember to use the hashline tools for every file read and edit: ${joinOps(tools, { backtick: true })}.`;
 }
 
 const SHARED_EDIT_OPS = ["replace", "replace_match", "insert", "copy", "move"];
