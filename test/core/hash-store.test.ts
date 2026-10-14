@@ -476,7 +476,7 @@ describe("hash-store - migration from legacy hash-store.json", () => {
       await writeLegacyStore(home, ["not-an-object"]);
 
       const store = await loadHashStore();
-      const paths = store.stmts.allPaths();
+      const paths = store.stmts.snapshotPaths();
       expect(paths).toEqual([]);
     });
   });
@@ -484,7 +484,7 @@ describe("hash-store - migration from legacy hash-store.json", () => {
   it("does not run migration when no legacy file exists", async () => {
     await withTempDir("pi-hashline-hashstore-test-", async (home) => {
       const store = await loadHashStore();
-      expect(store.stmts.allPaths()).toEqual([]);
+      expect(store.stmts.snapshotPaths()).toEqual([]);
       expect(existsSync(`${legacyPath(home)}.bak`)).toBe(false);
     });
   });
@@ -531,6 +531,38 @@ describe("hash-store - pruneMissing", () => {
         resultContent: "new",
       });
       await pruneMissing(store);
+      expect(getUndoEntry(store, "/gone.ts")).toBeDefined();
+    });
+  });
+
+  it("does not return undo-only paths as cleanup candidates", async () => {
+    await withTempDir("pi-hashline-hashstore-test-", async () => {
+      const store = await loadHashStore();
+      upsertUndo(store, "/gone.ts", {
+        content: "old",
+        bom: "",
+        ending: "\n",
+        hashes: ["PyBY"],
+        resultContent: "new",
+      });
+      expect(await pruneMissing(store)).toEqual([]);
+      expect(getUndoEntry(store, "/gone.ts")).toBeDefined();
+    });
+  });
+
+  it("returns missing snapshot paths while keeping their undo rows", async () => {
+    await withTempDir("pi-hashline-hashstore-test-", async () => {
+      const store = await loadHashStore();
+      await put(store, "/gone.ts", "old\n", ["PyBY"]);
+      upsertUndo(store, "/gone.ts", {
+        content: "old",
+        bom: "",
+        ending: "\n",
+        hashes: ["PyBY"],
+        resultContent: "new",
+      });
+      expect(await pruneMissing(store)).toEqual(["/gone.ts"]);
+      expect(getSnapshot(store, "/gone.ts", "old\n")).toBeUndefined();
       expect(getUndoEntry(store, "/gone.ts")).toBeDefined();
     });
   });

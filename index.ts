@@ -33,7 +33,7 @@ import {
   setDisableOnModelsFromText,
 } from "./src/config";
 import { loadHashStore, pruneMissing } from "./src/hash-store";
-import { initRegistry, gcRegistrySidecars, clearRegistry, freeAnchors, sessionKeyFor, withAnchorSession, releaseRegistrySession, formatAnchorReclaimNotice, takeReclaimedPaths } from "./src/anchor-registry";
+import { initRegistry, gcRegistrySidecars, clearRegistry, freeAnchors, freeAnchorsForPaths, sessionKeyFor, withAnchorSession, releaseRegistrySession, formatAnchorReclaimNotice, takeReclaimedPaths } from "./src/anchor-registry";
 import { serveRows } from "./src/served";
 import { finalizeTurn, planAssistantMessage } from "./src/batch";
 import { currentEditFlags } from "./src/edit-common";
@@ -154,8 +154,7 @@ export default function (pi: ExtensionAPI): void {
     await initHasher();
     loadHashStore()
       .then(async store => {
-        const missing = await pruneMissing(store);
-        for (const path of missing) freeAnchors(path);
+        freeAnchorsForPaths(await pruneMissing(store));
       })
       .catch(err => {
         console.error("Failed to load hash store:", err);

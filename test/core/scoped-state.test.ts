@@ -40,7 +40,7 @@ describe("scoped state", () => {
       await initRegistry(session);
       const undo = { content: scope, bom: "", ending: "\n", hashes: ["ATIm"], resultContent: "new" };
       if (!anchors.has(scope)) {
-        expect(store.stmts.allPaths()).toEqual([]);
+        expect(store.stmts.snapshotPaths()).toEqual([]);
         expect(getUndoEntry(store, target)).toBeUndefined();
         expect(ownersForPath(target).size).toBe(0);
         expect((await readConfig()).autoRead).toBe(true);
@@ -73,7 +73,7 @@ describe("scoped state", () => {
 
     vi.stubEnv("PI_HASHLINE_DIR", join(home, "isolated"));
     const isolated = await loadHashStore();
-    expect(isolated.stmts.allPaths()).toEqual([]);
+    expect(isolated.stmts.snapshotPaths()).toEqual([]);
     expect(getSnapshot(isolated, target, "old")).toBeUndefined();
     expect((await readConfig()).autoRead).toBe(true);
     expect(await readFile(legacyPath, "utf-8")).toBe(legacy);

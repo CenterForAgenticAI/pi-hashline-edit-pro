@@ -617,6 +617,28 @@ export function freeAnchors(path: string, anchors?: string[]): void {
 	}
 }
 
+export function freeAnchorsForPaths(paths: Iterable<string>): void {
+	const state = current();
+	if (!state) return;
+	const targets = new Set(paths);
+	if (targets.size === 0) return;
+	const freedByPath = new Map<string, string[]>();
+	for (const [anchor, entry] of state.owned) {
+		if (!targets.has(entry.path)) continue;
+		state.owned.delete(anchor);
+		const freed = freedByPath.get(entry.path);
+		if (freed === undefined) freedByPath.set(entry.path, [anchor]);
+		else freed.push(anchor);
+	}
+	for (const path of targets) {
+		state.served.delete(path);
+		state.lastUsedAt.delete(path);
+	}
+	for (const [path, anchors] of freedByPath) {
+		appendEvent({ kind: "free", path, anchors });
+	}
+}
+
 export function clearRegistry(): void {
 	const state = current();
 	if (!state) return;

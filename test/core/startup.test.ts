@@ -47,7 +47,7 @@ describe("startup non-blocking prune", () => {
         expect(elapsed).toBeLessThan(200);
         await new Promise(r => setTimeout(r, 800));
         const store2 = await loadHashStore();
-        const remaining = (store2.stmts.allPaths() as { path: string }[]).filter(r => r.path.includes("nonexistent-")).length;
+        const remaining = (store2.stmts.snapshotPaths() as { path: string }[]).filter(r => r.path.includes("nonexistent-")).length;
         expect(remaining).toBe(0);
         shutdownHashStore();
       } finally {

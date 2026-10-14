@@ -128,7 +128,7 @@ function requireEngine(): EngineSelection {
 interface Prepared {
   get: (...params: SqlParams) => Record<string, unknown> | undefined;
   getState: (...params: SqlParams) => Record<string, unknown> | undefined;
-  allPaths: (...params: SqlParams) => Record<string, unknown>[];
+  snapshotPaths: (...params: SqlParams) => Record<string, unknown>[];
   deleteOne: (...params: SqlParams) => void;
   upsert: (...params: SqlParams) => void;
   undoUpsert: (...params: SqlParams) => void;
@@ -226,7 +226,7 @@ function buildStore(db: RawDb): { db: RawDb; stmts: Prepared } {
   ).run(String(HASH_STORE_VERSION));
   const getStmt = db.prepare("SELECT hashes FROM snapshots WHERE path = ? AND checksum = ? AND line_count = ?");
   const getStateStmt = db.prepare("SELECT checksum, hashes, line_checksums FROM snapshots WHERE path = ?");
-  const allStmt = db.prepare("SELECT path FROM snapshots UNION SELECT path FROM undo");
+  const snapshotPathsStmt = db.prepare("SELECT path FROM snapshots");
   const delStmt = db.prepare("DELETE FROM snapshots WHERE path = ?");
   const upsertStmt = db.prepare(
     "INSERT INTO snapshots (path, checksum, line_count, hashes, line_checksums, updated_at) VALUES (?, ?, ?, ?, ?, ?) " +
@@ -245,7 +245,7 @@ function buildStore(db: RawDb): { db: RawDb; stmts: Prepared } {
   const stmts: Prepared = {
     get: (...params) => getStmt.get(...params) as Record<string, unknown> | undefined,
     getState: (...params) => getStateStmt.get(...params) as Record<string, unknown> | undefined,
-    allPaths: (...params) => withBusyRetry(() => allStmt.all(...params) as Record<string, unknown>[]),
+    snapshotPaths: (...params) => withBusyRetry(() => snapshotPathsStmt.all(...params) as Record<string, unknown>[]),
     deleteOne: retriedWrite(delStmt),
     upsert: retriedWrite(upsertStmt),
     undoUpsert: retriedWrite(undoUpsertStmt),
@@ -640,7 +640,7 @@ async function statMissing(rows: { path: string }[]): Promise<string[]> {
 }
 
 export async function pruneMissing(store: HashStore): Promise<string[]> {
-  const rows = store.stmts.allPaths() as { path: string }[];
+  const rows = store.stmts.snapshotPaths() as { path: string }[];
   const missing = await statMissing(rows);
   if (missing.length === 0) return [];
   withStore(() => {

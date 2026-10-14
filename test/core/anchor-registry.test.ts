@@ -7,6 +7,7 @@ import {
   resetRegistryForTests,
   allocateAnchor,
   freeAnchors,
+  freeAnchorsForPaths,
   clearRegistry,
   ownerOf,
   ownersForPath,
@@ -135,6 +136,60 @@ describe("anchor registry", () => {
     freeAnchors("a.ts");
     expect(ownerOf(b)).toBeUndefined();
     expect(servedForPath("a.ts")).toBeUndefined();
+  });
+
+  it("frees several paths in one pass and keeps unrelated anchors", () => {
+    const a1 = allocateAnchor("a.ts", "ckA1");
+    const a2 = allocateAnchor("a.ts", "ckA2");
+    const b1 = allocateAnchor("b.ts", "ckB1");
+    const keep = allocateAnchor("keep.ts", "ckK");
+    markServed("a.ts", [[a1, "ckA1"], [a2, "ckA2"]]);
+    markServed("b.ts", [[b1, "ckB1"]]);
+
+    expect(() => freeAnchorsForPaths([])).not.toThrow();
+    freeAnchorsForPaths(["a.ts", "b.ts", "never-owned.ts"]);
+
+    expect(ownerOf(a1)).toBeUndefined();
+    expect(ownerOf(a2)).toBeUndefined();
+    expect(ownerOf(b1)).toBeUndefined();
+    expect(ownerOf(keep)).toEqual({ path: "keep.ts", checksum: "ckK" });
+    expect(servedForPath("a.ts")).toBeUndefined();
+    expect(servedForPath("b.ts")).toBeUndefined();
+  });
+
+  it("appends one free event per path freed in a batch", async () => {
+    const sessionFile = join(sessionClaimsDir(), "batch-free.jsonl");
+    await mkdir(sessionClaimsDir(), { recursive: true });
+    await writeFile(sessionFile, "", "utf-8");
+    const ctx = { sessionManager: { getSessionFile: () => sessionFile, getSessionId: () => "batch-free" } };
+
+    await withAnchorSession(ctx, () => {
+      allocateAnchor("a.ts", "ckA");
+      allocateAnchor("b.ts", "ckB");
+      freeAnchorsForPaths(["a.ts", "b.ts", "c.ts"]);
+    });
+
+    const log = parseRegistryLog(await readFile(join(sessionClaimsDir(), `${sessionKeyFor(ctx)!}.registry.jsonl`), "utf-8"));
+    expect(log.flatMap((event) => (event.kind === "free" ? [event.path] : []))).toEqual(["a.ts", "b.ts"]);
+  });
+
+  it("frees a large registry against many unrelated paths in one pass", () => {
+    let last = "";
+    for (let i = 0; i < 50_000; i++) last = allocateAnchor("owned.ts", `ck${i}`);
+    const missing = Array.from({ length: 4_000 }, (_, i) => `missing-${i}.ts`);
+
+    const started = Date.now();
+    freeAnchorsForPaths(missing);
+    expect(Date.now() - started).toBeLessThan(2000);
+
+    expect(ownerOf(last)).toEqual({ path: "owned.ts", checksum: "ck49999" });
+    freeAnchorsForPaths(["owned.ts"]);
+    expect(ownersForPath("owned.ts").size).toBe(0);
+  });
+
+  it("is a no-op without an active session", () => {
+    resetRegistryForTests();
+    expect(() => freeAnchorsForPaths(["a.ts"])).not.toThrow();
   });
 
   it("merges and scopes the served record", () => {
