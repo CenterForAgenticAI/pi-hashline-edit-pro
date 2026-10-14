@@ -159,7 +159,7 @@ The extension registers eight tools: `read`, `replace`, `replace_match`, `insert
 
 ### read
 
-`read` returns a text file with every line prefixed by `anchor│content`. The anchor is the line's address. `offset` accepts a 1-indexed line number or a served anchor; with an anchor, `limit` counts the lines to return after it. Anchor offsets are stable across edits and return the same editable rows.
+`read` returns a text file with every line prefixed by `anchor│content`. The anchor is the line's address. `offset` accepts a 1-indexed line number or a served anchor; with an anchor, `limit` counts the lines to return starting at that anchor row. Anchor offsets are stable across edits and return the same editable rows.
 
 | Parameter | Description |
 | --- | --- |
@@ -207,7 +207,7 @@ A deletion keeps blank lines at the edges of the removed range, so the separator
 
 The extension checks the request before any file I/O, so a bad request never touches the file.
 
-Auto-fixable slips fall into two groups. Fixed silently: a reversed range, embedded newlines, and a legacy array payload (a single-element array that holds stringified array text, even with a trailing JS method call, for example `[…].map(s => s)`, is unwrapped). Fixed with a warning: a leftover `anchor│` prefix in `text` or the anchor fields (a prefix of 4 to 5 letters before `│`, for example `abde│`), and diff-preview rows pasted into the replacement.
+Auto-fixable slips fall into two groups. Fixed silently: embedded newlines and a legacy array payload (a single-element array that holds stringified array text, even with a trailing JS method call, for example `[…].map(s => s)`, is unwrapped). Fixed with a warning or a hint: a reversed `remove_from`/`remove_to` range is applied in document order with an `[H_RANGE_REVERSED]` hint; a leftover `anchor│` prefix in `text` or the anchor fields (a prefix of 4 to 5 letters before `│`, for example `abde│`) and diff-preview rows pasted into the replacement are stripped with a warning.
 
 Content containing a NUL byte (`U+0000`) is rejected with `[E_BAD_SHAPE]` before any file I/O: writing it would make the file binary, so use an empty replacement to delete. This applies to the `text` field of both `replace` and `insert`.
 
@@ -473,6 +473,7 @@ Full reference:
 | `[H_INDENT_MISMATCH]` | The new line has fewer leading whitespace characters than a structurally similar row (a reference row near the anchor line for an insert, or the replaced line). The edit applied as sent; the one-line hint names both counts and the reference anchor, for example `[H_INDENT_MISMATCH] new line has 0 leading whitespace characters; Kq3f│ has 2.` Copied or moved blocks are not checked, because their indentation comes from the source lines. |
 | `[H_SEPARATOR_MOVED]` | An insert landed its text directly against the anchor line, and the blank line that separated the anchor from its neighbor was displaced to the other side of the inserted text. The edit applied as sent; the one-line hint names the anchor and which side lost the blank line, for example `[H_SEPARATOR_MOVED] blank separator above Kq3f│ was displaced; add a blank line before Kq3f│ if unintended.` |
 | `[H_SEPARATOR_LOST]` | A pure deletion removed a run of blank lines that sat between two content lines. The edit applied as sent; the one-line hint names the two surviving anchors and the removed count, for example `[H_SEPARATOR_LOST] deletion removed 2 blank lines between Aaaa│ and Dddd│.` |
+| `[H_RANGE_REVERSED]` | The `remove_from` anchor resolved to a line after `remove_to`. The call applied the range in document order; the one-line hint names the line range used. |
 | `[E_NOT_FOUND]` | The path does not exist. |
 | `[E_ACCESS]` | The file is not readable or writable. |
 | `[E_NOT_TEXT]` | The path is a directory, binary file, image, or UTF-16/UTF-32 encoded text; hashline editing only supports text files. |

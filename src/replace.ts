@@ -158,9 +158,11 @@ function withEndingOverrides(edit: HEdit, overrides: (LineEnding | undefined)[] 
   const length = Math.max(edit.content_separators?.length ?? 0, overrides.length);
   const separators: (LineEnding | undefined)[] = new Array(length);
   for (let index = 0; index < length; index++) {
-    separators[index] = overrides[index] ?? edit.content_separators?.[index];
+    separators[index] = index < overrides.length ? overrides[index] : edit.content_separators?.[index];
   }
-  if (separators.every((ending) => ending === undefined)) return edit;
+  if (separators.every((ending) => ending === undefined)) {
+    return edit.content_separators === undefined ? edit : { ...edit, content_separators: undefined };
+  }
   return { ...edit, content_separators: separators };
 }
 

@@ -163,3 +163,75 @@ describe("line endings via embedded breaks", () => {
     });
   });
 });
+
+describe("line endings preserved by replace_match", () => {
+  it("keeps CRLF endings when a multi-line range is rewritten", async () => {
+    await withTempFile("sample.txt", "alpha\r\nbeta\r\ngamma\r\ndelta\r\n", async ({ cwd, path }) => {
+      const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
+      const text = getText(await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx));
+      const alpha = anchorFor(text, "alpha");
+      const gamma = anchorFor(text, "gamma");
+      await getTool("replace_match").execute(
+        "m1",
+        { replace_from: alpha, replace_to: gamma, old_string: "beta", new_string: "BETA" },
+        undefined,
+        undefined,
+        ctx,
+      );
+      expect(await readFile(path, "utf-8")).toBe("alpha\r\nBETA\r\ngamma\r\ndelta\r\n");
+    });
+  });
+
+  it("keeps a CRLF ending that spans the new_string boundary whole", async () => {
+    await withTempFile("sample.txt", "alpha\r\nbeta\r\ngamma\r\n", async ({ cwd, path }) => {
+      const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
+      const text = getText(await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx));
+      const alpha = anchorFor(text, "alpha");
+      const gamma = anchorFor(text, "gamma");
+      await getTool("replace_match").execute(
+        "m1",
+        { replace_from: alpha, replace_to: gamma, old_string: "beta", new_string: "BETA\r" },
+        undefined,
+        undefined,
+        ctx,
+      );
+      expect(await readFile(path, "utf-8")).toBe("alpha\r\nBETA\r\ngamma\r\n");
+    });
+  });
+
+  it("honors an explicit ending inside new_string and inherits the rest", async () => {
+    await withTempFile("sample.txt", "alpha\r\nbeta\r\ngamma\r\n", async ({ cwd, path }) => {
+      const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
+      const text = getText(await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx));
+      const alpha = anchorFor(text, "alpha");
+      const gamma = anchorFor(text, "gamma");
+      await getTool("replace_match").execute(
+        "m1",
+        { replace_from: alpha, replace_to: gamma, old_string: "beta", new_string: "BETA\r\nEXTRA" },
+        undefined,
+        undefined,
+        ctx,
+      );
+      expect(await readFile(path, "utf-8")).toBe("alpha\r\nBETA\r\nEXTRA\r\ngamma\r\n");
+    });
+  });
+
+  it("keeps CRLF endings when replace_match runs inside a batch", async () => {
+    await withTempFile("sample.txt", "alpha\r\nbeta\r\ngamma\r\ndelta\r\n", async ({ cwd, path }) => {
+      const { ctx, readTool, getTool, handlers } = setupIntegrationTest(cwd);
+      const text = getText(await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx));
+      const alpha = anchorFor(text, "alpha");
+      const gamma = anchorFor(text, "gamma");
+      const delta = anchorFor(text, "delta");
+      const matchArgs = { replace_from: alpha, replace_to: gamma, old_string: "beta", new_string: "BETA" };
+      const replaceArgs = { remove_from: delta, remove_to: delta, text: "DELTA" };
+      const message = assistantMessage([toolCall("m1", "replace_match", matchArgs), toolCall("m2", "replace", replaceArgs)]);
+      await handlers.get("message_end")!({ type: "message_end", message }, ctx);
+      const first = await getTool("replace_match").execute("m1", matchArgs, undefined, undefined, ctx);
+      expect(getText(first)).toBe("In batch 1 (queued)");
+      const last = await getTool("replace").execute("m2", replaceArgs, undefined, undefined, ctx);
+      expect(last.details.metrics?.classification).toBe("applied");
+      expect(await readFile(path, "utf-8")).toBe("alpha\r\nBETA\r\ngamma\r\nDELTA\r\n");
+    });
+  });
+});

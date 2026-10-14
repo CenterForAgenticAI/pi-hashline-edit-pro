@@ -4,7 +4,7 @@ import * as Diff from "diff";
 import { execPipeline, noteAnchorError, previewFromPipe, previewError, type ReplaceDetails } from "./replace";
 import { commitEdit } from "./commit";
 import { readNormFile, type NormFile } from "./file-reader";
-import { fmtRegion, MAX_HASH_LINES, parseHashRef, planEdit, preserveDeletionSeparators, resEdit, resolveAnchorLine, stripAnchorRow, type Anchor } from "./hashline";
+import { fmtRegion, MAX_HASH_LINES, parseHashRef, parsePayloadText, planEdit, preserveDeletionSeparators, resEdit, resolveAnchorLine, stripAnchorRow, type Anchor } from "./hashline";
 import { servedForPath, withAnchorSession } from "./anchor-registry";
 import { batchMemberFor, executeBatchMember, noteBatchFailure, registerBatchPlanner, type BatchMemberPlan, type BatchPlannerInput } from "./batch";
 import { loadP, loadGuidelines } from "./prompts";
@@ -16,9 +16,9 @@ import {
   type ReplaceMatchReq,
 } from "./payload-contract";
 import { literalEscapeHints, makePrepareArguments, splitLines } from "./utils";
-import { toLF } from "./normalize";
+import { toLF, type LineEnding } from "./normalize";
 import { isFidelitySensitiveChar } from "./edit-fidelity";
-import { countNewlines } from "./line-endings";
+import { countNewlines, splitWithEndings } from "./line-endings";
 import { MAX_RANGE_STALE_LINES } from "./constants";
 import {
   assertBoundaryLinesServed,
@@ -44,6 +44,7 @@ interface MatchRefs {
 export interface MatchPlan {
   editParams: { remove_from: string; remove_to: string; text: string };
   warnings: string[];
+  contentSeparators: (LineEnding | undefined)[];
   servedOverride?: ReadonlyMap<string, string>;
 }
 
@@ -51,18 +52,46 @@ function formatMatchRange(start: number, end: number): string {
   return start === end ? `line ${start}` : `lines ${start}-${end}`;
 }
 
-function replaceAllOccurrences(text: string, oldText: string, newText: string): { text: string; count: number } {
-  let out = "";
+function replaceAllOccurrences(
+  text: string,
+  oldText: string,
+  newText: string,
+): { text: string; separators: (LineEnding | undefined)[]; count: number } {
+  const parts: string[] = [];
+  const inserted: Array<{ start: number; end: number }> = [];
+  let length = 0;
+  const append = (chunk: string, fromNewText: boolean): void => {
+    if (fromNewText) inserted.push({ start: length, end: length + chunk.length });
+    parts.push(chunk);
+    length += chunk.length;
+  };
   let cursor = 0;
   let count = 0;
   for (;;) {
     const found = text.indexOf(oldText, cursor);
     if (found < 0) break;
-    out += text.slice(cursor, found) + newText;
+    append(text.slice(cursor, found), false);
+    append(newText, true);
     cursor = found + oldText.length;
     count += 1;
   }
-  return count === 0 ? { text, count: 0 } : { text: out + text.slice(cursor), count };
+  if (count === 0) return { text, separators: [], count: 0 };
+  append(text.slice(cursor), false);
+  const replacement = parts.join("");
+  const parsed = splitWithEndings(replacement);
+  const separators: (LineEnding | undefined)[] = [];
+  let offset = 0;
+  let insertedIndex = 0;
+  for (let index = 0; index < parsed.lines.length; index++) {
+    offset += parsed.lines[index]!.length;
+    const ending = parsed.endings[index];
+    if (ending === undefined) continue;
+    while (insertedIndex < inserted.length && inserted[insertedIndex]!.end <= offset) insertedIndex += 1;
+    const fromNewText = insertedIndex < inserted.length && offset >= inserted[insertedIndex]!.start && offset < inserted[insertedIndex]!.end;
+    separators.push(fromNewText ? ending : undefined);
+    offset += ending.length;
+  }
+  return { text: replacement, separators, count };
 }
 
 const RETYPE_DIFF_MAX_CHARS = 20_000;
@@ -206,10 +235,11 @@ export function buildReplaceMatchEdit(
   const rangeText = `${rangeLines.join("\n")}${rangeLines[rangeLines.length - 1] === "" ? "\n" : ""}`;
   const oldText = toLF(req.old_string);
   const newText = toLF(req.new_string);
-  const { text: replacement, count } = replaceAllOccurrences(rangeText, oldText, req.new_string);
+  const { text: replacement, separators: replacementSeparators, count } = replaceAllOccurrences(rangeText, oldText, req.new_string);
   if (count === 0) {
     throw new Error(notFoundMessage(displayPath, start, end, preload.fileHashes, fileLines, rangeText, oldText));
   }
+  const contentSeparators = parsePayloadText(replacement).lines.map((_, index) => replacementSeparators[index]);
   const startRef = fromLine <= toLine ? refs.from : refs.to;
   const endRef = fromLine <= toLine ? refs.to : refs.from;
   const servedOverride = trustRangeServed(fileLines, preload.fileHashes, served, start, end);
@@ -228,6 +258,7 @@ export function buildReplaceMatchEdit(
       text: replacement,
     },
     warnings,
+    contentSeparators,
     ...(servedOverride !== undefined ? { servedOverride } : {}),
   };
 }
@@ -251,6 +282,7 @@ function planReplaceMatchBatchMember(input: BatchPlannerInput): BatchMemberPlan 
   return {
     hedit,
     warnings: [...warnings, ...hints, ...resWarnings, ...matchPlan.warnings],
+    contentSeparators: matchPlan.contentSeparators,
     planned,
     foldedLines: 0,
     ...(matchPlan.servedOverride !== undefined ? { servedOverride: matchPlan.servedOverride } : {}),
@@ -286,6 +318,7 @@ export async function replaceMatchPreview(request: unknown, cwd: string, signal?
       noPersist: true,
       preloadedNorm: preload,
       served: plan.servedOverride,
+      endingOverrides: plan.contentSeparators,
       signal,
     });
     return previewFromPipe(pipe);
@@ -367,6 +400,7 @@ export function buildReplaceMatchToolDef(flags: EditToolFlags = DEFAULT_EDIT_FLA
             signal,
             preloadedNorm: preload,
             served: plan.servedOverride,
+            endingOverrides: plan.contentSeparators,
           });
           return commitEdit(pipe, {
             path: pipe.path,

@@ -265,6 +265,7 @@ export function stripDiffPrefixes(edit: HEdit, warnings: string[], location: Str
 export function swapReversedRanges(
 	edit: HEdit,
 	fileHashes: string[],
+	warnings?: string[],
 ): HEdit {
 	const lineByHash = new Map<string, number>();
 	for (let i = 0; i < fileHashes.length; i++) {
@@ -280,6 +281,7 @@ export function swapReversedRanges(
 	) {
 		return edit;
 	}
+	warnings?.push(`[H_RANGE_REVERSED] "remove_from" refers to line ${startLine} after "remove_to" (line ${endLine}); lines ${endLine}-${startLine} were replaced in document order.`);
 	return { ...edit, hash_bounds: [endRef, startRef] as [Anchor, Anchor] };
 }
 

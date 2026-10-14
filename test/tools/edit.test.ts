@@ -128,6 +128,7 @@ describe("regReplace", () => {
       expect(result.content[0].text).toContain("Successfully replaced");
       expect(result.content[0].text).toContain("Added 1 line(s), removed 2 line(s).");
       expect(result.details?.metrics?.warnings).toBe(0);
+      expect(result.details?.hints?.[0]).toContain("[H_RANGE_REVERSED]");
       expect(result.details?.diff).toContain("X");
     });
   });

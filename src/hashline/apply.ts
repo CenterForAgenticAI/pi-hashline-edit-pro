@@ -166,7 +166,7 @@ export function planEdit(
   const fileHashes = precomputedHashes;
   const warnings: string[] = [];
 
-  const rangeFixed = swapReversedRanges(edit, fileHashes);
+  const rangeFixed = swapReversedRanges(edit, fileHashes, warnings);
   const prefixFixed = stripDiffPrefixes(
     stripBarePrefixes(rangeFixed, warnings, options?.stripWarning),
     warnings,
