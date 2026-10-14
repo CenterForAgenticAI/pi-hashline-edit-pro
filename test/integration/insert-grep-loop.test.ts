@@ -108,7 +108,7 @@ describe("insert and grep loop", () => {
             diff,
             metrics: { classification: "applied", changed_lines: { first: 2, last: 3 } },
           },
-          content: [{ type: "text", text: "Successfully inserted in diff.txt. Added 1 line(s), removed 1 line(s)." }],
+          content: [{ type: "text", text: "Successfully inserted in diff.txt. Added 1 line(s), removed 0 line(s)." }],
         },
         { cwd: dir },
       );

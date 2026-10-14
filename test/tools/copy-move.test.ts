@@ -80,6 +80,9 @@ describe("copy", () => {
         ctx,
       );
       expect(getText(result)).toContain("Successfully copied in sample.txt");
+      expect(getText(result)).toContain("Added 2 line(s), removed 0 line(s).");
+      expect(result.details.metrics?.added_lines).toBe(2);
+      expect(result.details.metrics?.removed_lines).toBe(0);
       expect(await readFile(path, "utf-8")).toBe("alpha\nbeta\ngamma\ndelta\nbeta\ngamma\n");
       const diff = (result.details as { diff?: string }).diff ?? "";
       expect(diff).toContain("│beta");

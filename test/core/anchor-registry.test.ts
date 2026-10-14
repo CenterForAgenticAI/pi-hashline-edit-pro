@@ -31,6 +31,8 @@ import {
 } from "../../src/anchor-registry";
 import { sessionClaimsDir } from "../../src/paths";
 import { lineHashes } from "../../src/hashline";
+import { loadHashStore, upsertSnapshot } from "../../src/hash-store";
+import { contentChecksum } from "../../src/hashline/hasher";
 import { useTestHome } from "../support/fixtures";
 
 useTestHome();
@@ -698,5 +700,27 @@ describe("anchor registry", () => {
     adoptAnchors("b.ts", new Map([[anchor, "ckB"]]));
     expect(ownerOf(anchor)).toEqual({ path: "a.ts", checksum: "ckA" });
     expect(servedForPath("b.ts")?.has(anchor) ?? false).toBe(false);
+  });
+
+  it("rejects anchor work once the session's registry was released", async () => {
+    const sessionFile = join(sessionClaimsDir(), "released.jsonl");
+    await mkdir(sessionClaimsDir(), { recursive: true });
+    await writeFile(sessionFile, "", "utf-8");
+    const ctx = { sessionManager: { getSessionFile: () => sessionFile, getSessionId: () => "released" } };
+    const pending = withAnchorSession(ctx, () => lineHashes("a\nb\n", join(sessionClaimsDir(), "released.txt")));
+    releaseRegistrySession(sessionKeyFor(ctx)!);
+    await expect(pending).rejects.toThrow(/E_REGISTRY/);
+  });
+
+  it("frees anchors that cannot be matched when a snapshot has no line checksums", async () => {
+    const path = join(sessionClaimsDir(), "no-checksums.txt");
+    const store = await loadHashStore();
+    upsertSnapshot(store, path, contentChecksum("a\nb\nc\n"), 3, ["AAAA", "BBBB", "CCCC"]);
+    adoptAnchors(path, new Map([["AAAA", "ck1"], ["BBBB", "ck2"], ["CCCC", "ck3"]]));
+    const hashes = await lineHashes("a\nX\nc\n", path);
+    expect(hashes).toHaveLength(3);
+    expect(new Set(hashes).size).toBe(3);
+    expect(ownersForPath(path).size).toBe(3);
+    for (const anchor of ["AAAA", "BBBB", "CCCC"]) expect(ownerOf(anchor)).toBeUndefined();
   });
 });

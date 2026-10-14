@@ -416,6 +416,9 @@ describe("same-turn edit batches", () => {
         ctx,
       );
       expect(second.content[0].text).toContain("Successfully inserted in sample.txt");
+      expect(second.content[0].text).toContain("Added 2 line(s), removed 0 line(s).");
+      expect(second.details.metrics?.added_lines).toBe(2);
+      expect(second.details.metrics?.removed_lines).toBe(0);
       expect(second.details.diff).toContain("ONE-A");
       expect(second.details.diff).toContain("TWO-A");
       expect(second.details.diff.startsWith("batch 1:\n")).toBe(true);

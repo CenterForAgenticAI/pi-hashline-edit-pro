@@ -15,6 +15,7 @@ export const mockIsolatedFiles = [
   "test/tools/grep-pool-skip.test.ts",
   "test/tools/grep-rg-errors.test.ts",
   "test/core/auto-read-all-fallback.test.ts",
+  "test/tools/copy-move-stale-guard.test.ts",
 ];
 
 export const heavyTestFiles = [

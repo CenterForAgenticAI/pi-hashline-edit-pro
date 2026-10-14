@@ -505,7 +505,7 @@ function batchPlaceholder(member: PlannedMember, piece: BatchPiece, snapshotId: 
     edits_noop: piece.noop ? 1 : 0,
     warnings: 0,
     classification: piece.noop ? "noop" : "applied",
-    ...(piece.noop ? {} : { added_lines: added, removed_lines: piece.end - piece.start + 1 }),
+    ...(piece.noop ? {} : { added_lines: added, removed_lines: Math.max(0, piece.end - piece.start + 1 - piece.foldedLines) }),
   };
   const structuredContent: EditStructured = {
     ok: true,
@@ -1102,7 +1102,7 @@ async function finishBatch(member: PlannedMember, signal?: AbortSignal): Promise
   let added = 0;
   let removed = 0;
   for (const piece of appliedPieces) {
-    removed += piece.end - piece.start + 1;
+    removed += Math.max(0, piece.end - piece.start + 1 - piece.foldedLines);
     added += Math.max(0, piece.newLines.length - piece.foldedLines);
   }
   const verb = batchVerb(runtime);

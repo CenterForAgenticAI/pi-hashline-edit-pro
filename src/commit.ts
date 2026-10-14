@@ -14,6 +14,28 @@ import { spanForEdit } from "./replace";
 import { restoreEndings, stripBOM, toLF, type LineEnding } from "./normalize";
 import { applyEndingOverrides, joinSeparators, separatorsForSpans } from "./line-endings";
 import { toEditVerb } from "./structured";
+export type FileStateSinceRead = "unchanged" | "deleted" | "changed";
+
+export async function fileStateSinceRead(
+  mutationTargetPath: string,
+  displayPath: string,
+  expectedNormalized: string,
+  signal?: AbortSignal,
+): Promise<FileStateSinceRead> {
+  abortIf(signal);
+  let raw: string | undefined;
+  try {
+    raw = await readFile(mutationTargetPath, "utf-8");
+  } catch (error) {
+    const code = errCode(error);
+    if (code === "ENOENT") raw = undefined;
+    else if (code === "EACCES" || code === "EPERM") throw new Error(`[E_ACCESS] File is not readable: ${displayPath}`);
+    else if (code === "ELOOP") throw new Error(`[E_ACCESS] Too many symbolic links while resolving: ${displayPath}`);
+    else throw mapIoError(error, "read", displayPath);
+  }
+  if (raw === undefined) return "deleted";
+  return toLF(stripBOM(raw).text) === expectedNormalized ? "unchanged" : "changed";
+}
 export interface CommitMeta {
   editAnchors?: [string, string];
   anchorCarry?: number;
@@ -91,21 +113,11 @@ export async function commitEdit(pipe: PipelineResult, meta: CommitMeta): Promis
     );
   }
 
-  abortIf(signal);
-  let currentRaw: string | undefined;
-  try {
-    currentRaw = await readFile(mutationTargetPath, "utf-8");
-  } catch (error) {
-    const code = errCode(error);
-    if (code === "ENOENT") currentRaw = undefined;
-    else if (code === "EACCES" || code === "EPERM") throw new Error(`[E_ACCESS] File is not readable: ${path}`);
-    else if (code === "ELOOP") throw new Error(`[E_ACCESS] Too many symbolic links while resolving: ${path}`);
-    else throw mapIoError(error, "read", path);
-  }
-  if (currentRaw === undefined) {
+  const state = await fileStateSinceRead(mutationTargetPath, path, pipe.originalNormalized, signal);
+  if (state === "deleted") {
     throw new Error(`[E_OP_ABORTED] Edit aborted: the file was deleted after the edit started.`);
   }
-  if (toLF(stripBOM(currentRaw).text) !== pipe.originalNormalized) {
+  if (state === "changed") {
     throw new Error(`[E_OP_ABORTED] Edit aborted: the file changed after the edit started. Call read for fresh anchors and retry.`);
   }
   const undo = await saveUndo(mutationTargetPath, {
@@ -141,7 +153,7 @@ export async function commitEdit(pipe: PipelineResult, meta: CommitMeta): Promis
     firstChangedLine: pipe.firstChangedLine,
     lastChangedLine: pipe.lastChangedLine,
     addedLines: Math.max(0, pipe.totalAddedLines - (meta.foldedAnchorLines ?? 0)),
-    removedLines: pipe.totalRemovedLines,
+    removedLines: Math.max(0, pipe.totalRemovedLines - (meta.foldedAnchorLines ?? 0)),
   };
 
   let resultHashes: string[];

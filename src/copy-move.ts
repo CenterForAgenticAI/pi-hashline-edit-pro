@@ -3,7 +3,7 @@ import { DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES, formatSize, truncateHead, withFil
 import { Type } from "typebox";
 import { constants } from "node:fs";
 import { execPipeline, noteAnchorError, previewFromPipe, previewError, type PipelineResult, type ReplaceDetails } from "./replace";
-import { commitEdit } from "./commit";
+import { commitEdit, fileStateSinceRead } from "./commit";
 import { readNormFile, safeSnapId, type NormFile } from "./file-reader";
 import { preEditSnapshotFor } from "./pre-edit-snapshot";
 import {
@@ -377,6 +377,17 @@ async function commitMovePair(input: {
     warnings.push("Non-UTF-8 bytes were shown as U+FFFD; this edit rewrote the file as UTF-8.");
   }
 
+  const destinationState = await fileStateSinceRead(input.destination.mutationTargetPath, input.destination.displayPath, input.destination.pipe.originalNormalized, input.signal);
+  if (destinationState !== "unchanged") {
+    const verb = destinationState === "deleted" ? "was deleted" : "changed";
+    throw new Error(`[E_OP_ABORTED] Edit aborted: ${input.destination.displayPath} ${verb} after the move started. Call read for fresh anchors and retry.`);
+  }
+  const sourceState = await fileStateSinceRead(input.source.mutationTargetPath, input.source.displayPath, input.source.pipe.originalNormalized, input.signal);
+  if (sourceState !== "unchanged") {
+    const verb = sourceState === "deleted" ? "was deleted" : "changed";
+    throw new Error(`[E_OP_ABORTED] Edit aborted: ${input.source.displayPath} ${verb} after the move started. Call read for fresh anchors and retry.`);
+  }
+
   const undoDestination = await saveUndo(input.destination.mutationTargetPath, pairEntry(input.destination.pipe, destinationSeparators));
   if (!undoDestination.persisted) {
     throw new Error(`[E_UNDO_UNAVAILABLE] Could not persist undo history for ${input.destination.displayPath}. Nothing was written.`);
@@ -451,7 +462,7 @@ async function commitMovePair(input: {
       firstChangedLine: input.destination.pipe.firstChangedLine,
       lastChangedLine: input.destination.pipe.lastChangedLine,
       addedLines: Math.max(0, input.destination.pipe.totalAddedLines - input.destination.foldedAnchorLines),
-      removedLines: input.destination.pipe.totalRemovedLines,
+      removedLines: Math.max(0, input.destination.pipe.totalRemovedLines - input.destination.foldedAnchorLines),
     },
     ...(destinationSpan !== undefined ? { spans: [destinationSpan] } : {}),
   }, "moved", contextLines);

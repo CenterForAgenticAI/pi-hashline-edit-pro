@@ -43,7 +43,7 @@ describe("insert tool", () => {
         undefined, undefined, ctx,
       );
       expect(result.content[0].text).toContain("Successfully inserted in sample.ts");
-      expect(result.content[0].text).toContain("Added 2 line(s), removed 1 line(s).");
+      expect(result.content[0].text).toContain("Added 2 line(s), removed 0 line(s).");
       expect(await readFile(path, "utf-8")).toBe("alpha\nbeta\nbeta1\nbeta2\ngamma\n");
     });
   });
@@ -523,10 +523,10 @@ describe("insert tool rendering", () => {
       strikethrough: (text: string) => text,
     } as any;
     const result = {
-      content: [{ type: "text", text: "Successfully inserted in sample.ts. Added 1 line(s), removed 1 line(s)." }],
+      content: [{ type: "text", text: "Successfully inserted in sample.ts. Added 1 line(s), removed 0 line(s)." }],
       details: {
         diff: "+ATIm│BETA1\n-ATIm│beta",
-        metrics: { classification: "applied", added_lines: 1, removed_lines: 1 },
+        metrics: { classification: "applied", added_lines: 1, removed_lines: 0 },
       },
     };
     const component = tool.renderResult!(result as any, { expanded: false, isPartial: false }, theme, { state: {}, lastComponent: undefined, isError: false } as any) as any;
