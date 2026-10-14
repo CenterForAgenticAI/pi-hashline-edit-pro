@@ -33,7 +33,7 @@ import {
   setDisableOnModelsFromText,
 } from "./src/config";
 import { loadHashStore, pruneMissing } from "./src/hash-store";
-import { type AnchorSessionContext, initRegistry, gcRegistrySidecars, clearRegistry, freeAnchors, freeAnchorsForPaths, sessionKeyFor, withAnchorSession, releaseRegistrySession, formatAnchorReclaimNotice, takeReclaimedPaths } from "./src/anchor-registry";
+import { type AnchorSessionContext, initRegistry, gcRegistrySidecars, clearRegistry, freeAnchors, freeAnchorsForPaths, sessionKeyFor, sessionContextReadable, withAnchorSession, releaseRegistrySession, formatAnchorReclaimNotice, takeReclaimedPaths } from "./src/anchor-registry";
 import { serveRows } from "./src/served";
 import { finalizeTurn, planAssistantMessage } from "./src/batch";
 import { currentEditFlags } from "./src/edit-common";
@@ -154,14 +154,7 @@ export default function (pi: ExtensionAPI): void {
     const key = sessionKeyFor(ctx);
     const entry: PendingRegistrySession = {
       key,
-      alive: () => {
-        try {
-          void ctx?.sessionManager;
-          return true;
-        } catch {
-          return false;
-        }
-      },
+      alive: () => sessionContextReadable(ctx),
     };
     const index = key === undefined ? -1 : pendingRegistrySessions.findIndex((candidate) => candidate.key === key);
     if (index >= 0) pendingRegistrySessions[index] = entry;
@@ -174,7 +167,8 @@ export default function (pi: ExtensionAPI): void {
     releaseRegistrySession(key);
   }
 
-  async function withRegistrySession<T>(ctx: AnchorSessionContext | undefined, fn: () => Promise<T> | T): Promise<T> {
+  async function withRegistrySession<T>(ctx: AnchorSessionContext | undefined, fn: () => Promise<T> | T): Promise<T | undefined> {
+    if (!sessionContextReadable(ctx)) return undefined;
     captureRegistrySession(ctx);
     return withAnchorSession(ctx, fn);
   }

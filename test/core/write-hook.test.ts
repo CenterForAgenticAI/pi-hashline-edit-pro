@@ -223,4 +223,16 @@ describe("write-hook registerWriteHook", () => {
     controller.abort();
     await expect(handler({ toolName: "write", input: { path: "a.txt", content: "hello" } }, { cwd: "/tmp", signal: controller.signal })).rejects.toThrow("Operation aborted");
   });
+  it("ignores a stale tool_call context", async () => {
+    const { pi, handlers } = makePi();
+    registerWriteHook(pi);
+    const handler = handlers.get("tool_call") as (event: unknown, ctx: unknown) => Promise<unknown>;
+    const staleCtx = {
+      cwd: "/tmp",
+      get sessionManager(): never {
+        throw new Error("This extension ctx is stale after session replacement or reload.");
+      },
+    };
+    await expect(handler({ toolName: "write", input: { path: "a.txt", content: "clean\n" } }, staleCtx)).resolves.toBeUndefined();
+  });
 });

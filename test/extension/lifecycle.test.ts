@@ -340,3 +340,28 @@ describe("session_shutdown lifecycle", () => {
     });
   });
 });
+
+describe("stale context resilience", () => {
+  it("ignores late events whose context was disposed", async () => {
+    await withTempDir("lifecycle-stale-events-", async (dir) => {
+      const { writeFile } = await import("fs/promises");
+      const { join } = await import("path");
+      const sessionFile = join(dir, "session.jsonl");
+      await writeFile(sessionFile, "", "utf-8");
+      const { pi, handlers } = makePiStub();
+      await registerExtension(pi);
+      const ctx = { cwd: dir, ui: { notify: vi.fn() }, sessionManager: { getSessionFile: () => sessionFile, getSessionId: () => "stale-events" } };
+      await handlers.get("session_start")!({}, ctx);
+      const staleCtx = {
+        cwd: dir,
+        ui: { notify: vi.fn() },
+        get sessionManager(): never {
+          throw new Error("This extension ctx is stale after session replacement or reload.");
+        },
+      };
+      await expect(handlers.get("message_end")!({ type: "message_end", message: { role: "user", content: [] } }, staleCtx)).resolves.toBeUndefined();
+      await expect(handlers.get("tool_result")!({ toolName: "read", isError: false, content: [], input: {} }, staleCtx)).resolves.toBeUndefined();
+      await expect(handlers.get("before_agent_start")!({}, staleCtx)).resolves.toBeUndefined();
+    });
+  });
+});

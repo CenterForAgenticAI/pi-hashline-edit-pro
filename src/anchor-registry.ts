@@ -435,6 +435,15 @@ function sessionFileFor(ctx: AnchorSessionContext | undefined): string | undefin
   return typeof sessionFile === "string" && sessionFile.length > 0 ? sessionFile : undefined;
 }
 
+export function sessionContextReadable(ctx: AnchorSessionContext | undefined): boolean {
+  try {
+    void ctx?.sessionManager;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function withAnchorSession<T>(ctx: AnchorSessionContext | undefined, fn: () => Promise<T> | T): Promise<T> {
   const key = sessionKeyFor(ctx);
   if (key === undefined) return fn();
