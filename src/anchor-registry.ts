@@ -512,7 +512,7 @@ function hasOwnedPath(state: SessionState, path: string): boolean {
 
 function evictPath(state: SessionState, path: string): string[] {
 	const anchors: string[] = [];
-	for (const [anchor, entry] of [...state.owned]) {
+	for (const [anchor, entry] of state.owned) {
 		if (entry.path === path) {
 			anchors.push(anchor);
 			state.owned.delete(anchor);
