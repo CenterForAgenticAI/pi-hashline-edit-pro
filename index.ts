@@ -69,6 +69,7 @@ export default function (pi: ExtensionAPI): void {
   let autoReadAllRequireGit = true;
   let disableOnModels: string[] = [];
   let readOnDisabledModels: ReadOnDisabledModels = "vanilla";
+  let codemodeActive = false;
   let readFlavor: "anchored" | "vanilla" = "anchored";
   let readFlavorCwd: string | undefined;
   let autoReadAllInjected = false;
@@ -81,7 +82,8 @@ export default function (pi: ExtensionAPI): void {
 
   async function refreshEditTools(): Promise<void> {
     try {
-      const flags = await currentEditFlags(pi.getActiveTools().includes("codemode"));
+      codemodeActive = pi.getActiveTools().includes("codemode");
+      const flags = await currentEditFlags(codemodeActive);
       if (readFlavor !== "vanilla") regRead(pi, flags);
       regReplace(pi, flags);
       regReplaceMatch(pi, flags);
@@ -252,6 +254,7 @@ export default function (pi: ExtensionAPI): void {
   }));
 
   pi.on("before_agent_start", async (_event, ctx) => withRegistrySession(ctx, async () => {
+    if (pi.getActiveTools().includes("codemode") !== codemodeActive) await refreshEditTools();
     await syncModelGate(ctx.model, ctx.cwd);
     if (autoReadAll === "off" || autoReadAllInjected) return;
     if (modelDisabled(ctx.model, disableOnModels)) return;

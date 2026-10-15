@@ -232,6 +232,33 @@ describe("grep default", () => {
   });
 });
 
+describe("codemode guideline refresh", () => {
+  it("re-registers tools when codemode becomes active", async () => {
+    await withTempDir("startup-codemode-", async (dir) => {
+      const home = join(dir, "home");
+      await mkdir(join(home, ".config", "pi-hashline-edit-pro"), { recursive: true });
+      vi.stubEnv("HOME", home);
+      vi.stubEnv("XDG_CONFIG_HOME", "");
+      try {
+        const { pi, handlers, getActive, getTool } = makePiStub(["read", "replace", "insert", "grep", "undo_last_change"]);
+        const { default: register } = await import("../../index");
+        register(pi);
+        await handlers.get("session_start")!({}, { cwd: dir, ui: { notify: vi.fn() } });
+        expect((getTool("read").promptGuidelines as string[]).some((g) => g.includes("raw file content"))).toBe(false);
+
+        pi.setActiveTools([...getActive(), "codemode"]);
+        await handlers.get("before_agent_start")!({}, { cwd: dir, ui: { notify: vi.fn() }, sessionManager: { getBranch: () => [] } });
+        expect((getTool("read").promptGuidelines as string[]).some((g) => g.includes("raw file content"))).toBe(true);
+        expect((getTool("grep").promptGuidelines as string[]).some((g) => g.includes("results[].lines[]"))).toBe(true);
+      } finally {
+        vi.unstubAllEnvs();
+        const { shutdownHashStore } = await import("../../src/hash-store");
+        shutdownHashStore();
+      }
+    });
+  });
+});
+
 describe("copy/move default", () => {
   it("session_start keeps copy and move by default", async () => {
     await withTempDir("startup-copy-move-on-", async dir => {

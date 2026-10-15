@@ -429,6 +429,17 @@ describe("codemode prompt variants", () => {
     expect(on.guidelines.some((g) => g.includes("raw file content"))).toBe(true);
   });
 
+  it("documents the script result shapes for grep and the edit tools", () => {
+    const grepOff = withGrepPrompts(grepBase, DEFAULT_EDIT_FLAGS);
+    const grepOn = withGrepPrompts(grepBase, { ...DEFAULT_EDIT_FLAGS, codemode: true });
+    expect(grepOff.guidelines.some((g) => g.includes("results[].lines[]"))).toBe(false);
+    expect(grepOn.guidelines.some((g) => g.includes("results[].lines[]"))).toBe(true);
+    const replaceOff = withReplacePrompts(replaceBase, DEFAULT_EDIT_FLAGS);
+    const replaceOn = withReplacePrompts(replaceBase, { ...DEFAULT_EDIT_FLAGS, codemode: true });
+    expect(replaceOff.guidelines.some((g) => g.includes("chain the next edit"))).toBe(false);
+    expect(replaceOn.guidelines.some((g) => g.includes("chain the next edit"))).toBe(true);
+  });
+
   it("adds the script transfer and undo notes only when codemode is active", () => {
     const transferBase = {
       description: loadP("../tool-prompts/copy.md"),
