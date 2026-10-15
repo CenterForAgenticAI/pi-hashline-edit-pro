@@ -17,6 +17,10 @@ type Structured = {
 	truncated?: boolean;
 	blockedByLongLine?: boolean;
 	hadUtf8DecodeErrors?: boolean;
+	type?: string;
+	data?: string;
+	note?: string;
+	notices?: string[];
 	verb?: string;
 	classification?: string;
 	diff?: string;
@@ -79,6 +83,23 @@ describe("structuredContent for read and replace", () => {
 		});
 	});
 
+	it("read returns raw file text and anchors separately", async () => {
+		const jsonl = '{"index":0}\n{"index":1}\n{"index":2}\n';
+		await withTempFile("odyssey.jsonl", jsonl, async ({ cwd }) => {
+			const { readTool, ctx } = setupIntegrationTest(cwd);
+			const result = await readTool.execute("r1", { path: "odyssey.jsonl", limit: 2 }, undefined, undefined, ctx);
+			const sc = structured(result);
+			expect(sc.text).toBe('{"index":0}\n{"index":1}');
+			expect(sc.text).not.toContain("│");
+			expect(sc.text).not.toContain("Showing lines");
+			expect(sc.notices).toEqual([]);
+			expect(sc.lines!.map((line) => line.text)).toEqual(['{"index":0}', '{"index":1}']);
+			const rows = sc.text!.split("\n").map((line) => JSON.parse(line));
+			expect(rows).toEqual([{ index: 0 }, { index: 1 }]);
+			expect(getText(result)).toContain("Showing lines 1-2 of 3");
+		});
+	});
+
 	it("read marks an oversized line while keeping its anchor editable", async () => {
 		const long = "X".repeat(60_000);
 		await withTempFile("min.js", `a\n${long}\nb\n`, async ({ cwd }) => {
@@ -117,10 +138,11 @@ describe("structuredContent for read and replace", () => {
 			const { readTool, ctx } = setupIntegrationTest(cwd);
 			const result = await readTool.execute("r1", { path: "pixel.png" }, undefined, undefined, ctx);
 			const sc = structured(result);
-			expect(sc.ok).toBe(true);
-			expect(sc.kind).toBe("image");
-			expect(sc.path).toBe("pixel.png");
+			expect(sc.type).toBe("image");
 			expect(sc.mimeType).toBe("image/png");
+			expect(typeof sc.data).toBe("string");
+			expect(sc.data).not.toBe("");
+			expect(typeof sc.note).toBe("string");
 			expect(result.content.length).toBeGreaterThan(0);
 		});
 	});

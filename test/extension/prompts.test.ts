@@ -422,6 +422,13 @@ describe("codemode prompt variants", () => {
     }
   });
 
+  it("documents the raw read contract only when codemode is active", () => {
+    const off = withReadPrompts(readBase, DEFAULT_EDIT_FLAGS);
+    const on = withReadPrompts(readBase, { ...DEFAULT_EDIT_FLAGS, codemode: true });
+    expect(off.guidelines.some((g) => g.includes("raw file content"))).toBe(false);
+    expect(on.guidelines.some((g) => g.includes("raw file content"))).toBe(true);
+  });
+
   it("adds the script transfer and undo notes only when codemode is active", () => {
     const transferBase = {
       description: loadP("../tool-prompts/copy.md"),

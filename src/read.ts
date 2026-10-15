@@ -346,8 +346,7 @@ export function regRead(pi: ExtensionAPI, flags: EditToolFlags = DEFAULT_EDIT_FL
 						context: typeof ctx,
 					) => ReturnType<typeof builtinRead.execute>;
 					const imageResult = await executeBuiltinRead(_toolCallId, params, signal, _onUpdate, ctx);
-					const imageStructured: ReadResult = { ok: true, kind: "image", path: rawPath, mimeType: file.mimeType };
-					return { ...imageResult, structuredContent: imageStructured };
+					return { ...imageResult, structuredContent: imageResult.structuredContent as ReadResult };
 				}
 	      const { normalized, fileHashes, hadUtf8DecodeErrors, absolutePath: resolvedPath } = await readNormFile(
 	        rawPath, ctx.cwd, { signal, preloadedFile: file, maxLines: MAX_HASH_LINES },
@@ -363,24 +362,27 @@ export function regRead(pi: ExtensionAPI, flags: EditToolFlags = DEFAULT_EDIT_FL
 				serveRows(resolvedPath, fileHashes, fileLines, preview.servedHashes);
 				const snapshotId = await safeSnapId(absolutePath, "read");
 				const reclaimNotice = formatAnchorReclaimNotice(takeReclaimedPaths());
-				const previewText = [
-					preview.text,
+				const notices = [
 					hadUtf8DecodeErrors ? "[Non-UTF-8 bytes shown as U+FFFD; editing rewrites the file as UTF-8.]" : undefined,
 					reclaimNotice,
-				].filter((part): part is string => part !== undefined).join("\n\n");
+				].filter((part): part is string => part !== undefined);
+				const previewText = [preview.text, ...notices].join("\n\n");
+				const servedRawText = preview.anchoredLines.map((row) => fileLines[row.line - 1] ?? "").join("\n");
+				const rawTruncation = servedRawText.length > 0 ? truncateHead(servedRawText, { maxBytes: DEFAULT_MAX_BYTES, maxLines: DEFAULT_MAX_LINES }) : undefined;
 
 				const structuredContent: ReadResult = {
 					ok: true,
 					kind: "read",
 					path: rawPath,
-					text: previewText,
+					text: rawTruncation?.content ?? "",
 					lines: preview.anchoredLines,
 					totalLines: preview.totalLines,
 					startLine: preview.startLine,
 					nextOffset: preview.nextOffset ?? null,
-					truncated: preview.truncation !== undefined,
+					truncated: preview.truncation !== undefined || rawTruncation?.truncated === true,
 					blockedByLongLine: preview.blockedByLongLine,
 					hadUtf8DecodeErrors,
+					notices,
 				};
 				return {
 					content: [{ type: "text", text: previewText }],

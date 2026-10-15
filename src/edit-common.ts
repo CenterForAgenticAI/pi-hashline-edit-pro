@@ -55,6 +55,8 @@ const SHARED_PAYLOAD_OPS = ["replace", "replace_match", "insert"];
 const SHARED_DIFF_OPS = ["replace", "replace_match", "insert", "copy", "move", "undo_last_change"];
 const RESULT_CONTRACT_GUIDELINE =
   'When called from a codemode script, failures resolve to `{ ok: false, kind: "error", error: { code, message } }`; branch on `ok` instead of `try`/`catch`.';
+const READ_SCRIPT_GUIDELINE =
+  '`read`: a codemode script receives `{ text, lines, notices }`; `text` is the raw file content of the served window and `lines[].anchor` is the editable anchor. An image read resolves to an image block.';
 const SCRIPT_BATCH_GUIDELINE =
   "Script calls apply immediately in order, and only the most recent edit per file is undoable.";
 const SCRIPT_TRANSFER_GUIDELINE =
@@ -141,7 +143,7 @@ function readGuidelineApplies(guideline: Guideline, flags: EditToolFlags): boole
 
 export function withReadPrompts(base: { description: string; snippet: string; guidelines: Guideline[] }, flags: EditToolFlags): { description: string; snippet: string; guidelines: string[] } {
   const preference = preferenceGuideline(flags);
-  const script = flags.codemode ? [RESULT_CONTRACT_GUIDELINE] : [];
+  const script = flags.codemode ? [READ_SCRIPT_GUIDELINE, RESULT_CONTRACT_GUIDELINE] : [];
   const applicable = base.guidelines.filter((guideline) => readGuidelineApplies(guideline, flags));
   if (flags.autoReadAllActive) {
     const rewritten = applicable.filter((guideline) => guideline.id !== READ_REREAD_ID).map((guideline) => guideline.text);

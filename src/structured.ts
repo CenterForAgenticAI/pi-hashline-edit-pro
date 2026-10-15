@@ -45,16 +45,17 @@ export type ReadTextResult = {
 	truncated: boolean;
 	blockedByLongLine: boolean;
 	hadUtf8DecodeErrors: boolean;
+	notices: string[];
 };
 
 export type ReadImageResult = {
-	ok: true;
-	kind: "image";
-	path: string;
+	type: "image";
+	data: string;
 	mimeType: string;
+	note: string;
 };
 
-export type ReadResult = ReadTextResult | ReadImageResult | StructuredError;
+export type ReadResult = ReadTextResult | ReadImageResult | string | StructuredError;
 
 export const readResultSchema = Type.Union([
 	Type.Object({
@@ -69,13 +70,15 @@ export const readResultSchema = Type.Union([
 		truncated: Type.Boolean(),
 		blockedByLongLine: Type.Boolean(),
 		hadUtf8DecodeErrors: Type.Boolean(),
+		notices: Type.Array(Type.String()),
 	}),
 	Type.Object({
-		ok: Type.Literal(true),
-		kind: Type.Literal("image"),
-		path: Type.String(),
+		type: Type.Literal("image"),
+		data: Type.String(),
 		mimeType: Type.String(),
+		note: Type.String(),
 	}),
+	Type.String(),
 	structuredErrorSchema,
 ]);
 
