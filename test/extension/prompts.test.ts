@@ -187,15 +187,15 @@ describe("edit prompt flag variants", () => {
     expect(result.guidelines.some((g) => g.includes("strict-input mode is on; auto-fixable slips are rejected"))).toBe(true);
   });
 
-  it("withReplacePrompts lists only the enabled edit tools in its preference guideline", () => {
-    const all = withReplacePrompts(replaceBase, DEFAULT_EDIT_FLAGS);
-    expect(all.guidelines[0]).toBe("Remember to use the hashline tools for every file read and edit: `read`, `replace`, `replace_match`, `insert`, `copy`, `move`, or `undo_last_change`.");
-    const noWithin = withReplacePrompts(replaceBase, { ...DEFAULT_EDIT_FLAGS, replaceMatchEnabled: false });
-    expect(noWithin.guidelines[0]).not.toContain("replace_match");
-    const noTransfer = withReplacePrompts(replaceBase, { ...DEFAULT_EDIT_FLAGS, copyMoveEnabled: false });
-    expect(noTransfer.guidelines[0]).not.toContain("`copy`");
-    expect(noTransfer.guidelines[0]).not.toContain("`move`");
-    expect(noTransfer.guidelines[0]).toContain("`replace_match`");
+  it("carries the shared edit guidelines on replace only", () => {
+    const replace = withReplacePrompts(replaceBase, DEFAULT_EDIT_FLAGS);
+    expect(replace.guidelines.filter((g) => g.includes("same-file calls in one message commit as one batch"))).toHaveLength(1);
+    expect(replace.guidelines.some((g) => g.includes("anchors resolve the file"))).toBe(true);
+    expect(replace.guidelines.some((g) => g.includes("`text` is written exactly as received"))).toBe(true);
+    const insert = withInsertPrompts(insertBase, DEFAULT_EDIT_FLAGS);
+    expect(insert.guidelines.some((g) => g.includes("same-file calls in one message commit as one batch"))).toBe(false);
+    const match = withReplaceMatchPrompts(withinBase, DEFAULT_EDIT_FLAGS);
+    expect(match.guidelines.some((g) => g.includes("same-file calls in one message commit as one batch"))).toBe(false);
   });
 
   it("adds the diff-row guideline only when auto-read is on", () => {
@@ -221,11 +221,11 @@ describe("edit prompt flag variants", () => {
     expect(off.guidelines.some((g) => g.includes("combined diff"))).toBe(false);
   });
 
-  it("moves the insert batch wording into the shared edit guideline when auto-read is off", () => {
-    const on = withInsertPrompts(insertBase, DEFAULT_EDIT_FLAGS);
-    expect(on.guidelines.some((g) => g.includes("combined diff"))).toBe(true);
-    expect(on.description).not.toContain("combined");
-    const off = withInsertPrompts(insertBase, { ...DEFAULT_EDIT_FLAGS, autoRead: false });
+  it("keeps the insert prompts free of the shared edit guidelines", () => {
+    const insert = withInsertPrompts(insertBase, DEFAULT_EDIT_FLAGS);
+    expect(insert.guidelines.some((g) => g.includes("combined diff"))).toBe(false);
+    expect(insert.description).not.toContain("combined");
+    const off = withReplacePrompts(replaceBase, { ...DEFAULT_EDIT_FLAGS, autoRead: false });
     expect(off.guidelines.some((g) => g.includes("combined result"))).toBe(true);
   });
 
@@ -256,24 +256,25 @@ describe("edit prompt flag variants", () => {
     expect(on.guidelines.some((g) => g.includes("cross-file `move`"))).toBe(true);
   });
 
-  it("withInsertPrompts adds the require-path and strict-input notices", () => {
+  it("withInsertPrompts adds no shared notices", () => {
     const result = withInsertPrompts(insertBase, { ...DEFAULT_EDIT_FLAGS, requirePath: true, strictInput: true });
-    expect(result.guidelines.some((g) => g.includes("pass `path` matching the file the anchors were served for"))).toBe(true);
+    expect(result.guidelines.some((g) => g.includes("pass `path` matching the file the anchors were served for"))).toBe(false);
     expect(result.snippet).not.toContain("include `path` (required)");
-    expect(result.guidelines.some((g) => g.includes("strict-input mode is on"))).toBe(true);
+    expect(result.guidelines.some((g) => g.includes("strict-input mode is on"))).toBe(false);
   });
 
-  it("withReplaceMatchPrompts adds the require-path and strict-input notices", () => {
+  it("withReplaceMatchPrompts adds only its strict-input notice", () => {
     const result = withReplaceMatchPrompts(replaceBase, { ...DEFAULT_EDIT_FLAGS, requirePath: true, strictInput: true });
-    expect(result.guidelines.some((g) => g.includes("pass `path` matching the file the anchors were served for"))).toBe(true);
-    expect(result.guidelines.some((g) => g.includes("strict-input mode is on"))).toBe(true);
+    expect(result.guidelines.some((g) => g.includes("pass `path` matching the file the anchors were served for"))).toBe(false);
+    expect(result.guidelines.some((g) => g.includes("strict-input mode is on"))).toBe(false);
+    expect(result.guidelines.some((g) => g.includes("rejects an `old_string` that covers the whole range"))).toBe(true);
   });
 
   it("withReplaceMatchPrompts keeps its own guideline and names only enabled tools", () => {
     const on = withReplaceMatchPrompts(withinBase, DEFAULT_EDIT_FLAGS);
     const off = withReplaceMatchPrompts(withinBase, { ...DEFAULT_EDIT_FLAGS, copyMoveEnabled: false });
-    expect(on.guidelines[1]).toBe(withinBase.guidelines[0].text);
-    expect(off.guidelines[1]).toBe(withinBase.guidelines[0].text);
+    expect(on.guidelines[0]).toBe(withinBase.guidelines[0].text);
+    expect(off.guidelines[0]).toBe(withinBase.guidelines[0].text);
     expect(off.guidelines.some((g) => g.includes("`copy`") || g.includes("`move`"))).toBe(false);
   });
 
@@ -370,14 +371,16 @@ describe("edit prompt flag variants", () => {
     expect(off.guidelines.some((g) => g.includes("needs both boundary lines served"))).toBe(false);
   });
 
-  it("withTransferPrompts keeps the anchor-only contract by default", () => {
+  it("keeps the anchor-only contract on the replace host", () => {
     const base = {
       description: loadP("../tool-prompts/copy.md"),
       snippet: loadP("../tool-prompts/copy-snippet.md"),
       guidelines: loadGuidelines("../tool-prompts/copy-guidelines.md"),
     };
-    const result = withTransferPrompts(base, DEFAULT_EDIT_FLAGS);
-    expect(result.guidelines.some((g) => g.includes("anchors resolve the file; `path` is optional but must match anchor ownership when passed."))).toBe(true);
+    const transfer = withTransferPrompts(base, DEFAULT_EDIT_FLAGS);
+    expect(transfer.guidelines.some((g) => g.includes("anchors resolve the file; `path` is optional but must match anchor ownership when passed."))).toBe(false);
+    const replace = withReplacePrompts(replaceBase, DEFAULT_EDIT_FLAGS);
+    expect(replace.guidelines.some((g) => g.includes("anchors resolve the file; `path` is optional but must match anchor ownership when passed."))).toBe(true);
   });
 
   it("keeps the end-append transfer guideline", () => {
@@ -386,40 +389,36 @@ describe("edit prompt flag variants", () => {
     expect(guidelines.some((g) => g.text.includes("not a marker line and not the block's own end"))).toBe(true);
   });
 
-  it("withTransferPrompts adds the require-path and strict-input notices", () => {
+  it("keeps the require-path and strict notices off the transfer tools", () => {
     const base = {
       description: loadP("../tool-prompts/move.md"),
       snippet: loadP("../tool-prompts/move-snippet.md"),
       guidelines: loadGuidelines("../tool-prompts/move-guidelines.md"),
     };
     const result = withTransferPrompts(base, { ...DEFAULT_EDIT_FLAGS, requirePath: true, strictInput: true });
-    expect(result.guidelines.some((g) => g.includes("pass `path` matching the file the anchors were served for"))).toBe(true);
-    expect(result.guidelines.some((g) => g.includes("strict-input mode is on"))).toBe(true);
+    expect(result.guidelines.some((g) => g.includes("pass `path` matching the file the anchors were served for"))).toBe(false);
+    expect(result.guidelines.some((g) => g.includes("strict-input mode is on"))).toBe(false);
     expect(result.snippet).not.toContain("include `path` (required)");
   });
 });
 
 describe("codemode prompt variants", () => {
-  it("adds the script batch wording and result contract only when codemode is active", () => {
+  it("adds the script batch wording only when codemode is active", () => {
     const off = withReplacePrompts(replaceBase, DEFAULT_EDIT_FLAGS);
     const on = withReplacePrompts(replaceBase, { ...DEFAULT_EDIT_FLAGS, codemode: true });
     expect(off.guidelines.some((g) => g.includes("Script calls apply immediately"))).toBe(false);
     expect(off.guidelines.some((g) => g.includes("failures resolve to"))).toBe(false);
     expect(on.guidelines.some((g) => g.includes("Script calls apply immediately in order"))).toBe(true);
-    expect(on.guidelines.some((g) => g.includes("failures resolve to"))).toBe(true);
+    expect(on.guidelines.some((g) => g.includes("failures resolve to"))).toBe(false);
     expect(on.guidelines.some((g) => g.includes("same-file calls in one message commit as one batch"))).toBe(true);
   });
 
-  it("adds the result contract to read, grep, and undo only when codemode is active", () => {
-    const pairs: Array<[typeof withReadPrompts, typeof readBase]> = [
-      [withReadPrompts, readBase],
-      [withGrepPrompts, grepBase],
-      [withUndoPrompts, undoBase],
-    ];
-    for (const [build, base] of pairs) {
-      expect(build(base, DEFAULT_EDIT_FLAGS).guidelines.some((g) => g.includes("failures resolve to"))).toBe(false);
-      expect(build(base, { ...DEFAULT_EDIT_FLAGS, codemode: true }).guidelines.some((g) => g.includes("failures resolve to"))).toBe(true);
-    }
+  it("adds the result contract to read only when codemode is active", () => {
+    expect(withReadPrompts(readBase, DEFAULT_EDIT_FLAGS).guidelines.some((g) => g.includes("failures resolve to"))).toBe(false);
+    expect(withReadPrompts(readBase, { ...DEFAULT_EDIT_FLAGS, codemode: true }).guidelines.some((g) => g.includes("failures resolve to"))).toBe(true);
+    expect(withGrepPrompts(grepBase, { ...DEFAULT_EDIT_FLAGS, codemode: true }).guidelines.some((g) => g.includes("failures resolve to"))).toBe(false);
+    expect(withUndoPrompts(undoBase, { ...DEFAULT_EDIT_FLAGS, codemode: true }).guidelines.some((g) => g.includes("failures resolve to"))).toBe(false);
+    expect(withReplacePrompts(replaceBase, { ...DEFAULT_EDIT_FLAGS, codemode: true }).guidelines.some((g) => g.includes("failures resolve to"))).toBe(false);
   });
 
   it("documents the raw read contract only when codemode is active", () => {

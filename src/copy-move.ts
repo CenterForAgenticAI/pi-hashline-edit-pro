@@ -943,6 +943,7 @@ export function buildTransferToolDef(kind: TransferKind, flags: EditToolFlags = 
       ],
     },
     flags,
+    { scriptGuidelines: kind === "copy" },
   );
   return {
     name: kind,
