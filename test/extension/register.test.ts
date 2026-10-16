@@ -1,6 +1,6 @@
-import { readFileSync } from "fs";
 import { describe, expect, it } from "vitest";
 import register from "../../index";
+import { makeFakePiRegistry } from "../support/fixtures";
 
 describe("extension registration", () => {
   it("registers the read and replace tools", () => {
@@ -28,14 +28,13 @@ describe("extension registration", () => {
   });
 });
 
-describe("tool prompt file references", () => {
-  it("replace.ts loads the consolidated replace.md prompt", () => {
-    const source = readFileSync(
-      new URL("../../src/replace.ts", import.meta.url),
-      "utf-8",
-    );
-    expect(source).toContain("../tool-prompts/replace.md");
-    expect(source).toContain("../tool-prompts/replace-snippet.md");
-    expect(source).toContain("../tool-prompts/replace-guidelines.md");
+describe("tool prompt loading", () => {
+  it("loads the replace prompt, snippet, and guidelines", () => {
+    const { pi, getTool } = makeFakePiRegistry();
+    register(pi);
+    const tool = getTool("replace");
+    expect(tool.description).toContain("Replace a range of lines");
+    expect(tool.promptSnippet).toContain("Replace lines by anchor");
+    expect(tool.promptGuidelines.some((guideline: string) => guideline.includes("remove_from"))).toBe(true);
   });
 });

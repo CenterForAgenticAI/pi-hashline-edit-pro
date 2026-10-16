@@ -11,7 +11,16 @@ import {
   ioErrorCode,
   literalEscapeHints,
   mapIoError,
+  isHashRow,
+  numberedRead,
+  withLineNumbers,
+  clipLine,
+  assertLineLimit,
+  lineLimitMoreThanMessage,
+  getCached,
+  splitLines,
 } from "../../src/utils";
+import { canon } from "../../src/hashline";
 
 describe("isRec", () => {
   it("returns true for plain objects", () => {
@@ -483,5 +492,77 @@ describe("mapIoError", () => {
     expect(ioErrorCode(Object.assign(new Error("gone"), { code: "ENOENT" }))).toBe("E_NOT_FOUND");
     expect(ioErrorCode(new Error("plain"))).toBeUndefined();
     expect(ioErrorCode(Object.assign(new Error("weird"), { code: "EUNKNOWN" }))).toBeUndefined();
+  });
+});
+
+describe("string and row helpers", () => {
+  it("isHashRow detects only 4-letter anchors", () => {
+    expect(isHashRow("Hasu│hello")).toBe(true);
+    expect(isHashRow("Ha│hello")).toBe(false);
+    expect(isHashRow("HasuX│hello")).toBe(false);
+    expect(isHashRow("Abcd│")).toBe(true);
+    expect(isHashRow("AB1c│")).toBe(false);
+    expect(isHashRow("")).toBe(false);
+    expect(isHashRow("Hasu|hello")).toBe(false);
+  });
+
+  it("numberedRead numbers only hash rows", () => {
+    expect(numberedRead("Hasu│hello\narvm│world", 1)).toBe("1 │ Hasu│hello\n2 │ arvm│world");
+    expect(numberedRead("plain\nHasu│hello", 5)).toBe("plain\n5 │ Hasu│hello");
+    expect(numberedRead("", 1)).toBe("");
+    expect(numberedRead("nohash", 10)).toBe("nohash");
+    expect(numberedRead("Abcd│x\nBcde│y\nCdef│z", 99)).toBe(" 99 │ Abcd│x\n100 │ Bcde│y\n101 │ Cdef│z");
+  });
+
+  it("withLineNumbers pads rows without a number", () => {
+    expect(withLineNumbers("a\nb", [1, 2])).toBe("1 │ a\n2 │ b");
+    expect(withLineNumbers("a\nb", [undefined, 5])).toBe("  │ a\n5 │ b");
+    expect(withLineNumbers("a\nb", [null, 5])).toBe("  │ a\n5 │ b");
+    expect(withLineNumbers("a\nb\nc", [])).toBe("  │ a\n  │ b\n  │ c");
+    expect(withLineNumbers("", [])).toBe("  │ ");
+    expect(withLineNumbers("x", [10])).toBe("10 │ x");
+  });
+
+  it("clipLine flattens newlines and truncates long text", () => {
+    expect(clipLine("short")).toBe("short");
+    expect(clipLine("a\nb")).toBe("a\\nb");
+    expect(clipLine("x".repeat(200))).toBe("x".repeat(200));
+    expect(clipLine("y".repeat(201))).toBe("y".repeat(200) + "...");
+    expect(clipLine("a".repeat(300))).toContain("...");
+  });
+
+  it("assertLineLimit reports the path and the line count", () => {
+    expect(() => assertLineLimit("a\nb", "f.txt", 5)).not.toThrow();
+    expect(() => assertLineLimit("a\nb\nc", "f.txt", 2)).toThrow(/E_FILE_TOO_LARGE/);
+    expect(lineLimitMoreThanMessage("f.txt", 10)).toContain("has more than 10");
+    const message = (() => {
+      try {
+        assertLineLimit("a\nb\nc\nd", "my.txt", 2);
+      } catch (error) {
+        return (error as Error).message;
+      }
+      return "";
+    })();
+    expect(message).toContain("my.txt");
+    expect(message).toContain("has 4");
+  });
+
+  it("getCached computes a key once", () => {
+    const cache = new Map<string, number>();
+    expect(getCached(cache, "a", () => 1)).toBe(1);
+    expect(getCached(cache, "a", () => 2)).toBe(1);
+    expect(cache.get("a")).toBe(1);
+  });
+
+  it("splitLines keeps the final empty line only for empty input", () => {
+    expect(splitLines("")).toEqual([""]);
+    expect(splitLines("a\nb\n")).toEqual(["a", "b"]);
+    expect(splitLines("a\nb")).toEqual(["a", "b"]);
+    expect(splitLines("\n")).toEqual([""]);
+  });
+
+  it("canon strips carriage returns and trailing whitespace", () => {
+    expect(canon("  hello   ")).toBe("  hello");
+    expect(canon("a\r\nb\r")).toBe("a\nb");
   });
 });

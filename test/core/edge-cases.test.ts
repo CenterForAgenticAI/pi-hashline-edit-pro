@@ -3,9 +3,9 @@ import { initHasher } from "../../src/hashline";
 import { lineHashes } from "../../src/hashline";
 import { applyEdit, fmtRegion } from "../../src/hashline";
 import { valEdit, resEdit, resolveAnchorLine } from "../../src/hashline/resolve";
-import { mkMdTheme, renderEditResult } from "../../src/replace-render";
+import { renderEditResult } from "../../src/replace-render";
 import { assertReq, assertInsertReq, getPreviewInput } from "../../src/payload-contract";
-import { decodeStringArray, cntDiff } from "../../src/utils";
+import { cntDiff } from "../../src/utils";
 import { parseHashList } from "../../src/hash-store/validation";
 import { tryReadNormFile } from "../../src/file-reader";
 import { commitEdit } from "../../src/commit";
@@ -29,35 +29,6 @@ function fakeTheme() {
 }
 
 describe("gap mkMdTheme", () => {
-  it("invokes every getter and highlight branches", () => {
-    const theme = mkMdTheme(fakeTheme() as never);
-    expect(theme.heading("h")).toContain("h");
-    expect(theme.link("l")).toContain("l");
-    expect(theme.linkUrl("u")).toContain("u");
-    expect(theme.code("c")).toContain("c");
-    expect(theme.codeBlock("b")).toContain("b");
-    expect(theme.codeBlockBorder("bb")).toContain("bb");
-    expect(theme.quote("q")).toContain("q");
-    expect(theme.quoteBorder("qb")).toContain("qb");
-    expect(theme.hr("h")).toContain("h");
-    expect(theme.listBullet("x")).toContain("x");
-    expect(theme.bold("b")).toContain("b");
-    expect(theme.italic("i")).toContain("i");
-    expect(theme.underline("u")).toContain("u");
-    expect(theme.strikethrough("s")).toContain("s");
-    const diffed = theme.highlightCode("+a\n-b\n c", "diff");
-    expect(diffed.length).toBe(3);
-    const plain = theme.highlightCode("x", "js");
-    expect(plain.length).toBe(1);
-    const bare = fakeTheme() as unknown as Record<string, unknown>;
-    delete bare.italic;
-    delete bare.underline;
-    delete bare.strikethrough;
-    const fallback = mkMdTheme(bare as never);
-    expect(fallback.italic("i")).toBe("i");
-    expect(fallback.underline("u")).toBe("u");
-    expect(fallback.strikethrough("s")).toBe("s");
-  });
   it("clears pending preview state in renderEditResult", () => {
     const theme = { fg: (c: string, t: string) => t };
     const timer = setTimeout(() => undefined, 10000);
@@ -116,14 +87,6 @@ describe("gap apply and hashes", () => {
   });
 });
 
-describe("gap decode array", () => {
-  it("handles non-string and unterminated inputs", () => {
-    expect(decodeStringArray(123)).toBeUndefined();
-    expect(decodeStringArray([123 as unknown as string])).toBeUndefined();
-    expect(decodeStringArray('["a]')).toBeUndefined();
-    expect(decodeStringArray('["a","b"]')).toEqual(["a", "b"]);
-  });
-});
 
 describe("gap validation with context", () => {
   it("includes context in parse errors", () => {

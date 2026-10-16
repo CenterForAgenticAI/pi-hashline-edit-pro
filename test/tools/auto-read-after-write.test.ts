@@ -30,7 +30,6 @@ describe("auto-read after write", () => {
       const { getToolResultHandler } = createTestPi();
       const handler = getToolResultHandler();
 
-      expect(handler).toBeDefined();
 
       const writeResult = await handler!(
         {
@@ -62,11 +61,9 @@ describe("auto-read after write", () => {
 
       const { getToolResultHandler, getSessionStartHandler } = createTestPi();
       const sessionHandler = getSessionStartHandler();
-      expect(sessionHandler).toBeDefined();
       await sessionHandler!({}, { cwd });
 
       const handler = getToolResultHandler();
-      expect(handler).toBeDefined();
 
       const writeResult = await handler!(
         {
@@ -98,7 +95,6 @@ describe("auto-read after write", () => {
     try {
       const { getToolResultHandler } = createTestPi();
       const handler = getToolResultHandler();
-      expect(handler).toBeDefined();
 
       const writeResult = await handler!(
         {
@@ -112,7 +108,6 @@ describe("auto-read after write", () => {
         { cwd },
       );
 
-      expect(writeResult).toBeDefined();
       expect(writeResult!.content).toHaveLength(2);
 
       expect(writeResult!.content![0]).toEqual({
@@ -223,7 +218,6 @@ describe("auto-read after write", () => {
         { cwd },
       );
 
-      expect(writeResult).toBeDefined();
       const content = (writeResult as { content: Array<{ type: string; text: string }> }).content;
       expect(content).toHaveLength(2);
       expect(content[0]).toEqual({
@@ -258,7 +252,6 @@ describe("auto-read after write", () => {
         { cwd },
       );
 
-      expect(writeResult).toBeDefined();
       const autoReadText = writeResult!.content![1]!.text!;
 
       const lines = autoReadText.split("\n");
@@ -302,7 +295,6 @@ describe("auto-read after write", () => {
         { cwd },
       );
 
-      expect(writeResult).toBeDefined();
       const autoReadText = writeResult!.content![1]!.text!;
 
       expect(autoReadText).toContain("--- Auto-read (hashline anchors) ---");
@@ -321,7 +313,6 @@ describe("auto-read after write", () => {
     try {
       const { getToolResultHandler } = createTestPi();
       const handler = getToolResultHandler();
-      expect(handler).toBeDefined();
 
       const writeResult = await handler!(
         {
@@ -335,7 +326,6 @@ describe("auto-read after write", () => {
         { cwd },
       );
 
-      expect(writeResult).toBeDefined();
       const text = (writeResult as { content: Array<{ type: string; text: string }> }).content[1].text;
       expect(text).toContain("--- Auto-read (hashline anchors) ---");
       expect(text).toContain("[File is empty. Use replace to insert content.]");
@@ -365,7 +355,6 @@ describe("auto-read after write", () => {
         { cwd },
       );
 
-      expect(replaceResult).toBeDefined();
       expect(replaceResult!.content).toHaveLength(1);
       expect(replaceResult!.content![0]!.text).toBe(diff);
       expect(replaceResult!.content![0]!.text).not.toContain("--- Auto-read");
@@ -394,7 +383,6 @@ describe("auto-read after write", () => {
         { cwd },
       );
 
-      expect(undoResult).toBeDefined();
       expect(undoResult!.content).toHaveLength(1);
       expect(undoResult!.content![0]!.text).toBe(diff);
       expect(undoResult!.content![0]!.text).not.toContain("--- Auto-read");

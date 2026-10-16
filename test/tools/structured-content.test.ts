@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { writeFile } from "fs/promises";
 import { join } from "path";
+import { Compile } from "typebox/compile";
 import register from "../../index";
 import { withTempFile, withTempDir, setupIntegrationTest, getText, anchorFor, makePiStub } from "../support/fixtures";
 
@@ -344,6 +345,41 @@ describe("structuredContent for read and replace", () => {
 			const result = await getTool("undo_last_change").execute("u1", { path: "sample.ts" }, undefined, undefined, ctx);
 			expect(result.isError).toBe(true);
 			expect(structured(result).error!.code).toBe("E_UNDO_STALE");
+		});
+	});
+
+	it("every tool result matches its declared outputSchema", async () => {
+		await withTempDir("structured-schema-", async (dir) => {
+			await writeFile(join(dir, "sample.ts"), "alpha\nbeta\ngamma\n", "utf-8");
+			await writeFile(join(dir, "pixel.png"), Buffer.from(
+				"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+				"base64",
+			));
+			const { readTool, getTool, ctx } = setupIntegrationTest(dir);
+			const text = getText(await readTool.execute("r1", { path: "sample.ts" }, undefined, undefined, ctx));
+			const alpha = anchorFor(text, "alpha");
+			const beta = anchorFor(text, "beta");
+			const gamma = anchorFor(text, "gamma");
+			const cases: Array<[string, unknown, string]> = [
+				["read", { path: "sample.ts" }, "s-read"],
+				["read", { path: "pixel.png" }, "s-image"],
+				["read", { path: "missing.ts" }, "s-read-error"],
+				["insert", { anchor: alpha, direction: "after", text: "mid" }, "s-insert"],
+				["copy", { source_from: beta, source_to: beta, anchor: gamma, direction: "after" }, "s-copy"],
+				["move", { source_from: beta, source_to: beta, anchor: gamma, direction: "after" }, "s-move"],
+				["replace", { remove_from: alpha, remove_to: alpha, text: "ALPHA" }, "s-replace"],
+				["replace", { remove_from: "ZZZZ", remove_to: "ZZZZ", text: "x" }, "s-replace-error"],
+				["grep", { pattern: "ALPHA", path: "sample.ts" }, "s-grep"],
+				["grep", { pattern: "(\\w)\\1", path: "sample.ts" }, "s-grep-error"],
+				["undo_last_change", { path: "sample.ts" }, "s-undo"],
+			];
+			for (const [name, args, id] of cases) {
+				const tool = getTool(name);
+				const result = await tool.execute(id, args, undefined, undefined, ctx);
+				const validator = Compile(tool.outputSchema!);
+				const errors = validator.Errors(result.structuredContent);
+				expect(validator.Check(result.structuredContent), `${name} (${id}): ${JSON.stringify(errors)}`).toBe(true);
+			}
 		});
 	});
 

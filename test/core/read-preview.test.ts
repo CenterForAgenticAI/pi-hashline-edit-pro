@@ -30,6 +30,12 @@ describe("fmtReadPreview", () => {
     expect(result.text).not.toContain("│a");
   });
 
+  it("reports a beyond-end offset for a non-empty file", async () => {
+    const result = await fmtReadPreview("a\nb\nc\n", { offset: 10 }, undefined, home.testPath);
+    expect(result.text).toContain("beyond end of file (3 lines total)");
+    expect(result.servedHashes).toEqual([]);
+  });
+
   it("respects limit parameter", async () => {
     const result = await fmtReadPreview("a\nb\nc\n", { limit: 2 }, undefined, home.testPath);
     expect(result.text).toContain("│a");

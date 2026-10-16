@@ -156,10 +156,18 @@ export async function makeTempDir(prefix: string): Promise<string> {
   pushEnvRestore(withHome(dir));
   return dir;
 }
+type Handler = (...args: any[]) => any;
+class HandlerMap extends Map<string, Handler> {
+  override get(name: string): Handler {
+    const handler = super.get(name);
+    if (!handler) throw new Error(`Handler not registered: ${name}`);
+    return handler;
+  }
+}
 export function makeFakePiRegistry() {
   const tools = new Map<string, any>();
   let activeTools: string[] = [];
-  const handlers = new Map<string, (...args: unknown[]) => unknown>();
+  const handlers = new HandlerMap();
   return {
     pi: {
       registerTool(tool: any) {
@@ -251,7 +259,7 @@ export function assistantMessage(calls: Array<{ type: string; id: string; name: 
 }
 
 export function makePiStub(initialTools: string[] = []) {
-  const handlers = new Map<string, (event: any, ctx: any) => any>();
+  const handlers = new HandlerMap();
   const commands = new Map<string, { description: string; handler: (...args: any[]) => any }>();
   const tools = new Map<string, any>();
   const notify = vi.fn();

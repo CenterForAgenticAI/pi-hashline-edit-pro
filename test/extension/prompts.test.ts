@@ -198,6 +198,22 @@ describe("edit prompt flag variants", () => {
     expect(match.guidelines.some((g) => g.includes("same-file calls in one message commit as one batch"))).toBe(false);
   });
 
+  it("drops disabled tools from the host guidelines", () => {
+    const off = { ...DEFAULT_EDIT_FLAGS, copyMoveEnabled: false, replaceMatchEnabled: false };
+    const replace = withReplacePrompts(replaceBase, off).guidelines.join("\n");
+    expect(replace).toContain("`replace`/`insert`: same-file calls in one message commit as one batch");
+    expect(replace).toContain("`replace`/`insert`: anchors resolve the file");
+    expect(replace).toContain("`replace`/`insert`: `text` is written exactly as received");
+    expect(replace).toContain("`replace`/`insert`/`undo_last_change`: in the post-edit diff");
+    expect(replace).not.toContain("`copy`");
+    expect(replace).not.toContain("`move`");
+    expect(replace).not.toContain("replace_match");
+    const read = withReadPrompts(readBase, off).guidelines.join("\n");
+    expect(read).toContain("`read`, `replace`, `insert`, or `undo_last_change`");
+    expect(read).not.toContain("`copy`");
+    expect(read).not.toContain("replace_match");
+  });
+
   it("adds the diff-row guideline only when auto-read is on", () => {
     const on = withReplacePrompts(replaceBase, DEFAULT_EDIT_FLAGS);
     expect(on.guidelines.some((g) => g.includes("rows are dead anchors"))).toBe(true);

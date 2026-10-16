@@ -16,7 +16,6 @@ describe("auto-read handler", () => {
       register(pi);
 
       const handler = handlers.get("tool_result");
-      expect(handler).toBeDefined();
 
       const result = await handler!(
         {
@@ -28,7 +27,6 @@ describe("auto-read handler", () => {
         { cwd: dir },
       );
 
-      expect(result).toBeDefined();
       expect(result).toHaveProperty("content");
       const content = (result as { content: Array<{ type: string; text: string }> }).content;
       expect(content).toHaveLength(2);
@@ -50,11 +48,9 @@ describe("auto-read handler", () => {
       register(pi);
 
       const sessionHandler = handlers.get("session_start");
-      expect(sessionHandler).toBeDefined();
       await sessionHandler!({}, { getActiveTools: () => [], setActiveTools: () => {}, ui: { notify() {} } });
 
       const handler = handlers.get("tool_result");
-      expect(handler).toBeDefined();
 
       const result = await handler!(
         {
@@ -75,7 +71,6 @@ describe("auto-read handler", () => {
     register(pi);
 
     const handler = handlers.get("tool_result");
-    expect(handler).toBeDefined();
 
     const result = await handler!(
       {
@@ -95,7 +90,6 @@ describe("auto-read handler", () => {
     register(pi);
 
     const handler = handlers.get("tool_result");
-    expect(handler).toBeDefined();
 
     const result = await handler!(
       {
@@ -115,7 +109,6 @@ describe("auto-read handler", () => {
     register(pi);
 
     const handler = handlers.get("tool_result");
-    expect(handler).toBeDefined();
 
     const result = await handler!(
       {
@@ -139,7 +132,6 @@ describe("auto-read handler", () => {
       register(pi);
 
       const handler = handlers.get("tool_result");
-      expect(handler).toBeDefined();
 
       const result = await handler!(
         {
@@ -151,7 +143,6 @@ describe("auto-read handler", () => {
         { cwd: dir },
       );
 
-      expect(result).toBeDefined();
       const content = (result as { content: Array<{ type: string; text: string }> }).content;
       expect(content[1].text).toContain("--- Auto-read (hashline anchors) ---");
       expect(content[1].text).toContain("[File is empty. Use replace to insert content.]");
@@ -168,7 +159,6 @@ describe("auto-read handler", () => {
       register(pi);
 
       const handler = handlers.get("tool_result");
-      expect(handler).toBeDefined();
 
       const result = await handler!(
         {
@@ -190,7 +180,6 @@ describe("auto-read handler", () => {
     register(pi);
 
     const handler = handlers.get("tool_result");
-    expect(handler).toBeDefined();
 
     const result = await handler!(
       {
@@ -202,7 +191,6 @@ describe("auto-read handler", () => {
       { cwd: "/tmp" },
     );
 
-    expect(result).toBeDefined();
     const content = (result as { content: Array<{ type: string; text: string }> }).content;
     expect(content).toHaveLength(2);
     expect(content[0]).toEqual({ type: "text", text: "File written." });
@@ -219,7 +207,6 @@ describe("auto-read handler", () => {
       register(pi);
 
       const sessionStart = handlers.get("session_start");
-      expect(sessionStart).toBeDefined();
       await sessionStart!({}, { cwd: dir, ui: { notify() {} } });
 
       const handler = handlers.get("tool_result");
@@ -233,7 +220,6 @@ describe("auto-read handler", () => {
         { cwd: dir },
       );
 
-      expect(result).toBeDefined();
       const content = (result as { content: Array<{ type: string; text: string }> }).content;
       expect(content).toHaveLength(2);
       expect(content[1].text).toContain("--- Auto-read (hashline anchors) ---");
@@ -256,7 +242,6 @@ describe("auto-read handler", () => {
       },
       { cwd: "/tmp" },
     );
-    expect(result).toBeDefined();
     const content = (result as { content: Array<{ type: string; text: string }> }).content;
     expect(content).toHaveLength(1);
     expect(content[0].text).toBe(diff);
@@ -278,7 +263,6 @@ describe("auto-read handler", () => {
       },
       { cwd: "/tmp" },
     );
-    expect(result).toBeDefined();
     const content = (result as { content: Array<{ type: string; text: string }> }).content;
     expect(content).toHaveLength(1);
     expect(content[0].text).toBe(diff);
