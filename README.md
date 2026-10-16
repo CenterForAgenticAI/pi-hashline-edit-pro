@@ -302,6 +302,7 @@ Output is capped at `limit` matched lines, 2000 rows, and 50KB of text, whicheve
 
 - History is per-file and single-level: only the most recent `replace`, `replace_match`, `insert`, `copy`, or `move` can be reverted. A same-message batch of `replace`/`insert` calls on one file counts as one entry: one undo reverts the whole batch.
 - History is persisted and survives session restarts. A failed `write` does not clear it.
+- Undo records older than `undoRetentionDays` (default 30; `0` keeps them forever) are deleted when the store opens.
 - Every applied `replace`, `replace_match`, `insert`, `copy`, or `move` is undoable; the undo record is saved before the edit is written.
 - A cross-file `move` stores one undo entry per file; `undo_last_change` reverts the file you name, so revert both sides to undo the whole move; a batched cross-file `move` reverts its destination side with the batch's undo and its source side with its own entry.
 - A successful `write` clears the history for that file.
@@ -353,7 +354,7 @@ The setting lives in `/hashline-config` as Auto-read all and in `config.json` as
 
 | Command | Description |
 | --- | --- |
-| `/hashline-config` | Open the settings window: auto-read anchors, auto-read all mode, git repos only, ignore folders/files, disable on models, read on disabled models, diff context lines, `grep` tool, copy/move tools, replace_match tool, required `path`, and strict input. Persists across sessions. |
+| `/hashline-config` | Open the settings window: auto-read anchors, auto-read all mode, git repos only, ignore folders/files, disable on models, read on disabled models, diff context lines, `grep` tool, copy/move tools, replace_match tool, required `path`, strict input, and undo retention. Persists across sessions. |
 | `/clear-anchors` | Clear the session's anchor claims. Anchors are re-claimed on the next `read`. |
 
 Settings live in `~/.config/pi-hashline-edit-pro/config.json`, created when a setting is first changed in `/hashline-config`:
@@ -370,6 +371,7 @@ Settings live in `~/.config/pi-hashline-edit-pro/config.json`, created when a se
   "requirePath": false,
   "strictInput": false,
   "diffContextLines": 1,
+  "undoRetentionDays": 30,
   "disableOnModels": [],
   "readOnDisabledModels": "vanilla"
 }
@@ -389,6 +391,7 @@ Settings live in `~/.config/pi-hashline-edit-pro/config.json`, created when a se
 | `diffContextLines` | Diff context | `1` | Surrounding lines in post-edit diffs, 0-10 (needs Auto-read). |
 | `disableOnModels` | Disable on models | `[]` | Model globs matched case-insensitively against `provider/id`, the bare `id`, and `api`, with `*` and `?` wildcards. A matching model gets no anchored edit tools, no auto-read, and no write-echo refusal; `read` stays available as pi's ordinary read unless Read on disabled models is `remove`. |
 | `readOnDisabledModels` | Read on disabled models | `"vanilla"` | `read` for a model matched by `disableOnModels`: `"vanilla"` keeps pi's ordinary `read` active while the anchored edit tools stay off; `"remove"` disables `read` with the rest of the anchored tools. |
+| `undoRetentionDays` | Undo retention | `30` | Days to keep undo history; records older than this are deleted when the store opens. `0` keeps them forever (0-3650). |
 
 `disableOnModels` turns off the whole anchored surface for the models you name, so another edit tool (`apply_patch`, a shell read) can own the session without competing instructions. A match removes `replace`, `replace_match`, `insert`, `copy`, `move`, `grep`, and `undo_last_change` from the active tools, and also `read` when Read on disabled models is `remove`, registering pi's plain `grep` for those models, and it also skips the auto-read-all injection, the auto-read block after `write`, the post-edit diff substitution, and the `write` hook that refuses a `write` echoing a served anchor. Because the extension's `read` replaces the built-in one, a matched model has no `read` at all under `remove` unless another extension provides one; the default `vanilla` gives those models pi's ordinary `read` while the anchored edit tools stay off. The list is checked on `session_start`, on `model_select`, and again on `before_agent_start`, so a model change inside a session switches the surface immediately and another extension cannot re-add the tools mid-session. The default `[]` leaves every model unchanged.
 
@@ -411,6 +414,7 @@ When `PI_HASHLINE_DIR` is unset or empty, non-Windows platforms honor `XDG_CONFI
 | Auto-read all budget | 200KB floor; 2MB ceiling in `full` | total injection size derived from the model context window; `outline` is not capped at 2MB |
 | Stale-range feedback | first 100 lines | rows returned with `[E_RANGE_STALE]` |
 | Session anchors | 1,353,139 anchors in use | all tools; the least recently read or edited files are freed when the quota is exhausted (`[W_ANCHOR_RECLAIMED]`) |
+| Undo retention | 30 days by default (`undoRetentionDays` 0-3650) | `undo_last_change` history |
 
 `grep` uses the same 100MB file-size cutoff as `read`. Files over the line cap are skipped silently in directory searches.
 
@@ -513,7 +517,7 @@ All state lives under the config directory (see [Configuration](#configuration))
 | `hash-store.sqlite` (+ `-wal`, `-shm`) | Per-file snapshots of allocated anchors keyed by content checksum, plus the undo table. |
 | `sessions/<key>.registry.jsonl` | The session's anchor ownership log (`allocate`/`free`/`clear` events). |
 
-The undo table contains the complete pre-edit and post-edit text for the latest edit to each file, so treat the store as sensitive data. On POSIX systems the state directory is restricted to mode `0700` and the SQLite database plus its WAL/SHM sidecars to `0600`. Sidecar logs whose session file is gone are garbage-collected at startup (never the sidecar of a session that is currently loaded in this process); the in-memory ownership of a session is released when that session shuts down and rebuilt from its sidecar on next use. Served records live in memory only and are recomputed on the next read.
+The undo table contains the complete pre-edit and post-edit text for the latest edit to each file, so treat the store as sensitive data. Undo records older than `undoRetentionDays` are deleted when the store opens, and SQLite's `secure_delete` overwrites deleted content. On POSIX systems the state directory is restricted to mode `0700` and the SQLite database plus its WAL/SHM sidecars to `0600`. Sidecar logs whose session file is gone are garbage-collected at startup (never the sidecar of a session that is currently loaded in this process); the in-memory ownership of a session is released when that session shuts down and rebuilt from its sidecar on next use. Served records live in memory only and are recomputed on the next read.
 
 ### Isolated state
 

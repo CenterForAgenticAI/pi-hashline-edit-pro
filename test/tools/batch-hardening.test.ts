@@ -187,7 +187,7 @@ describe("batch hardening", () => {
 
   it("planEdit with cached base lines matches fresh planning", async () => {
     await withTempFile("sample.txt", "aaa\nbbb\nccc\n", async ({ cwd, path }) => {
-      setupTools(cwd);
+      await setupTools(cwd);
       const content = "aaa\nbbb\nccc\n";
       const hashes = await lineHashes(content, path);
       const edit = resEdit({ remove_from: hashes[1]!, remove_to: hashes[1]!, text: ["X"] }, []);

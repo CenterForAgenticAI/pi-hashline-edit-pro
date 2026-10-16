@@ -12,6 +12,9 @@ const READ_ON_DISABLED_MODELS: ReadOnDisabledModels[] = ["remove", "vanilla"];
 export const DEFAULT_DIFF_CONTEXT_LINES = 1;
 export const MIN_DIFF_CONTEXT_LINES = 0;
 export const MAX_DIFF_CONTEXT_LINES = 10;
+export const DEFAULT_UNDO_RETENTION_DAYS = 30;
+export const MIN_UNDO_RETENTION_DAYS = 0;
+export const MAX_UNDO_RETENTION_DAYS = 3650;
 
 export interface Config {
   autoRead: boolean;
@@ -26,6 +29,7 @@ export interface Config {
   diffContextLines?: number;
   disableOnModels?: string[];
   readOnDisabledModels?: ReadOnDisabledModels;
+  undoRetentionDays?: number;
 }
 
 const DEFAULT_CONFIG: Config = {
@@ -41,6 +45,7 @@ const DEFAULT_CONFIG: Config = {
   diffContextLines: DEFAULT_DIFF_CONTEXT_LINES,
   disableOnModels: [],
   readOnDisabledModels: "vanilla",
+  undoRetentionDays: DEFAULT_UNDO_RETENTION_DAYS,
 };
 
 function parseAutoReadAllMode(value: unknown): AutoReadAllMode {
@@ -101,6 +106,14 @@ export function normalizeDiffContextLines(value: unknown): number {
   return floored;
 }
 
+export function normalizeUndoRetentionDays(value: unknown): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) return DEFAULT_UNDO_RETENTION_DAYS;
+  const floored = Math.floor(value);
+  if (floored < MIN_UNDO_RETENTION_DAYS) return MIN_UNDO_RETENTION_DAYS;
+  if (floored > MAX_UNDO_RETENTION_DAYS) return MAX_UNDO_RETENTION_DAYS;
+  return floored;
+}
+
 function parseConfig(content: string): Config {
   const parsed = JSON.parse(content) as unknown;
   if (!isRec(parsed) || (parsed.autoRead !== undefined && typeof parsed.autoRead !== "boolean")) {
@@ -118,6 +131,7 @@ function parseConfig(content: string): Config {
   const autoReadAllIgnore = parsed.autoReadAllIgnore;
   const disableOnModels = parsed.disableOnModels;
   const readOnDisabledModels = parsed.readOnDisabledModels;
+  const undoRetentionDays = parsed.undoRetentionDays;
   const legacyDisableReadOnModels = parsed.disableReadOnModels;
   return {
     autoRead: typeof autoRead === "boolean" ? autoRead : DEFAULT_CONFIG.autoRead,
@@ -132,6 +146,7 @@ function parseConfig(content: string): Config {
     autoReadAllIgnore: parseAutoReadAllIgnore(autoReadAllIgnore),
     disableOnModels: parseDisableOnModels(disableOnModels),
     readOnDisabledModels: parseReadOnDisabledModels(readOnDisabledModels, legacyDisableReadOnModels),
+    undoRetentionDays: normalizeUndoRetentionDays(undoRetentionDays),
   };
 }
 
@@ -277,11 +292,22 @@ export const toggleStrictInput = (): Promise<boolean> => toggleFlag("strictInput
 export async function getDiffContextLines(): Promise<number> {
   return normalizeDiffContextLines((await readConfig()).diffContextLines);
 }
+export async function getUndoRetentionDays(): Promise<number> {
+  return normalizeUndoRetentionDays((await readConfig()).undoRetentionDays);
+}
 export async function adjustDiffContextLines(delta: number): Promise<number> {
   let next = DEFAULT_DIFF_CONTEXT_LINES;
   await updateConfig((c) => {
     next = normalizeDiffContextLines(normalizeDiffContextLines(c.diffContextLines) + delta);
     c.diffContextLines = next;
+  });
+  return next;
+}
+export async function adjustUndoRetentionDays(delta: number): Promise<number> {
+  let next = DEFAULT_UNDO_RETENTION_DAYS;
+  await updateConfig((c) => {
+    next = normalizeUndoRetentionDays(normalizeUndoRetentionDays(c.undoRetentionDays) + delta);
+    c.undoRetentionDays = next;
   });
   return next;
 }

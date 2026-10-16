@@ -214,7 +214,7 @@ export function makeFakePiRegistry() {
 export function setupIntegrationTest(cwd: string) {
   resetRegistryForTests();
   resetBatchStateForTests();
-  initRegistry(undefined);
+  void initRegistry(undefined);
   const { pi, handlers, getTool } = makeFakePiRegistry();
   register(pi);
   const ctx = { cwd, ui: { notify() {} } } as any;

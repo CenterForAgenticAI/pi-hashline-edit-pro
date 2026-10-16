@@ -136,6 +136,7 @@ interface Prepared {
   undoDelete: (...params: SqlParams) => void;
   snapshotTime: (...params: SqlParams) => Record<string, unknown> | undefined;
   undoTime: (...params: SqlParams) => Record<string, unknown> | undefined;
+  undoExpired: (...params: SqlParams) => Record<string, unknown>[];
 }
 
 export interface HashStore {
@@ -183,6 +184,7 @@ function addColumnIfMissing(db: RawDb, statement: string): void {
 function buildStore(db: RawDb): { db: RawDb; stmts: Prepared } {
   db.exec("PRAGMA journal_mode = WAL");
   db.exec("PRAGMA synchronous = NORMAL");
+  db.exec("PRAGMA secure_delete = ON");
   db.exec(
     "CREATE TABLE IF NOT EXISTS snapshots (" +
       "path TEXT PRIMARY KEY, " +
@@ -242,6 +244,7 @@ function buildStore(db: RawDb): { db: RawDb; stmts: Prepared } {
   const undoDelStmt = db.prepare("DELETE FROM undo WHERE path = ?");
   const snapshotTimeStmt = db.prepare("SELECT updated_at FROM snapshots WHERE path = ?");
   const undoTimeStmt = db.prepare("SELECT updated_at FROM undo WHERE path = ?");
+  const undoExpiredStmt = db.prepare("SELECT path FROM undo WHERE updated_at < ?");
   const stmts: Prepared = {
     get: (...params) => getStmt.get(...params) as Record<string, unknown> | undefined,
     getState: (...params) => getStateStmt.get(...params) as Record<string, unknown> | undefined,
@@ -253,6 +256,7 @@ function buildStore(db: RawDb): { db: RawDb; stmts: Prepared } {
     undoDelete: retriedWrite(undoDelStmt),
     snapshotTime: (...params) => snapshotTimeStmt.get(...params) as Record<string, unknown> | undefined,
     undoTime: (...params) => undoTimeStmt.get(...params) as Record<string, unknown> | undefined,
+    undoExpired: (...params) => withBusyRetry(() => undoExpiredStmt.all(...params) as Record<string, unknown>[]),
   };
   return { db, stmts };
 }
@@ -650,6 +654,17 @@ export async function pruneMissing(store: HashStore): Promise<string[]> {
   });
   for (const path of missing) snapshotCache.delete(path);
   return missing;
+}
+export function pruneExpiredUndo(store: HashStore, retentionDays: number, now = Date.now()): string[] {
+  if (!Number.isFinite(retentionDays) || retentionDays <= 0) return [];
+  const cutoff = now - retentionDays * 24 * 60 * 60 * 1000;
+  const rows = store.stmts.undoExpired(cutoff) as { path?: unknown }[];
+  const paths = rows.map((row) => row.path).filter((path): path is string => typeof path === "string");
+  if (paths.length === 0) return [];
+  withStore(() => {
+    for (const path of paths) store.stmts.undoDelete(path);
+  });
+  return paths;
 }
 
 

@@ -1,8 +1,8 @@
 import { Key, matchesKey, truncateToWidth, visibleWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
 import type { Theme } from "@earendil-works/pi-coding-agent";
-import { readConfig, type Config } from "./config";
+import { DEFAULT_UNDO_RETENTION_DAYS, readConfig, type Config } from "./config";
 
-export type ConfigToggleKey = "autoRead" | "autoReadAll" | "autoReadAllRequireGit" | "autoReadAllIgnore" | "anchorGrepEnabled" | "copyMoveEnabled" | "replaceMatchEnabled" | "requirePath" | "strictInput" | "diffContextLines" | "disableOnModels" | "readOnDisabledModels";
+export type ConfigToggleKey = "autoRead" | "autoReadAll" | "autoReadAllRequireGit" | "autoReadAllIgnore" | "anchorGrepEnabled" | "copyMoveEnabled" | "replaceMatchEnabled" | "requirePath" | "strictInput" | "diffContextLines" | "disableOnModels" | "readOnDisabledModels" | "undoRetentionDays";
 
 export interface ConfigRow {
   key: ConfigToggleKey;
@@ -40,6 +40,7 @@ export function configRows(config: Config): ConfigRow[] {
     { key: "strictInput", group: "Edit behavior", depth: 0, label: "Strict input", hint: "Reject auto-fixable slips instead of warnings", enabled: config.strictInput === true },
     { key: "disableOnModels", group: "Model gating", depth: 0, label: "Disable on models", hint: "Model globs that turn off anchored tools (comma-separated)", enabled: (config.disableOnModels ?? []).length > 0, entries: config.disableOnModels ?? [] },
     { key: "readOnDisabledModels", group: "Model gating", depth: 1, dependsOn: "disableOnModels", gated: true, label: "Read on disabled models", hint: "Keep read available for models disabled above", enabled: (config.readOnDisabledModels ?? "vanilla") !== "remove", mode: config.readOnDisabledModels ?? "vanilla", cycle: ["remove", "vanilla"] },
+    { key: "undoRetentionDays", group: "State", depth: 0, label: "Undo retention", hint: "Days to keep undo history; 0 keeps it forever", enabled: (config.undoRetentionDays ?? DEFAULT_UNDO_RETENTION_DAYS) > 0, value: config.undoRetentionDays ?? DEFAULT_UNDO_RETENTION_DAYS },
   ];
   for (const row of rows) {
     if (row.gated !== true || row.dependsOn === undefined) continue;

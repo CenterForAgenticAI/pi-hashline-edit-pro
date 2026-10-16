@@ -16,6 +16,8 @@ import {
   parseDisableOnModels,
   setDisableOnModels,
   setDisableOnModelsFromText,
+  adjustUndoRetentionDays,
+  normalizeUndoRetentionDays,
 } from "../../src/config";
 import { configRows } from "../../src/config-ui";
 import { configPath } from "../../src/paths";
@@ -526,6 +528,36 @@ describe("config - lock recovery", () => {
     await withStaleLock("pi-hashline-config-lock-fresh-", 1000, async (lockPath) => {
       expect(await toggleAutoRead()).toBe(false);
       await expect(stat(lockPath)).rejects.toThrow();
+    });
+  });
+});
+
+describe("config - undoRetentionDays", () => {
+  it("defaults to 30 and clamps stored values", async () => {
+    await withTempDir("pi-hashline-config-test-", async () => {
+      expect((await readConfig()).undoRetentionDays).toBe(30);
+      expect(normalizeUndoRetentionDays(99_999)).toBe(3650);
+      expect(normalizeUndoRetentionDays(-4)).toBe(0);
+      expect(normalizeUndoRetentionDays(2.7)).toBe(2);
+      expect(normalizeUndoRetentionDays("many")).toBe(30);
+    });
+  });
+
+  it("adjusts within bounds and persists", async () => {
+    await withTempDir("pi-hashline-config-test-", async () => {
+      expect(await adjustUndoRetentionDays(5)).toBe(35);
+      expect(await adjustUndoRetentionDays(-100)).toBe(0);
+      expect(await adjustUndoRetentionDays(1)).toBe(1);
+      expect((await readConfig()).undoRetentionDays).toBe(1);
+    });
+  });
+
+  it("exposes the row", async () => {
+    await withTempDir("pi-hashline-config-test-", async () => {
+      const row = configRows(await readConfig()).find((candidate) => candidate.key === "undoRetentionDays")!;
+      expect(row.label).toBe("Undo retention");
+      expect(row.group).toBe("State");
+      expect(row.value).toBe(30);
     });
   });
 });

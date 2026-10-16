@@ -42,6 +42,7 @@ describe("configRows ordering and gating", () => {
       "strictInput",
       "disableOnModels",
       "readOnDisabledModels",
+      "undoRetentionDays",
     ]);
     const byKey = new Map(rows.map((row) => [row.key, row]));
     expect(byKey.get("diffContextLines")?.depth).toBe(1);

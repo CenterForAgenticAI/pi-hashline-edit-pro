@@ -459,7 +459,7 @@ describe("hashline-config overlay rendering", () => {
         expect(lines.filter((line) => line.includes("[off]")).length).toBe(1);
         expect(lines.filter((line) => line.includes("[vanilla]")).length).toBe(1);
         overlay.handleInput("k");
-        expect(overlay.render(60).find((line) => line.includes("Read on disabled models"))!).toContain("> ");
+        expect(overlay.render(60).find((line) => line.includes("Undo retention"))!).toContain("> ");
         overlay.handleInput("j");
         expect(overlay.render(60).find((line) => line.includes("[x] Auto-read"))!).toContain("> ");
         overlay.invalidate();
