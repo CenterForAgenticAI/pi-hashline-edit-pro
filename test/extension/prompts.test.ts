@@ -431,10 +431,18 @@ describe("codemode prompt variants", () => {
 
   it("adds the result contract to read only when codemode is active", () => {
     expect(withReadPrompts(readBase, DEFAULT_EDIT_FLAGS).guidelines.some((g) => g.includes("failures resolve to"))).toBe(false);
-    expect(withReadPrompts(readBase, { ...DEFAULT_EDIT_FLAGS, codemode: true }).guidelines.some((g) => g.includes("failures resolve to"))).toBe(true);
+    const on = withReadPrompts(readBase, { ...DEFAULT_EDIT_FLAGS, codemode: true });
+    expect(on.guidelines.find((g) => g.includes("failures resolve to"))).toContain("`read`/`replace`/`replace_match`/`insert`/`copy`/`move`/`grep`/`undo_last_change`");
     expect(withGrepPrompts(grepBase, { ...DEFAULT_EDIT_FLAGS, codemode: true }).guidelines.some((g) => g.includes("failures resolve to"))).toBe(false);
     expect(withUndoPrompts(undoBase, { ...DEFAULT_EDIT_FLAGS, codemode: true }).guidelines.some((g) => g.includes("failures resolve to"))).toBe(false);
     expect(withReplacePrompts(replaceBase, { ...DEFAULT_EDIT_FLAGS, codemode: true }).guidelines.some((g) => g.includes("failures resolve to"))).toBe(false);
+  });
+
+  it("drops disabled tools from the result contract", () => {
+    const contract = withReadPrompts(readBase, { ...DEFAULT_EDIT_FLAGS, codemode: true, copyMoveEnabled: false, replaceMatchEnabled: false }).guidelines.find((g) => g.includes("failures resolve to"));
+    expect(contract).toContain("`read`/`replace`/`insert`/`grep`/`undo_last_change`");
+    expect(contract).not.toContain("`copy`");
+    expect(contract).not.toContain("`replace_match`");
   });
 
   it("documents the raw read contract only when codemode is active", () => {

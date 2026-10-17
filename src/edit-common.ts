@@ -53,8 +53,12 @@ function preferenceGuideline(flags: EditToolFlags): string {
 const SHARED_EDIT_OPS = ["replace", "replace_match", "insert", "copy", "move"];
 const SHARED_PAYLOAD_OPS = ["replace", "replace_match", "insert"];
 const SHARED_DIFF_OPS = ["replace", "replace_match", "insert", "copy", "move", "undo_last_change"];
-const RESULT_CONTRACT_GUIDELINE =
-  'When called from a codemode script, failures resolve to `{ ok: false, kind: "error", error: { code, message } }`; branch on `ok` instead of `try`/`catch`.';
+const SHARED_SCRIPT_OPS = ["read", "replace", "replace_match", "insert", "copy", "move", "grep", "undo_last_change"];
+
+function resultContractGuideline(flags: EditToolFlags): string {
+  const tools = operationNames(SHARED_SCRIPT_OPS, flags);
+  return `${tools}: when called from a codemode script, failures resolve to \`{ ok: false, kind: "error", error: { code, message } }\`; branch on \`ok\` instead of \`try\`/\`catch\`.`;
+}
 const READ_SCRIPT_GUIDELINE =
   '`read` in a codemode script resolves to the file\'s text, like the built-in `read`; pass `anchors: true` to receive `{ text, lines, notices }` with the raw file content and `lines[].anchor` for chained edits. An image read resolves to an image block.';
 const GREP_SCRIPT_GUIDELINE =
@@ -137,7 +141,7 @@ function readGuidelineApplies(guideline: Guideline, flags: EditToolFlags): boole
 
 export function withReadPrompts(base: { description: string; snippet: string; guidelines: Guideline[] }, flags: EditToolFlags): { description: string; snippet: string; guidelines: string[] } {
   const preference = preferenceGuideline(flags);
-  const script = flags.codemode ? [READ_SCRIPT_GUIDELINE, RESULT_CONTRACT_GUIDELINE] : [];
+  const script = flags.codemode ? [READ_SCRIPT_GUIDELINE, resultContractGuideline(flags)] : [];
   const applicable = base.guidelines.filter((guideline) => readGuidelineApplies(guideline, flags));
   if (flags.autoReadAllActive) {
     const rewritten = applicable.filter((guideline) => guideline.id !== READ_REREAD_ID).map((guideline) => guideline.text);
