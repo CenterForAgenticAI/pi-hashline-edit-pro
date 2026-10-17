@@ -61,15 +61,15 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "@earendil-works/pi-coding-agent": "^1.2.0",
+    "@earendil-works/pi-coding-agent": "^1.3.0",
     "@eslint/js": "^10.0.1",
-    "@types/node": "^24",
-    "@vitest/coverage-v8": "^4.1.11",
-    "eslint": "^10.9.1",
-    "typebox": "^1.3.7",
-    "typescript": "^5.9.3",
-    "typescript-eslint": "^8.68.0",
-    "vitest": "^4.1.11"
+    "@types/node": "^24.19.2",
+    "@vitest/coverage-v8": "^5.0.5",
+    "eslint": "^10.13.0",
+    "typebox": "^1.4.1",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.71.2",
+    "vitest": "^5.0.5"
   },
   "allowScripts": {
     "@google/genai@1.52.0": true,

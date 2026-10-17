@@ -5,9 +5,13 @@ on:
     branches: [main, master]
   pull_request:
     branches: [main, master]
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
 
 jobs:
   unit:
+    if: github.event_name != 'schedule'
     runs-on: ${{ matrix.os }}
 
     strategy:
@@ -58,6 +62,7 @@ jobs:
         run: npm run test:unit
 
   full:
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
 
     steps:
@@ -78,3 +83,34 @@ jobs:
 
       - name: Run full test suite with coverage
         run: npm run test:coverage
+
+  latest-pi:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.19.0
+          cache: npm
+
+      - name: Install ripgrep
+        run: sudo apt-get update && sudo apt-get install -y ripgrep
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install the latest pi SDK
+        run: npm install --no-save @earendil-works/pi-coding-agent@latest @earendil-works/pi-tui@latest
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Run unit tests
+        run: npm run test:unit
