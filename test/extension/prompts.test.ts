@@ -442,6 +442,8 @@ describe("codemode prompt variants", () => {
     const on = withReadPrompts(readBase, { ...DEFAULT_EDIT_FLAGS, codemode: true });
     expect(off.guidelines.some((g) => g.includes("raw file content"))).toBe(false);
     expect(on.guidelines.some((g) => g.includes("raw file content"))).toBe(true);
+    expect(off.guidelines.some((g) => g.includes("not to a string"))).toBe(false);
+    expect(on.guidelines.some((g) => g.includes("not to a string"))).toBe(true);
   });
 
   it("documents the script result shapes for grep and the edit tools", () => {
