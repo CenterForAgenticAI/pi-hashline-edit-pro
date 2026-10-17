@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { join } from "node:path";
 import { realpath, symlink, writeFile } from "node:fs/promises";
 import { fmtRegion } from "../../src/hashline";
-import { fmtReadPreview } from "../../src/read";
+import { fmtReadPreview, insertBeforeExpandHint } from "../../src/read";
 import { cacheSnapshot, snapshotCache } from "../../src/hash-store/cache";
 import { useTestHome, withTempFile, withTempDir, setupIntegrationTest, makeFakePiRegistry } from "../support/fixtures";
 import register from "../../index";
@@ -194,5 +194,20 @@ describe("read tool - call rendering", () => {
     expect(renderCall(undefined)).toContain("read");
     expect(renderCall({ path: "sample.ts", offset: "576" })).toContain(":576");
     expect(renderCall("nope")).toBeDefined();
+  });
+});
+
+describe("read tool - call range insertion", () => {
+  it("appends the range when the call has no expand hint", () => {
+    expect(insertBeforeExpandHint("read sample.ts", ":2 (RKhl)")).toBe("read sample.ts:2 (RKhl)");
+  });
+
+  it("inserts the range before a styled compact expand hint", () => {
+    const hint = "\x1b[2m (ctrl+o to expand)\x1b[39m";
+    expect(insertBeforeExpandHint(`read resource AGENTS.md${hint}`, ":RKhl +560")).toBe(`read resource AGENTS.md:RKhl +560${hint}`);
+  });
+
+  it("inserts the range before a plain compact expand hint", () => {
+    expect(insertBeforeExpandHint("read resource AGENTS.md (ctrl+o to expand)", ":RKhl +560")).toBe("read resource AGENTS.md:RKhl +560 (ctrl+o to expand)");
   });
 });
