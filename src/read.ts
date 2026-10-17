@@ -23,7 +23,7 @@ import { withAnchorSession, adoptAnchors, ownerOf, ownersDifferingOnlyByCase, fo
 import { serveRows } from "./served";
 import { snapshotCache } from "./hash-store/cache";
 import { Text } from "@earendil-works/pi-tui";
-import { anchoredLine, readResultSchema, withStructuredErrors, type AnchoredLine, type ReadResult } from "./structured";
+import { anchoredLine, readResultSchema, withStructuredErrors, type AnchoredLine, type ReadResult, type ReadTextResult } from "./structured";
 const R_DESC = loadP("../tool-prompts/read.md");
 const R_SNIPPET = loadP("../tool-prompts/read-snippet.md");
 function readGuide(): Guideline[] {
@@ -306,6 +306,35 @@ function renderReadCall(args: unknown, theme: any, context: any): Text {
 	return rendered;
 }
 
+function buildReadToolSchema(codemode: boolean) {
+	return Type.Object({
+		path: Type.String({
+			description: "Path to the file to read (relative or absolute)",
+		}),
+		offset: Type.Optional(
+			Type.Union([
+				Type.Integer({ minimum: 1 }),
+				Type.String(),
+			], { description: "Line number (1-indexed) or a served anchor to start reading from" }),
+		),
+		limit: Type.Optional(
+			Type.Integer({
+				minimum: 1,
+				description: "Maximum number of lines to read from offset",
+			}),
+		),
+		...(codemode
+			? {
+					anchors: Type.Optional(
+						Type.Boolean({
+							description: "Return { text, lines, notices } with editable anchors instead of the plain file text to a codemode script",
+						}),
+					),
+				}
+			: {}),
+	});
+}
+
 export function regRead(pi: ExtensionAPI, flags: EditToolFlags = DEFAULT_EDIT_FLAGS): void {
   const prompted = withReadPrompts({ description: R_DESC, snippet: R_SNIPPET, guidelines: readGuide() }, flags);
   pi.registerTool({
@@ -315,23 +344,7 @@ export function regRead(pi: ExtensionAPI, flags: EditToolFlags = DEFAULT_EDIT_FL
     promptSnippet: prompted.snippet,
     promptGuidelines: prompted.guidelines,
 		prepareArguments: makePrepareArguments(),
-		parameters: Type.Object({
-			path: Type.String({
-				description: "Path to the file to read (relative or absolute)",
-			}),
-			offset: Type.Optional(
-				Type.Union([
-					Type.Integer({ minimum: 1 }),
-					Type.String(),
-				], { description: "Line number (1-indexed) or a served anchor to start reading from" }),
-			),
-			limit: Type.Optional(
-				Type.Integer({
-					minimum: 1,
-					description: "Maximum number of lines to read from offset",
-				}),
-			),
-		}),
+		parameters: buildReadToolSchema(flags.codemode),
 		outputSchema: readResultSchema,
 		executionMode: "sequential",
 		renderCall: renderReadCall,
@@ -391,7 +404,7 @@ export function regRead(pi: ExtensionAPI, flags: EditToolFlags = DEFAULT_EDIT_FL
 				const servedRawText = preview.anchoredLines.map((row) => fileLines[row.line - 1] ?? "").join("\n");
 				const rawTruncation = servedRawText.length > 0 ? truncateHead(servedRawText, { maxBytes: DEFAULT_MAX_BYTES, maxLines: DEFAULT_MAX_LINES }) : undefined;
 
-				const structuredContent: ReadResult = {
+				const readResult: ReadTextResult = {
 					ok: true,
 					kind: "read",
 					path: rawPath,
@@ -405,6 +418,8 @@ export function regRead(pi: ExtensionAPI, flags: EditToolFlags = DEFAULT_EDIT_FL
 					hadUtf8DecodeErrors,
 					notices,
 				};
+				const anchorsRequested = isRec(params) && params.anchors === true;
+				const structuredContent: ReadResult = flags.codemode && !anchorsRequested ? readResult.text : readResult;
 				return {
 					content: [{ type: "text", text: previewText }],
 					details: {

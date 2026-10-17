@@ -56,7 +56,7 @@ const SHARED_DIFF_OPS = ["replace", "replace_match", "insert", "copy", "move", "
 const RESULT_CONTRACT_GUIDELINE =
   'When called from a codemode script, failures resolve to `{ ok: false, kind: "error", error: { code, message } }`; branch on `ok` instead of `try`/`catch`.';
 const READ_SCRIPT_GUIDELINE =
-  '`read` in a codemode script: this tool replaces the built-in `read`, so a text file resolves to `{ text, lines, notices }`, not to a string; use `.text` for the raw file content and `lines[].anchor` for the editable anchor. An image read resolves to an image block.';
+  '`read` in a codemode script resolves to the file\'s text, like the built-in `read`; pass `anchors: true` to receive `{ text, lines, notices }` with the raw file content and `lines[].anchor` for chained edits. An image read resolves to an image block.';
 const GREP_SCRIPT_GUIDELINE =
   '`grep`: a codemode script receives `{ text, results }`; each `results[].lines[]` entry carries the matching line\'s `anchor` and `text`, so a result is editable without a fresh read.';
 function editScriptGuideline(flags: EditToolFlags): string {

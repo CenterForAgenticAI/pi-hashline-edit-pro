@@ -3,7 +3,9 @@ import { writeFile } from "fs/promises";
 import { join } from "path";
 import { Compile } from "typebox/compile";
 import register from "../../index";
-import { withTempFile, withTempDir, setupIntegrationTest, getText, anchorFor, makePiStub } from "../support/fixtures";
+import { withTempFile, withTempDir, setupIntegrationTest, getText, anchorFor, makePiStub, makeFakePiRegistry } from "../support/fixtures";
+import { regRead } from "../../src/read";
+import { DEFAULT_EDIT_FLAGS } from "../../src/edit-common";
 
 type Structured = {
 	ok: boolean;
@@ -147,6 +149,28 @@ describe("structuredContent for read and replace", () => {
 			expect(result.content.length).toBeGreaterThan(0);
 		});
 	});
+
+describe("read codemode contract", () => {
+	it("resolves to the raw text by default and to the anchored object with anchors: true", async () => {
+		const newline = String.fromCharCode(10);
+		const jsonl = `{"index":0}${newline}{"index":1}${newline}`;
+		const raw = `{"index":0}${newline}{"index":1}`;
+		await withTempFile("codemode.jsonl", jsonl, async ({ cwd }) => {
+			const { pi, getTool } = makeFakePiRegistry();
+			regRead(pi, { ...DEFAULT_EDIT_FLAGS, codemode: true });
+			expect(Object.keys(getTool("read").parameters.properties)).toContain("anchors");
+			const readTool = getTool("read");
+			const ctx = { cwd } as any;
+			const plain = await readTool.execute("r1", { path: "codemode.jsonl" }, undefined, undefined, ctx);
+			expect(plain.structuredContent).toBe(raw);
+			const anchored = await readTool.execute("r2", { path: "codemode.jsonl", anchors: true }, undefined, undefined, ctx);
+			const sc = structured(anchored);
+			expect(sc.ok).toBe(true);
+			expect(sc.text).toBe(raw);
+			expect(sc.lines).toHaveLength(2);
+		});
+	});
+});
 
 	it("replace returns applied structured content with live anchors", async () => {
 		await withTempFile("sample.ts", "alpha\nbeta\ngamma\n", async ({ cwd }) => {
