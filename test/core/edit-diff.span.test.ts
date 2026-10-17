@@ -103,4 +103,45 @@ describe("genDiff with true spans", () => {
       { start: 4, end: 3, replacementCount: 1 },
     ]);
   });
+
+  it("keeps unchanged interior lines of a span as context rows", () => {
+    const oldContent = "l0\nold a\nkeep\nkeep too\nold b\nl5";
+    const newContent = "l0\nnew a\nkeep\nkeep too\nnew b\nl5";
+    const oldHashes = ["Aaaa", "Bbbb", "Cccc", "Dddd", "Eeee", "Ffff"];
+    const newHashes = ["Aaaa", "Gggg", "Cccc", "Dddd", "Hhhh", "Ffff"];
+    const spans = [{ start: 1, end: 4, replacementCount: 4 }];
+    const { diff } = genDiff(oldContent, newContent, 1, newHashes, oldHashes, undefined, spans);
+    expect(diff).toContain("-Bbbb│old a");
+    expect(diff).toContain("+Gggg│new a");
+    expect(diff).toContain(" Cccc│keep");
+    expect(diff).toContain(" Dddd│keep too");
+    expect(diff).toContain("-Eeee│old b");
+    expect(diff).toContain("+Hhhh│new b");
+    expect(diff).not.toMatch(/^[-+]Cccc│/m);
+    expect(diff).not.toMatch(/^[-+]Dddd│/m);
+  });
+
+  it("treats a shifted unchanged run inside a span as context", () => {
+    const oldContent = "A\nB\nC\nD";
+    const newContent = "A\nC\nD";
+    const oldHashes = ["Aaaa", "Bbbb", "Cccc", "Dddd"];
+    const newHashes = ["Aaaa", "Cccc", "Dddd"];
+    const spans = [{ start: 1, end: 3, replacementCount: 2 }];
+    const { diff } = genDiff(oldContent, newContent, 1, newHashes, oldHashes, undefined, spans);
+    expect(diff).toContain("-Bbbb│B");
+    expect(diff).toContain(" Cccc│C");
+    expect(diff).not.toMatch(/^[-+]Cccc│/m);
+    expect(diff).not.toMatch(/^[-+]Dddd│/m);
+  });
+
+  it("keeps a line whose hash survived but whose text changed as a change row", () => {
+    const oldContent = "same\nhidden tail A";
+    const newContent = "same\nhidden tail B";
+    const oldHashes = ["Aaaa", "Bbbb"];
+    const newHashes = ["Aaaa", "Bbbb"];
+    const spans = [{ start: 1, end: 1, replacementCount: 1 }];
+    const { diff } = genDiff(oldContent, newContent, 1, newHashes, oldHashes, undefined, spans);
+    expect(diff).toContain("+Bbbb│hidden tail B");
+    expect(diff).not.toContain(" Bbbb│hidden tail B");
+  });
 });

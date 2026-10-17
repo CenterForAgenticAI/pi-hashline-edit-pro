@@ -159,6 +159,41 @@ function placeSpans(
   return placed;
 }
 
+function splitPlacedSpan(
+  span: PlacedSpan,
+  oldLines: string[],
+  newLines: string[],
+  oldHashes: string[],
+  newHashes: string[],
+  newIndexByHash: ReadonlyMap<string, number>,
+): PlacedSpan[] {
+  if (span.oldStart > span.oldEnd || span.newStart > span.newEnd) return [span];
+  const pairs: Array<[number, number]> = [];
+  let lastNew = span.newStart - 1;
+  for (let oldIdx = span.oldStart; oldIdx <= span.oldEnd; oldIdx++) {
+    const newIdx = newIndexByHash.get(oldHashes[oldIdx]!);
+    if (newIdx === undefined || newIdx < span.newStart || newIdx > span.newEnd || newIdx <= lastNew) continue;
+    if (oldLines[oldIdx] !== newLines[newIdx]) continue;
+    pairs.push([oldIdx, newIdx]);
+    lastNew = newIdx;
+  }
+  if (pairs.length === 0) return [span];
+  const out: PlacedSpan[] = [];
+  let oldCursor = span.oldStart;
+  let newCursor = span.newStart;
+  for (const [oldIdx, newIdx] of pairs) {
+    if (oldCursor <= oldIdx - 1 || newCursor <= newIdx - 1) {
+      out.push({ oldStart: oldCursor, oldEnd: oldIdx - 1, newStart: newCursor, newEnd: newIdx - 1 });
+    }
+    oldCursor = oldIdx + 1;
+    newCursor = newIdx + 1;
+  }
+  if (oldCursor <= span.oldEnd || newCursor <= span.newEnd) {
+    out.push({ oldStart: oldCursor, oldEnd: span.oldEnd, newStart: newCursor, newEnd: span.newEnd });
+  }
+  return out;
+}
+
 function trimPlacedSpans(
   placed: PlacedSpan[],
   oldLines: string[],
@@ -166,23 +201,10 @@ function trimPlacedSpans(
   oldHashes: string[],
   newHashes: string[],
 ): PlacedSpan[] {
+  const newIndexByHash = new Map<string, number>();
+  for (let index = 0; index < newHashes.length; index++) newIndexByHash.set(newHashes[index]!, index);
   const out: PlacedSpan[] = [];
-  for (const span of placed) {
-    let oldStart = span.oldStart;
-    let oldEnd = span.oldEnd;
-    let newStart = span.newStart;
-    let newEnd = span.newEnd;
-    while (oldStart <= oldEnd && newStart <= newEnd && oldLines[oldStart] === newLines[newStart] && oldHashes[oldStart] === newHashes[newStart]) {
-      oldStart += 1;
-      newStart += 1;
-    }
-    while (oldStart <= oldEnd && newStart <= newEnd && oldLines[oldEnd] === newLines[newEnd] && oldHashes[oldEnd] === newHashes[newEnd]) {
-      oldEnd -= 1;
-      newEnd -= 1;
-    }
-    if (oldStart > oldEnd && newStart > newEnd) continue;
-    out.push({ oldStart, oldEnd, newStart, newEnd });
-  }
+  for (const span of placed) out.push(...splitPlacedSpan(span, oldLines, newLines, oldHashes, newHashes, newIndexByHash));
   return out;
 }
 
