@@ -73,6 +73,10 @@ describe("formatCharEscape", () => {
   it("escapes astral characters as a surrogate pair", () => {
     expect(formatCharEscape("😀")).toBe(String.raw`\ud83d\ude00`);
   });
+
+  it("returns an empty escape for empty input", () => {
+    expect(formatCharEscape("")).toBe("");
+  });
 });
 
 describe("fidelityHints", () => {

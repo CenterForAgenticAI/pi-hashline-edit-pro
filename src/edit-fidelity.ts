@@ -77,7 +77,8 @@ export function isFidelitySensitiveChar(char: string): boolean {
 }
 
 export function formatCharEscape(char: string): string {
-  const codePoint = char.codePointAt(0)!;
+  const codePoint = char.codePointAt(0);
+  if (codePoint === undefined) return "";
   if (codePoint <= 0xffff) return `\\u${codePoint.toString(16).padStart(4, "0")}`;
   const pair = codePoint - 0x10000;
   return `\\u${(0xd800 + (pair >> 10)).toString(16).padStart(4, "0")}\\u${(0xdc00 + (pair & 0x3ff)).toString(16).padStart(4, "0")}`;
