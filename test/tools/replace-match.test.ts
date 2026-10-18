@@ -361,6 +361,94 @@ describe("replace_match", () => {
       expect(message).toContain("use replace with the same anchors");
     });
   });
+
+  it("escapes an invisible mismatch character instead of printing it raw", async () => {
+    const content = 'const label = "caf\u00a0";\n';
+    await withTempFile("labels.ts", content, async ({ cwd }) => {
+      const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
+      const text = getText(await readTool.execute("r1", { path: "labels.ts" }, undefined, undefined, ctx));
+      const anchor = anchorOf(text, "caf");
+      const message = await toolError(() => getTool("replace_match").execute(
+        "w1",
+        {
+          replace_from: anchor,
+          replace_to: anchor,
+          old_string: 'const label = "caf ";',
+          new_string: "x",
+        },
+        undefined, undefined, ctx,
+      ));
+      expect(message).toContain("the first mismatch is at line 1");
+      expect(message).toContain(String.raw`the file has "\u00a0"`);
+      expect(message).toContain('where old_string has " "');
+    });
+  });
+
+  it("escapes a non-ASCII look-alike mismatch character", async () => {
+    const content = 'const label = "caf\u0435";\n';
+    await withTempFile("labels.ts", content, async ({ cwd }) => {
+      const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
+      const text = getText(await readTool.execute("r1", { path: "labels.ts" }, undefined, undefined, ctx));
+      const anchor = anchorOf(text, "caf");
+      const message = await toolError(() => getTool("replace_match").execute(
+        "w1",
+        {
+          replace_from: anchor,
+          replace_to: anchor,
+          old_string: 'const label = "cafe";',
+          new_string: "x",
+        },
+        undefined, undefined, ctx,
+      ));
+      expect(message).toContain("the first mismatch is at line 1");
+      expect(message).toContain(String.raw`the file has "\u0435"`);
+      expect(message).toContain('where old_string has "e"');
+    });
+  });
+
+  it("reports the code-point column for a mismatch after an astral character", async () => {
+    const content = '// note 😀 const label = "caf\u00a0";\n';
+    await withTempFile("labels.ts", content, async ({ cwd }) => {
+      const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
+      const text = getText(await readTool.execute("r1", { path: "labels.ts" }, undefined, undefined, ctx));
+      const anchor = anchorOf(text, "caf");
+      const message = await toolError(() => getTool("replace_match").execute(
+        "w1",
+        {
+          replace_from: anchor,
+          replace_to: anchor,
+          old_string: '// note 😀 const label = "caf ";',
+          new_string: "x",
+        },
+        undefined, undefined, ctx,
+      ));
+      expect(message).toContain("the first mismatch is at line 1, col 29");
+      expect(message).toContain(String.raw`the file has "\u00a0"`);
+      expect(message).toContain('where old_string has " "');
+    });
+  });
+
+  it("escapes an astral mismatch character as a full surrogate pair", async () => {
+    const content = 'const label = "caf😀";\n';
+    await withTempFile("labels.ts", content, async ({ cwd }) => {
+      const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
+      const text = getText(await readTool.execute("r1", { path: "labels.ts" }, undefined, undefined, ctx));
+      const anchor = anchorOf(text, "caf");
+      const message = await toolError(() => getTool("replace_match").execute(
+        "w1",
+        {
+          replace_from: anchor,
+          replace_to: anchor,
+          old_string: 'const label = "caf😁";',
+          new_string: "x",
+        },
+        undefined, undefined, ctx,
+      ));
+      expect(message).toContain("the first mismatch is at line 1, col 19");
+      expect(message).toContain(String.raw`the file has "\ud83d\ude00"`);
+      expect(message).toContain(String.raw`where old_string has "\ud83d\ude01"`);
+    });
+  });
 });
 
 describe("replace_match requirePath", () => {

@@ -17,7 +17,7 @@ import {
 } from "./payload-contract";
 import { literalEscapeHints, makePrepareArguments, splitLines } from "./utils";
 import { toLF, type LineEnding } from "./normalize";
-import { isFidelitySensitiveChar } from "./edit-fidelity";
+import { formatCharEscape, isFidelitySensitiveChar } from "./edit-fidelity";
 import { countNewlines, splitWithEndings } from "./line-endings";
 import { MAX_RANGE_STALE_LINES } from "./constants";
 import {
@@ -179,13 +179,22 @@ function wholeRangeWarning(oldText: string, rangeText: string, lineCount: number
   return `[W_REPLACE_MATCH_WHOLE_RANGE] "old_string" is the entire selected range (${formatMatchRange(start, end)}); the anchors already identify it. Use replace with remove_from "${startHash}", remove_to "${endHash}" and the new text, or send only the fragment that changes.`;
 }
 
+function charAt(text: string, index: number): string | undefined {
+  if (index >= text.length) return undefined;
+  return String.fromCodePoint(text.codePointAt(index)!);
+}
+
+function codePointStart(text: string, index: number): number {
+  if (index <= 0 || index >= text.length) return index;
+  const before = text.charCodeAt(index - 1);
+  const at = text.charCodeAt(index);
+  return before >= 0xd800 && before <= 0xdbff && at >= 0xdc00 && at <= 0xdfff ? index - 1 : index;
+}
+
 function describeChar(char: string | undefined): string {
   if (char === undefined) return "the end of the text";
   const codePoint = char.codePointAt(0)!;
-  const shown = JSON.stringify(char);
-  return isFidelitySensitiveChar(char) || codePoint < 0x20 || codePoint > 0x7e
-    ? `${shown} (U+${codePoint.toString(16).toUpperCase().padStart(4, "0")})`
-    : shown;
+  return isFidelitySensitiveChar(char) || codePoint > 0x7e ? `"${formatCharEscape(char)}"` : JSON.stringify(char);
 }
 
 function nearMissDetail(oldText: string, rangeText: string, start: number): string | undefined {
@@ -195,8 +204,11 @@ function nearMissDetail(oldText: string, rangeText: string, start: number): stri
   const comparable = Math.min(oldText.length, rangeText.length);
   if (prefix + suffix < Math.floor(comparable * NEAR_MISS_MATCH_RATIO)) return undefined;
   const lineOffset = countNewlines(rangeText.slice(0, prefix));
-  const column = prefix - rangeText.lastIndexOf("\n", prefix - 1);
-  return `the first mismatch is at line ${start + lineOffset}, col ${column}: the file has ${describeChar(rangeText[prefix])} where old_string has ${describeChar(oldText[prefix])}.`;
+  const fileStart = codePointStart(rangeText, prefix);
+  const oldStart = codePointStart(oldText, prefix);
+  const lineStart = rangeText.lastIndexOf("\n", fileStart - 1) + 1;
+  const column = [...rangeText.slice(lineStart, fileStart)].length + 1;
+  return `the first mismatch is at line ${start + lineOffset}, col ${column}: the file has ${describeChar(charAt(rangeText, fileStart))} where old_string has ${describeChar(charAt(oldText, oldStart))}.`;
 }
 
 function notFoundMessage(displayPath: string, start: number, end: number, fileHashes: string[], fileLines: string[], rangeText: string, oldText: string): string {

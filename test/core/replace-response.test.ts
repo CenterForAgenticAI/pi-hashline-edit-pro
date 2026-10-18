@@ -267,7 +267,6 @@ describe("buildChanged", () => {
     expect(output.details.hints).toHaveLength(1);
     const hint = output.details.hints![0]!;
     expect(hint).toContain(`${resultHashes[1]}│ col 7`);
-    expect(hint).toContain("resend with U+200B if unintended.");
   });
 
   it("replaces the anchor list with the recovery when many rows carry the literal escape", async () => {
@@ -290,8 +289,6 @@ describe("buildChanged", () => {
     expect(hint).toContain("undo_last_change");
     expect(hint).toContain("on 4 rows");
     expect(hint).not.toContain(" at col ");
-    expect(hint).toContain("resend with U+200B if unintended.");
-    expect(hint).not.toContain("resending with a single");
   });
 
   it("skips indent hints for copied and moved results", async () => {

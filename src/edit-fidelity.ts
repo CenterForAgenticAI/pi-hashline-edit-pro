@@ -76,8 +76,11 @@ export function isFidelitySensitiveChar(char: string): boolean {
   return char === REPLACEMENT_CHAR || INVISIBLE_RE.test(char) || LOOKALIKE_SPACE_RE.test(char) || LOOKALIKE_DASH_RE.test(char) || LOOKALIKE_QUOTE_RE.test(char) || LOOKALIKE_PUNCT_RE.test(char);
 }
 
-function formatCodePoint(char: string): string {
-  return `U+${char.codePointAt(0)!.toString(16).toUpperCase().padStart(4, "0")}`;
+export function formatCharEscape(char: string): string {
+  const codePoint = char.codePointAt(0)!;
+  if (codePoint <= 0xffff) return `\\u${codePoint.toString(16).padStart(4, "0")}`;
+  const pair = codePoint - 0x10000;
+  return `\\u${(0xd800 + (pair >> 10)).toString(16).padStart(4, "0")}\\u${(0xdc00 + (pair & 0x3ff)).toString(16).padStart(4, "0")}`;
 }
 
 function plural(count: number, noun: string): string {
@@ -89,11 +92,16 @@ interface ReferenceRow {
   index: number;
 }
 
-function hiddenCharHint(char: string, reference: ReferenceRow, anchor: string | undefined): string {
+function hiddenCharHint(char: string, reference: ReferenceRow, liveAnchor: string | undefined, referenceAnchor: string | undefined): string {
   const column = [...reference.line].indexOf(char) + 1;
-  const codePoint = formatCodePoint(char);
-  const referenceNote = anchor === undefined ? "" : `; ${anchor}${HASH_SEP} has it`;
-  return `[H_UNICODE_LOST] ${codePoint} missing at col ${column}${referenceNote}; resend with ${codePoint} if unintended.`;
+  const escape = formatCharEscape(char);
+  const located = referenceAnchor === undefined
+    ? `the replaced row had it at col ${column}`
+    : `${referenceAnchor}${HASH_SEP} has it at col ${column}`;
+  if (liveAnchor === undefined) {
+    return `[H_UNICODE_LOST] "${escape}" missing; ${located}.`;
+  }
+  return `[H_UNICODE_LOST] ${liveAnchor}${HASH_SEP} missing "${escape}"; ${located}.`;
 }
 
 function withCharsRestored(line: string, chars: readonly string[], replacementFor: (char: string) => string): string {
@@ -122,6 +130,7 @@ interface SwappedChar {
 interface SwapCandidate {
   reference: ReferenceRow;
   swapped: SwappedChar;
+  liveAnchor?: string;
 }
 
 function containsSensitiveChar(line: string): boolean {
@@ -132,6 +141,14 @@ function normalizeSensitiveChars(line: string): string {
   let normalized = "";
   for (const char of line) normalized += isFidelitySensitiveChar(char) ? "?" : char;
   return normalized;
+}
+
+function sensitiveStripped(line: string): string {
+  let visible = "";
+  for (const char of line) {
+    if (!isFidelitySensitiveChar(char)) visible += char;
+  }
+  return visible;
 }
 
 function isLookalikeSwap(oldChar: string, newChar: string): boolean {
@@ -150,21 +167,46 @@ function sharesFidelityClass(left: string, right: string): boolean {
   );
 }
 
-function findSubstitute(char: string, reference: ReferenceRow, payload: readonly string[]): string | undefined {
+interface SubstituteMatch {
+  value: string;
+  payloadIndex: number;
+  column: number;
+}
+
+interface SubstituteRank {
+  echo: boolean;
+  aligned: boolean;
+  distance: number;
+}
+
+function preferSubstitute(candidate: SubstituteRank, best: SubstituteRank | undefined): boolean {
+  if (best === undefined) return true;
+  if (candidate.echo !== best.echo) return candidate.echo;
+  if (candidate.aligned !== best.aligned) return candidate.aligned;
+  return candidate.distance < best.distance;
+}
+
+function findSubstitute(char: string, reference: ReferenceRow, payload: readonly string[]): SubstituteMatch | undefined {
   const referenceChars = [...reference.line];
   const column = referenceChars.indexOf(char);
-  for (const line of payload) {
+  const visibleReference = sensitiveStripped(reference.line);
+  let best: SubstituteMatch | undefined;
+  let bestRank: SubstituteRank | undefined;
+  for (let index = 0; index < payload.length; index += 1) {
+    const line = payload[index]!;
     const candidateChars = [...line];
-    if (candidateChars.length !== referenceChars.length) continue;
-    const candidate = candidateChars[column];
-    if (candidate !== undefined && candidate !== char && sharesFidelityClass(char, candidate)) return candidate;
-  }
-  for (const line of payload) {
-    for (const candidate of line) {
-      if (candidate !== char && sharesFidelityClass(char, candidate)) return candidate;
+    const echo = sensitiveStripped(line) === visibleReference;
+    const sameLength = candidateChars.length === referenceChars.length;
+    for (let at = 0; at < candidateChars.length; at += 1) {
+      const candidate = candidateChars[at]!;
+      if (candidate === char || !sharesFidelityClass(char, candidate)) continue;
+      const rank = { echo, aligned: sameLength && at === column, distance: Math.abs(at - column) };
+      if (!preferSubstitute(rank, bestRank)) continue;
+      bestRank = rank;
+      best = { value: candidate, payloadIndex: index, column: at + 1 };
     }
   }
-  return undefined;
+  return best;
 }
 
 function swappedCharPair(oldLine: string, newLine: string): SwappedChar | undefined {
@@ -193,10 +235,15 @@ function swappedCandidate(line: string, matches: IndexedLine[], spanStart: numbe
   return candidates.find((candidate) => candidate.reference.index >= spanStart && candidate.reference.index <= spanEnd) ?? candidates[0];
 }
 
-function swappedCharHint(swapped: SwappedChar, anchor: string | undefined): string {
-  const label = anchor === undefined ? "the replaced line" : `${anchor}${HASH_SEP}`;
-  const expected = formatCodePoint(swapped.oldChar);
-  return `[H_UNICODE_SWAPPED] ${formatCodePoint(swapped.newChar)} at col ${swapped.column} where ${label} has ${expected}; resend with ${expected} if unintended.`;
+function swappedCharHint(swapped: SwappedChar, liveAnchor: string | undefined, referenceAnchor: string | undefined): string {
+  const newEscape = formatCharEscape(swapped.newChar);
+  const oldEscape = formatCharEscape(swapped.oldChar);
+  if (liveAnchor === undefined) {
+    const label = referenceAnchor === undefined ? "the replaced line" : `${referenceAnchor}${HASH_SEP}`;
+    return `[H_UNICODE_SWAPPED] "${newEscape}" at col ${swapped.column} where ${label} has "${oldEscape}".`;
+  }
+  const referenceNote = referenceAnchor === undefined ? `; expected "${oldEscape}"` : `; ${referenceAnchor}${HASH_SEP} has "${oldEscape}"`;
+  return `[H_UNICODE_SWAPPED] ${liveAnchor}${HASH_SEP} has "${newEscape}" at col ${swapped.column}${referenceNote}.`;
 }
 
 function trailingWhitespaceHint(oldLine: string, newLine: string, anchor: string | undefined): string {
@@ -327,18 +374,6 @@ function literalEscapeHintRows(
   return rows;
 }
 
-function actualEscapeName(escape: string): string {
-  const hex = /^\\u([0-9a-fA-F]{4})$/.exec(escape)?.[1];
-  if (hex !== undefined) return `U+${hex.toUpperCase()}`;
-  if (escape.length === 2) {
-    if (escape[1] === "n") return "a line break";
-    if (escape[1] === "r") return "a carriage return";
-    if (escape[1] === "t") return "a tab";
-    if (escape[1] === '"') return "a double quote";
-  }
-  return "the character";
-}
-
 export function annotateLiteralEscapeHints(
   hints: string[],
   resultContent: string,
@@ -353,10 +388,10 @@ export function annotateLiteralEscapeHints(
     const rows = literalEscapeHintRows(resultContent, spans, resultHashes, escape);
     if (rows.length === 0) return hint;
     if (rows.length > MAX_LITERAL_ESCAPE_ROWS) {
-      return `${hint} on ${plural(rows.length, "row")}; undo_last_change + resend with ${actualEscapeName(escape)} if unintended.`;
+      return `${hint} on ${plural(rows.length, "row")}; undo_last_change if unintended.`;
     }
     const locations = rows.map((row) => `${resultHashes[row.index]!}${HASH_SEP} col ${literalEscapeColumn(row.line, escape)}`).join(", ");
-    return `${hint} (${locations}); resend with ${actualEscapeName(escape)} if unintended.`;
+    return `${hint} (${locations}).`;
   });
 }
 
@@ -404,6 +439,8 @@ export function fidelityHints(
     return sensitiveIndex;
   };
   let offset = 0;
+  const removedByAnySpan = (index: number): boolean =>
+    spans.some((candidate) => index >= candidate.start && index <= candidate.end);
   for (const span of [...spans].sort((a, b) => a.start - b.start)) {
     const removedCount = span.end >= span.start ? span.end - span.start + 1 : 0;
     const removed = removedCount > 0 ? oldLines.slice(span.start, span.end + 1) : [];
@@ -416,10 +453,31 @@ export function fidelityHints(
         ? removed.map((line, index) => ({ line, index: span.start + index }))
         : referenceRows(oldLines, span.start, span.end);
       const insertGate = carried === undefined ? null : (gramSet(payload, SIMILARITY_RUN, true) ?? new Set<string>());
+      const resultIndexForPayload = (payloadIndex: number): number =>
+        span.start + offset + (carried !== undefined && payloadIndex >= carried ? payloadIndex + 1 : payloadIndex);
+      const referenceSurvives = (reference: ReferenceRow): boolean =>
+        (carried !== undefined && reference.index === span.start && inserted[carried] === oldLines[reference.index]) ||
+        !removedByAnySpan(reference.index);
+      const liveAnchorForPayload = (payloadIndex: number): string | undefined =>
+        resultHashes?.[resultIndexForPayload(payloadIndex)];
+      const payloadIndexSharingRun = (line: string): number => {
+        const grams = gramSet([sensitiveStripped(line)], SIMILARITY_RUN);
+        return grams === undefined ? -1 : payload.findIndex((candidate) => sharesRun(sensitiveStripped(candidate), grams, SIMILARITY_RUN));
+      };
+      const liveAnchorForReference = (reference: ReferenceRow): string | undefined => {
+        const shared = payloadIndexSharingRun(reference.line);
+        if (shared >= 0) return liveAnchorForPayload(shared);
+        if (carried !== undefined || removed.length !== payload.length) return undefined;
+        const payloadIndex = reference.index - span.start;
+        return payloadIndex >= 0 && payloadIndex < payload.length ? liveAnchorForPayload(payloadIndex) : undefined;
+      };
+      const referenceAnchorFor = (reference: ReferenceRow): string | undefined =>
+        referenceSurvives(reference) ? originalHashes?.[reference.index] : undefined;
       const swapKeys = new Set<string>();
       const swaps: SwapCandidate[] = [];
       let candidates: Map<string, IndexedLine[]> | undefined;
-      for (const line of payload) {
+      for (let payloadIndex = 0; payloadIndex < payload.length; payloadIndex += 1) {
+        const line = payload[payloadIndex]!;
         if (!containsSensitiveChar(line)) continue;
         candidates ??= sensitiveLines();
         const matches = [...(candidates.get(normalizeSensitiveChars(line)) ?? []), ...references];
@@ -428,7 +486,7 @@ export function fidelityHints(
         const key = `${candidate.reference.index}:${candidate.swapped.oldChar}`;
         if (swapKeys.has(key)) continue;
         swapKeys.add(key);
-        swaps.push(candidate);
+        swaps.push({ ...candidate, liveAnchor: liveAnchorForPayload(payloadIndex) });
       }
       const missing = new Map<string, ReferenceRow>();
       for (const reference of references) {
@@ -449,17 +507,17 @@ export function fidelityHints(
         const substitute = findSubstitute(char, reference, payload);
         if (substitute !== undefined) {
           seen.add(`swap:${reference.index}:${char}`);
-          hints.push(swappedCharHint({ oldChar: char, newChar: substitute, column: [...reference.line].indexOf(char) + 1 }, originalHashes?.[reference.index]));
+          hints.push(swappedCharHint({ oldChar: char, newChar: substitute.value, column: substitute.column }, liveAnchorForPayload(substitute.payloadIndex), referenceAnchorFor(reference)));
           continue;
         }
-        hints.push(hiddenCharHint(char, reference, originalHashes?.[reference.index]));
+        hints.push(hiddenCharHint(char, reference, liveAnchorForReference(reference), referenceAnchorFor(reference)));
       }
       for (const candidate of swaps) {
         if (hints.length >= MAX_FIDELITY_HINTS) break;
         const key = `swap:${candidate.reference.index}:${candidate.swapped.oldChar}`;
         if (seen.has(key)) continue;
         seen.add(key);
-        hints.push(swappedCharHint(candidate.swapped, originalHashes?.[candidate.reference.index]));
+        hints.push(swappedCharHint(candidate.swapped, candidate.liveAnchor, referenceAnchorFor(candidate.reference)));
       }
       const indentReferenceFor = (payloadIndex: number): ReferenceRow | undefined => {
         if (options?.indentHints === false) return undefined;
@@ -482,8 +540,6 @@ export function fidelityHints(
         }
         return undefined;
       };
-      const resultIndexForPayload = (payloadIndex: number): number =>
-        span.start + offset + (carried !== undefined && payloadIndex >= carried ? payloadIndex + 1 : payloadIndex);
       for (let index = 0; index < payload.length; index += 1) {
         if (hints.length >= MAX_FIDELITY_HINTS) break;
         const payloadLine = payload[index]!;

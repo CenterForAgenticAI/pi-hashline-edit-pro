@@ -317,7 +317,7 @@ describe("edit fidelity hints", () => {
         undefined, undefined, ctx,
       );
       expect(result.content[0].text).toContain("[H_UNICODE_LOST]");
-      expect(result.details.hints).toContainEqual(expect.stringContaining("U+200B"));
+      expect(result.details.hints).toContainEqual(expect.stringContaining(String.raw`\u200b`));
       expect(result.details.metrics?.warnings).toBe(0);
       expect(await readFile(path, "utf-8")).toBe("alpha\nstableCheckout\n");
     });
