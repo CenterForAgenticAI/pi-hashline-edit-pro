@@ -1,11 +1,13 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { ANCHOR_COUNT, anchorAt } from "../../src/hashline/alphabet";
+import { HASH_PROBE_STRIDE } from "../../src/hashline/hash";
 import {
   foldRegistryEvents,
   formatAnchorReclaimNotice,
   mintAnchor,
   reclaimAnchorSpace,
   resetRegistryForTests,
+  shadowStateFrom,
   takeReclaimedPaths,
 } from "../../src/anchor-registry";
 import { ANCHOR_RECLAIM_WARNING_CODE, MAX_RECLAIMED_PATHS_REPORTED } from "../../src/constants";
@@ -23,6 +25,39 @@ interface SaturatingOwned {
   values(): Iterable<Entry>;
   entries(): Iterable<[string, Entry]>;
   [Symbol.iterator](): IterableIterator<[string, Entry]>;
+}
+
+interface SaturatingMintedSet {
+  readonly size: number;
+  has(anchor: string): boolean;
+  add(anchor: string): unknown;
+  [Symbol.iterator](): IterableIterator<string>;
+}
+
+class FakeMintedSet implements SaturatingMintedSet {
+  private readonly members = new Set<string>();
+  private readonly base: number;
+
+  constructor(base: number) {
+    this.base = base;
+  }
+
+  get size(): number {
+    return this.base + this.members.size;
+  }
+
+  has(anchor: string): boolean {
+    return this.members.has(anchor);
+  }
+
+  add(anchor: string): this {
+    this.members.add(anchor);
+    return this;
+  }
+
+  [Symbol.iterator](): IterableIterator<string> {
+    return this.members.values();
+  }
 }
 
 function saturatedState(entries: Array<{ path: string; anchors: string[]; usedAt: number }>) {
@@ -64,7 +99,7 @@ function saturatedState(entries: Array<{ path: string; anchors: string[]; usedAt
   return {
     owned: ownedView,
     served,
-    everMinted: new Set<string>(),
+    everMinted: new FakeMintedSet(0),
     probe: 0,
     allocatedChecksum: new Map<string, string>(),
     lastUsedAt,
@@ -72,6 +107,19 @@ function saturatedState(entries: Array<{ path: string; anchors: string[]; usedAt
     reclaimed: [] as string[],
     shadow: false,
   };
+}
+function fullyMinted(): FakeMintedSet {
+  return new FakeMintedSet(ANCHOR_COUNT);
+}
+
+function saturatedMintState(anchors: string[], probe: number): ReturnType<typeof saturatedState> {
+  const state = saturatedState([{ path: "/p.ts", anchors: [], usedAt: 1 }]);
+  const owned = new Map<string, Entry>();
+  for (const anchor of anchors) owned.set(anchor, { path: "/p.ts", checksum: "ck" });
+  state.owned = owned;
+  state.probe = probe;
+  state.everMinted = fullyMinted();
+  return state;
 }
 
 describe("reclaimAnchorSpace", () => {
@@ -136,6 +184,55 @@ describe("mintAnchor reclamation", () => {
     expect(state.served.has("/old.ts")).toBe(false);
     expect(state.owned.get(anchorAt(2))).toBeDefined();
   }, 15000);
+});
+
+describe("mintAnchor saturation", () => {
+  it("skips the dead fresh-anchor probe once every pool anchor was minted", () => {
+    const state = saturatedMintState([], 0);
+    const mintedHas = vi.spyOn(state.everMinted, "has").mockReturnValue(true);
+    const anchor = mintAnchor(state as never);
+    expect(mintedHas).not.toHaveBeenCalled();
+    expect(anchor).toBe(anchorAt(1));
+  });
+
+  it("still probes for a fresh anchor while an unminted anchor remains", () => {
+    const state = saturatedMintState([], 0);
+    state.everMinted = new FakeMintedSet(ANCHOR_COUNT - 1);
+    const mintedHas = vi.spyOn(state.everMinted, "has");
+    const anchor = mintAnchor(state as never);
+    expect(mintedHas).toHaveBeenCalled();
+    expect(anchor).toBe(anchorAt(HASH_PROBE_STRIDE));
+  });
+
+  it("skips the fresh probe for a saturated shadow set", () => {
+    const real = foldRegistryEvents([]);
+    real.everMinted = new FakeMintedSet(ANCHOR_COUNT);
+    const shadow = shadowStateFrom(real);
+    const mintedHas = vi.spyOn(shadow.everMinted, "has");
+    const anchor = mintAnchor(shadow);
+    expect(mintedHas).not.toHaveBeenCalled();
+    expect(anchor).toBe(anchorAt(1));
+  });
+
+  it("advances the cursor past the recycled anchor instead of re-walking it", () => {
+    const start = 10;
+    const owned = Array.from({ length: 100 }, (_, index) => anchorAt(start + 1 + index));
+    const state = saturatedMintState(owned, start);
+    const recycled = anchorAt(start + 101);
+    state.served.set("/p.ts", new Map([[recycled, "ck"]]));
+    const ownedHas = vi.spyOn(state.owned, "has");
+    const first = mintAnchor(state as never);
+    expect(first).toBe(recycled);
+    expect(state.probe).toBe(start + 101);
+    expect(state.served.get("/p.ts")!.has(recycled)).toBe(false);
+    expect(ownedHas).toHaveBeenCalledTimes(101);
+    state.owned.set(first, { path: "/p.ts", checksum: "ck" });
+    ownedHas.mockClear();
+    const second = mintAnchor(state as never);
+    expect(second).toBe(anchorAt(start + 102));
+    expect(state.probe).toBe(start + 102);
+    expect(ownedHas).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("foldRegistryEvents recency", () => {

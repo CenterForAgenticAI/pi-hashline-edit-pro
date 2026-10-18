@@ -212,9 +212,11 @@ export function clipLine(line: string, maxLen = 200): string {
 	const flat = line.replace(/\n/g, "\\n");
 	return flat.length > maxLen ? `${flat.slice(0, maxLen)}...` : flat;
 }
-export function assertLineLimit(content: string, displayPath: string, limit: number): void {
-	const count = splitLines(content).length;
+export function assertLineCount(count: number, displayPath: string, limit: number): void {
 	if (count > limit) throw new Error(formatLineLimit(displayPath, limit, count));
+}
+export function assertLineLimit(content: string, displayPath: string, limit: number): void {
+	assertLineCount(splitLines(content).length, displayPath, limit);
 }
 export function assertByteLimit(content: string, displayPath: string, limit = MAX_BYTES): void {
 	if (Buffer.byteLength(content, "utf-8") > limit) {

@@ -341,6 +341,13 @@ describe("anchor registry", () => {
     shadow.everMinted.add("DdDd");
     expect(real.everMinted.has("DdDd")).toBe(false);
     expect([...shadow.everMinted]).toEqual(["AaAa", "BbBb", "DdDd"]);
+    expect(shadow.everMinted.size).toBe(3);
+    shadow.everMinted.add("AaAa");
+    expect(shadow.everMinted.size).toBe(3);
+    real.everMinted.add("DdDd");
+    expect(shadow.everMinted.size).toBe(3);
+    real.everMinted.add("EeEe");
+    expect(shadow.everMinted.size).toBe(4);
   });
 
   it("parses and folds the ownership log", () => {

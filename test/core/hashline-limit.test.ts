@@ -1,4 +1,6 @@
 import { describe, expect, it, beforeEach } from "vitest";
+import { mkdir, readFile } from "node:fs/promises";
+import { join } from "node:path";
 import {
   _lineHashesPure,
   lineHashes,
@@ -11,12 +13,17 @@ import {
   setupReadTest,
   toolError,
 } from "../support/fixtures";
-import { resetRegistryForTests } from "../../src/anchor-registry";
+import { initRegistry, lastUsedAtForTests, ownersForPath, resetRegistryForTests } from "../../src/anchor-registry";
+import { sessionClaimsDir } from "../../src/paths";
 
 beforeEach(() => {
   resetRegistryForTests();
 });
 
+
+function oversizedContent(): string {
+  return Array.from({ length: MAX_HASH_LINES + 1 }, () => "x").join("\n");
+}
 const home = useTestHome();
 
 describe("hashline limits", () => {
@@ -36,10 +43,48 @@ describe("hashline limits", () => {
   }, 300_000);
 
   it("throws a clear E_FILE_TOO_LARGE error above the limit", () => {
-    const content = Array.from({ length: MAX_HASH_LINES + 1 }, () => "x").join(
-      "\n",
-    );
+    const content = oversizedContent();
     expect(() => _lineHashesPure(content)).toThrow("E_FILE_TOO_LARGE");
+  }, 300_000);
+
+  it("rejects an oversized file through the store path before minting or touching recency", async () => {
+    const content = oversizedContent();
+    await expect(lineHashes(content, home.testPath)).rejects.toThrow(
+      new RegExp(`\\[E_FILE_TOO_LARGE\\][\\s\\S]*has ${MAX_HASH_LINES + 1} lines`),
+    );
+    expect(ownersForPath(home.testPath).size).toBe(0);
+    expect(lastUsedAtForTests(home.testPath)).toBeUndefined();
+  }, 300_000);
+
+  it("does not evict another file's anchors when rejecting an oversized file", async () => {
+    const neighbor = `${home.testPath}.neighbor`;
+    await lineHashes("neighbor\n", neighbor);
+    const owned = ownersForPath(neighbor).size;
+    expect(owned).toBeGreaterThan(0);
+    const content = oversizedContent();
+    await expect(lineHashes(content, home.testPath)).rejects.toThrow("E_FILE_TOO_LARGE");
+    expect(ownersForPath(neighbor).size).toBe(owned);
+  }, 300_000);
+
+  it("rejects an oversized file in shadow allocation without claiming anchors", async () => {
+    const content = oversizedContent();
+    await expect(lineHashes(content, home.testPath, undefined, undefined, false, true)).rejects.toThrow("E_FILE_TOO_LARGE");
+    expect(ownersForPath(home.testPath).size).toBe(0);
+    expect(lastUsedAtForTests(home.testPath)).toBeUndefined();
+  }, 300_000);
+
+  it("does not append ownership events for a rejected oversized file", async () => {
+    const sessionFile = join(sessionClaimsDir(), "oversized-session.jsonl");
+    await mkdir(sessionClaimsDir(), { recursive: true });
+    const key = await initRegistry(sessionFile);
+    const neighbor = `${home.testPath}.neighbor`;
+    await lineHashes("neighbor\n", neighbor);
+    const sidecar = join(sessionClaimsDir(), `${key}.registry.jsonl`);
+    const before = await readFile(sidecar, "utf-8");
+    expect(before).toContain(neighbor);
+    const content = oversizedContent();
+    await expect(lineHashes(content, home.testPath)).rejects.toThrow("E_FILE_TOO_LARGE");
+    expect(await readFile(sidecar, "utf-8")).toBe(before);
   }, 300_000);
 
   it("preserves unique hashes at the boundary through the store path", async () => {

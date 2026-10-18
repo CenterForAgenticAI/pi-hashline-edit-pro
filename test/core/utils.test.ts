@@ -15,6 +15,7 @@ import {
   numberedRead,
   withLineNumbers,
   clipLine,
+  assertLineCount,
   assertLineLimit,
   lineLimitMoreThanMessage,
   getCached,
@@ -539,6 +540,21 @@ describe("string and row helpers", () => {
     const message = (() => {
       try {
         assertLineLimit("a\nb\nc\nd", "my.txt", 2);
+      } catch (error) {
+        return (error as Error).message;
+      }
+      return "";
+    })();
+    expect(message).toContain("my.txt");
+    expect(message).toContain("has 4");
+  });
+
+  it("assertLineCount reports the given count without re-counting", () => {
+    expect(() => assertLineCount(2, "f.txt", 2)).not.toThrow();
+    expect(() => assertLineCount(3, "f.txt", 2)).toThrow(/E_FILE_TOO_LARGE/);
+    const message = (() => {
+      try {
+        assertLineCount(4, "my.txt", 2);
       } catch (error) {
         return (error as Error).message;
       }

@@ -6,8 +6,8 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { sessionClaimsDir } from "./paths";
 import { contentChecksum } from "./hashline/hasher";
 import { ANCHOR_COUNT, anchorAt } from "./hashline/alphabet";
-import { HASH_PROBE_STRIDE } from "./hashline/hash";
-import { errCode, isRec, splitLines, spliceAll } from "./utils";
+import { HASH_PROBE_STRIDE, MAX_HASH_LINES } from "./hashline/hash";
+import { assertLineCount, errCode, isRec, splitLines, spliceAll } from "./utils";
 import * as Diff from "diff";
 import { lineChecksum } from "./hashline";
 import { getAllocatedState, persistSnapshot, type HashStore } from "./hash-store";
@@ -46,6 +46,7 @@ interface OwnedAnchorMap {
 }
 
 interface AnchorMintedSet {
+  readonly size: number;
   has(anchor: string): boolean;
   add(anchor: string): unknown;
   [Symbol.iterator](): IterableIterator<string>;
@@ -125,9 +126,12 @@ class ShadowOwnedMap implements OwnedAnchorMap {
 class ShadowMintedSet implements AnchorMintedSet {
   private readonly parent: AnchorMintedSet;
   private readonly added = new Set<string>();
+  private extra = 0;
+  private parentSize: number;
 
   constructor(parent: AnchorMintedSet) {
     this.parent = parent;
+    this.parentSize = parent.size;
   }
 
   has(anchor: string): boolean {
@@ -135,8 +139,20 @@ class ShadowMintedSet implements AnchorMintedSet {
   }
 
   add(anchor: string): this {
+    if (!this.added.has(anchor) && !this.parent.has(anchor)) this.extra += 1;
     this.added.add(anchor);
     return this;
+  }
+
+  get size(): number {
+    if (this.parent.size !== this.parentSize) {
+      this.parentSize = this.parent.size;
+      this.extra = 0;
+      for (const anchor of this.added) {
+        if (!this.parent.has(anchor)) this.extra += 1;
+      }
+    }
+    return this.parentSize + this.extra;
   }
 
   *[Symbol.iterator](): IterableIterator<string> {
@@ -555,16 +571,19 @@ export function reclaimAnchorSpace(state: SessionState, protectPath?: string): s
 
 export function mintAnchor(state: SessionState, protectPath?: string): string {
   for (;;) {
-    for (let probe = 0; probe < MINT_PROBE_LIMIT; probe++) {
-      state.probe = (state.probe + HASH_PROBE_STRIDE) % ANCHOR_COUNT;
-      const candidate = anchorAt(state.probe);
-      if (!state.owned.has(candidate) && !state.everMinted.has(candidate)) {
-        return candidate;
+    if (state.everMinted.size < ANCHOR_COUNT) {
+      for (let probe = 0; probe < MINT_PROBE_LIMIT; probe++) {
+        state.probe = (state.probe + HASH_PROBE_STRIDE) % ANCHOR_COUNT;
+        const candidate = anchorAt(state.probe);
+        if (!state.owned.has(candidate) && !state.everMinted.has(candidate)) {
+          return candidate;
+        }
       }
     }
     for (let step = 1; step <= ANCHOR_COUNT; step++) {
       const candidate = anchorAt((state.probe + step) % ANCHOR_COUNT);
       if (!state.owned.has(candidate)) {
+        state.probe = (state.probe + step) % ANCHOR_COUNT;
         for (const served of state.served.values()) served.delete(candidate);
         return candidate;
       }
@@ -963,8 +982,9 @@ export async function allocateFileAnchors(
   ensureRegistry();
   const registry = current();
   const shadow = options?.shadow === true;
-  if (!shadow && registry) touchPath(registry, path);
   const lines = splitLines(content);
+  assertLineCount(lines.length, path, MAX_HASH_LINES);
+  if (!shadow && registry) touchPath(registry, path);
   const checksums = lines.map(lineChecksum);
   if (options?.previous?.spans) {
     const prevChecksums = splitLines(options.previous.content).map(lineChecksum);
@@ -1056,6 +1076,10 @@ export function resetRegistryForTests(): void {
   pendingInits.clear();
   loadTokens.clear();
   registries.clear();
+}
+
+export function lastUsedAtForTests(path: string): number | undefined {
+  return current()?.lastUsedAt.get(path);
 }
 
 async function readSidecarWindow(sidecar: string): Promise<{ text: string; filled: boolean }> {
