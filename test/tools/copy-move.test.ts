@@ -559,6 +559,20 @@ describe("copy and move previews", () => {
     });
   });
 
+  it("keeps the anchor line in a same-file before-copy preview", async () => {
+    await withTempFile("sample.txt", "alpha\nbeta\ngamma\n", async ({ cwd }) => {
+      const { ctx, readTool } = setupIntegrationTest(cwd);
+      const text = getText(await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx));
+      const beta = anchorFor(text, "beta");
+      const gamma = anchorFor(text, "gamma");
+      const preview = await transferPreview("copy", { source_from: beta, source_to: beta, direction: "before", anchor: gamma }, cwd);
+      const diff = (preview as { diff: string }).diff;
+      expect(diff).toContain(` ${gamma}│gamma`);
+      expect(diff).not.toMatch(/^-[A-Za-z]{4}│gamma$/m);
+      expect(diff).not.toMatch(/^\+[A-Za-z]{4}│gamma$/m);
+    });
+  });
+
   it("rethrows an aborted preview", async () => {
     await withTempFile("sample.txt", "alpha\nbeta\n", async ({ cwd }) => {
       const { ctx, readTool } = setupIntegrationTest(cwd);
@@ -657,6 +671,42 @@ describe("cross-file previews and require-path", () => {
       const diff = (movePreview as { diff: string }).diff;
       expect(diff).toContain("--- a.ts ---");
       expect(diff).toContain("--- b.ts ---");
+    });
+  });
+
+  it("keeps the destination anchor in a before-copy preview", async () => {
+    await withTempDir("transfer-cross-before-", async (dir) => {
+      await writeFile(join(dir, "a.ts"), "alpha\nbeta\n", "utf-8");
+      await writeFile(join(dir, "b.ts"), "one\ntwo\n", "utf-8");
+      const { ctx, readTool } = setupIntegrationTest(dir);
+      const aText = getText(await readTool.execute("r1", { path: "a.ts" }, undefined, undefined, ctx));
+      const bText = getText(await readTool.execute("r2", { path: "b.ts" }, undefined, undefined, ctx));
+      const beta = anchorFor(aText, "beta");
+      const one = anchorFor(bText, "one");
+      const preview = await transferPreview("copy", { source_from: beta, source_to: beta, direction: "before", anchor: one }, dir);
+      const diff = (preview as { diff: string }).diff;
+      expect(diff).toContain(` ${one}│one`);
+      expect(diff).not.toMatch(/^-[A-Za-z]{4}│one$/m);
+      expect(diff).not.toMatch(/^\+[A-Za-z]{4}│one$/m);
+    });
+  });
+
+  it("keeps the destination anchor in a before-move preview", async () => {
+    await withTempDir("transfer-cross-move-before-", async (dir) => {
+      await writeFile(join(dir, "a.ts"), "alpha\nbeta\n", "utf-8");
+      await writeFile(join(dir, "b.ts"), "one\ntwo\n", "utf-8");
+      const { ctx, readTool } = setupIntegrationTest(dir);
+      const aText = getText(await readTool.execute("r1", { path: "a.ts" }, undefined, undefined, ctx));
+      const bText = getText(await readTool.execute("r2", { path: "b.ts" }, undefined, undefined, ctx));
+      const beta = anchorFor(aText, "beta");
+      const one = anchorFor(bText, "one");
+      const preview = await transferPreview("move", { source_from: beta, source_to: beta, direction: "before", anchor: one }, dir);
+      const diff = (preview as { diff: string }).diff;
+      expect(diff).toContain("--- a.ts ---");
+      expect(diff).toContain("--- b.ts ---");
+      expect(diff).toContain(` ${one}│one`);
+      expect(diff).not.toMatch(/^-[A-Za-z]{4}│one$/m);
+      expect(diff).not.toMatch(/^\+[A-Za-z]{4}│one$/m);
     });
   });
 

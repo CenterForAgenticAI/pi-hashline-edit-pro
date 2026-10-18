@@ -87,6 +87,7 @@ export interface ExecPipelineOptions {
   stripWarning?: StripWarningLocation;
   endingOverrides?: (LineEnding | undefined)[];
   preserveDeletionSeparators?: boolean;
+  anchorCarry?: number;
 }
 
 export function hashSpan(hashes: string[], from: string, to: string): [number, number] | undefined {
@@ -205,20 +206,22 @@ export async function execPipeline(
   const result = anchorResult.content;
   const isNoop = result === originalNormalized;
 
+  const pipeSpan = isNoop ? undefined : spanForEdit(originalHashes, effectiveEdit.hash_bounds[0].hash, effectiveEdit.hash_bounds[1].hash, result);
+  if (pipeSpan && options?.anchorCarry !== undefined) pipeSpan.carry = options.anchorCarry;
+  const pipeSpans = pipeSpan ? [pipeSpan] : undefined;
+
   const resultHashes = isNoop
     ? originalHashes
     : await lineHashes(result, absolutePath, {
         content: originalNormalized,
         hashes: originalHashes,
+        ...(pipeSpans ? { spans: pipeSpans } : {}),
       }, hashStore, false, true);
   const warnings = [...editWarnings, ...(anchorResult.warnings ?? [])];
   await throwIfStrictInput(warnings);
   const { totalAddedLines, totalRemovedLines } = countLineChanges(
     effectiveEdit, originalHashes, isNoop,
   );
-
-  const pipeSpan = isNoop ? undefined : spanForEdit(originalHashes, effectiveEdit.hash_bounds[0].hash, effectiveEdit.hash_bounds[1].hash, result);
-  const pipeSpans = pipeSpan ? [pipeSpan] : undefined;
   return {
     path: displayPath,
     originalNormalized,

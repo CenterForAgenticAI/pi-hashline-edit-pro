@@ -19,6 +19,7 @@ import {
   lineLimitMoreThanMessage,
   getCached,
   splitLines,
+  spliceAll,
 } from "../../src/utils";
 import { canon } from "../../src/hashline";
 
@@ -564,5 +565,66 @@ describe("string and row helpers", () => {
   it("canon strips carriage returns and trailing whitespace", () => {
     expect(canon("  hello   ")).toBe("  hello");
     expect(canon("a\r\nb\r")).toBe("a\nb");
+  });
+});
+
+describe("spliceAll", () => {
+  it("replaces a range with the items and keeps the tail", () => {
+    const target = ["a", "b", "c", "d", "e"];
+    spliceAll(target, 1, 2, ["X", "Y", "Z"]);
+    expect(target).toEqual(["a", "X", "Y", "Z", "d", "e"]);
+  });
+
+  it("deletes without items and inserts with deleteCount zero", () => {
+    const deleted = ["a", "b", "c"];
+    spliceAll(deleted, 1, 1, []);
+    expect(deleted).toEqual(["a", "c"]);
+    const inserted = ["a", "c"];
+    spliceAll(inserted, 1, 0, ["b"]);
+    expect(inserted).toEqual(["a", "b", "c"]);
+  });
+
+  it("handles counts beyond the target length and empty targets", () => {
+    const long = ["a"];
+    spliceAll(long, 0, 5, ["x", "y"]);
+    expect(long).toEqual(["x", "y"]);
+    const empty: string[] = [];
+    spliceAll(empty, 3, 0, ["z"]);
+    expect(empty).toEqual(["z"]);
+  });
+
+  it("treats a negative delete count as zero", () => {
+    const target = ["a", "b", "c"];
+    spliceAll(target, 1, -5, ["X"]);
+    expect(target).toEqual(["a", "X", "b", "c"]);
+  });
+
+  it("normalizes start and deleteCount like Array.prototype.splice", () => {
+    const negative = ["a", "b", "c", "d", "e"];
+    spliceAll(negative, -2, 1, []);
+    expect(negative).toEqual(["a", "b", "c", "e"]);
+    const nan = ["a", "b", "c"];
+    spliceAll(nan, NaN, 1, ["X"]);
+    expect(nan).toEqual(["X", "b", "c"]);
+    const fractional = ["a", "b", "c"];
+    spliceAll(fractional, 1.9, 1.9, ["Y"]);
+    expect(fractional).toEqual(["a", "Y", "c"]);
+  });
+
+  it("returns the removed items and tolerates the target as the item source", () => {
+    const target = ["a", "b", "c"];
+    expect(spliceAll(target, 1, 2, target)).toEqual(["b", "c"]);
+    expect(target).toEqual(["a", "a", "b", "c"]);
+  });
+
+  it("replaces a range with more items than the argument limit", () => {
+    const count = 140000;
+    const target = ["head", "old", "tail"];
+    const items = Array.from({ length: count }, (_, index) => `n${index}`);
+    spliceAll(target, 1, 1, items);
+    expect(target).toHaveLength(count + 2);
+    expect(target[0]).toBe("head");
+    expect(target[count + 1]).toBe("tail");
+    expect(target[count]).toBe(`n${count - 1}`);
   });
 });

@@ -109,6 +109,23 @@ describe("compPreview", () => {
       expect((preview as { diff: string }).diff).toContain("BBB");
     });
   });
+
+  it("keeps anchors for unchanged lines inside a wide span", async () => {
+    const count = 2500;
+    const lines = Array.from({ length: count }, (_, index) => `payload line ${index}`);
+    const content = lines.join("\n") + "\n";
+    await withTempFile("wide.ts", content, async ({ cwd }) => {
+      const replacement = lines.map((line, index) => (index === 0 || index === count - 1 || index === 1250 ? `${line} (tweaked)` : line));
+      const hashes = await lineHashes(content, join(cwd, "wide.ts"));
+      const preview = await compPreview(
+        { remove_from: hashes[0]!, remove_to: hashes[count - 1]!, text: replacement },
+        cwd,
+      );
+      const diff = (preview as { diff: string }).diff;
+      expect(diff).toMatch(/^ [A-Za-z]{4}│payload line 1$/m);
+      expect(diff).not.toMatch(/^[-+][A-Za-z]{4}│payload line 1$/m);
+    });
+  });
 });
 
 describe("renderCall preview", () => {

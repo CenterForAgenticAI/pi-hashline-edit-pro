@@ -296,6 +296,24 @@ describe("anchor registry", () => {
     expect(shadow.freed).toEqual(real.freed);
   });
 
+  it("replaces a span longer than the argument limit without exhausting the call stack", () => {
+    const count = 140000;
+    const prevAnchors = Array.from({ length: count }, (_, index) => `A${index.toString(36).padStart(4, "0")}`);
+    const prevChecksums = Array.from({ length: count }, (_, index) => `ck${index}`);
+    const newChecksums = prevChecksums.map((checksum, index) => (index % 2 === 1 ? `${checksum}-x` : checksum));
+    const aligned = alignOwnershipWithSpans(
+      "big.ts",
+      prevAnchors,
+      prevChecksums,
+      newChecksums,
+      [{ start: 0, end: count - 1, replacementCount: count }],
+    );
+    expect(aligned.anchors).toHaveLength(count);
+    expect(aligned.anchors[0]).toBe(prevAnchors[0]);
+    expect(aligned.anchors[count - 2]).toBe(prevAnchors[count - 2]);
+    expect(aligned.minted).toHaveLength(count / 2);
+  });
+
   it("shadows session state without mutating the real registry", () => {
     const real = foldRegistryEvents(parseRegistryLog([
       '{"kind":"allocate","path":"s.ts","rows":[["AaAa","ckA"]]}',

@@ -23,7 +23,7 @@ import { formatAnchorReclaimNotice, servedForPath, takeReclaimedPaths, withAncho
 import { batchMemberFor, batchServedFor, ensureBatchBase, executeBatchMember, noteBatchFailure, pendingBatchMemberFor, registerBatchPlanner, type BatchBase, type BatchMemberPlanner, type PlannedMember } from "./batch";
 import { loadP, loadGuidelines } from "./prompts";
 import { assertTransferReq, normReq, type TransferReq } from "./payload-contract";
-import { abortIf, assertByteLimit, isRec, splitLines } from "./utils";
+import { abortIf, anchorCarryIndex, assertByteLimit, isRec, splitLines } from "./utils";
 import { toDisplayPath } from "./paths";
 import { getDiffContextLines } from "./config";
 import { resolveInCwd, writeAtomic } from "./fs-write";
@@ -145,7 +145,7 @@ export function buildTransferEdit(input: {
           : [...sourceLines, fileLines[anchorLine - 1]!],
       },
       foldedAnchorLines: 1,
-      anchorCarry: refs.direction === "after" ? 0 : sourceLines.length,
+      anchorCarry: anchorCarryIndex(refs.direction, sourceLines.length),
       endingOverrides: refs.direction === "after"
         ? [undefined, ...sourceEndings]
         : [...sourceEndings, undefined],
@@ -319,14 +319,14 @@ async function prepareCrossTransfer(input: {
       ? offsetEndings(1, sourceEndings)
       : sourceEndings;
   if (kind === "copy") {
-    return { sourcePreload, destinationPreload, sourceDisplay, destinationDisplay, destinationEdit, destinationFolded, ...(destinationFolded === 1 ? { anchorCarry: refs.direction === "after" ? 0 : moved.length } : {}), endingOverrides };
+    return { sourcePreload, destinationPreload, sourceDisplay, destinationDisplay, destinationEdit, destinationFolded, ...(destinationFolded === 1 ? { anchorCarry: anchorCarryIndex(refs.direction, moved.length) } : {}), endingOverrides };
   }
   const sourceEdit: HTEdit = {
     remove_from: sourcePreload.fileHashes[sourceStart - 1]!,
     remove_to: sourcePreload.fileHashes[sourceEnd - 1]!,
     text: [],
   };
-  return { sourcePreload, destinationPreload, sourceDisplay, destinationDisplay, destinationEdit, destinationFolded, ...(destinationFolded === 1 ? { anchorCarry: refs.direction === "after" ? 0 : moved.length } : {}), sourceEdit, endingOverrides };
+  return { sourcePreload, destinationPreload, sourceDisplay, destinationDisplay, destinationEdit, destinationFolded, ...(destinationFolded === 1 ? { anchorCarry: anchorCarryIndex(refs.direction, moved.length) } : {}), sourceEdit, endingOverrides };
 }
 
 function pairEntry(pipe: PipelineResult, separators: LineEnding[] | undefined): UndoEntry {
@@ -584,6 +584,7 @@ async function executeCrossFile(
       signal,
       preloadedNorm: prepared.destinationPreload,
       endingOverrides: prepared.endingOverrides,
+      ...(prepared.anchorCarry !== undefined ? { anchorCarry: prepared.anchorCarry } : {}),
     });
     if (kind === "copy") {
       return commitEdit(destinationPipe, {
@@ -827,6 +828,7 @@ export async function transferPreview(kind: TransferKind, request: unknown, cwd:
         served: plan.servedOverride,
         endingOverrides: plan.endingOverrides,
         signal,
+        ...(plan.anchorCarry !== undefined ? { anchorCarry: plan.anchorCarry } : {}),
       });
       return previewFromPipe(pipe);
     }
@@ -837,6 +839,7 @@ export async function transferPreview(kind: TransferKind, request: unknown, cwd:
       preloadedNorm: prepared.destinationPreload,
       endingOverrides: prepared.endingOverrides,
       signal,
+      ...(prepared.anchorCarry !== undefined ? { anchorCarry: prepared.anchorCarry } : {}),
     });
     if (kind === "copy") return previewFromPipe(destinationPipe);
     const sourcePipe = await execPipeline(sourcePath, prepared.sourceEdit!, cwd, {
@@ -1017,6 +1020,7 @@ export function buildTransferToolDef(kind: TransferKind, flags: EditToolFlags = 
               preloadedNorm: preload,
               served: plan.servedOverride,
               endingOverrides: plan.endingOverrides,
+              ...(plan.anchorCarry !== undefined ? { anchorCarry: plan.anchorCarry } : {}),
             });
             return commitEdit(pipe, {
               path: pipe.path,

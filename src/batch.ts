@@ -28,7 +28,7 @@ import { saveUndo } from "./replace-undo";
 import { buildChanged, buildNoop, type RMetrics, type TResult } from "./replace-response";
 import { toEditVerb, withStructuredText, type EditStructured } from "./structured";
 import { serveRows, servedHashesFromDiff } from "./served";
-import { abortIf, assertByteLimit, assertLineLimit, errCode, isRec, mapIoError, splitLines } from "./utils";
+import { abortIf, assertByteLimit, assertLineLimit, errCode, isRec, mapIoError, splitLines, spliceAll } from "./utils";
 
 export interface PlannedMember {
   batchKey: number;
@@ -793,7 +793,7 @@ function composeBatchLines(baseContent: string, pieces: BatchPiece[]): string {
   const lines = splitLines(baseContent);
   const baseLineCount = lines.length;
   const descending = [...pieces].sort((a, b) => b.start - a.start);
-  for (const piece of descending) lines.splice(piece.start - 1, piece.end - piece.start + 1, ...piece.newLines);
+  for (const piece of descending) spliceAll(lines, piece.start - 1, piece.end - piece.start + 1, piece.newLines);
   let composed = lines.join("\n");
   if (lines.length > 0 && (baseContent.endsWith("\n") || lines[lines.length - 1] === "")) {
     composed += "\n";

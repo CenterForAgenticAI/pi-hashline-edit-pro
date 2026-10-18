@@ -12,7 +12,7 @@ import { stripAnchorRow } from "./hashline/resolve";
 import { withAnchorSession } from "./anchor-registry";
 import { loadP, loadGuidelines } from "./prompts";
 import { assertInsertReq, normReq, type InsertReq } from "./payload-contract";
-import { isRec, literalEscapeHints, splitLines } from "./utils";
+import { anchorCarryIndex, isRec, literalEscapeHints, splitLines } from "./utils";
 import { queuedEdit, editToolBase, editRenderCallWrapper, editRenderResultWrapper, resolveEditTargetWithRequirement, throwIfStrictInput, withInsertPrompts, DEFAULT_EDIT_FLAGS, type EditToolFlags } from "./edit-common";
 import type { RPreview, RRState } from "./replace-render";
 import { editResultSchema, withStructuredErrors } from "./structured";
@@ -98,6 +98,11 @@ function insertStripWarning(anchorLine: string | undefined, direction: "before" 
   return { label: "text", indexOffset: anchorLine !== undefined && direction === "after" ? -1 : 0 };
 }
 
+function insertAnchorCarry(direction: "before" | "after", editParams: HTEdit, anchorLine: string | undefined): number | undefined {
+  if (anchorLine === undefined) return undefined;
+  return anchorCarryIndex(direction, editParams.text.length - 1);
+}
+
 function planInsertBatchMember(input: BatchPlannerInput): BatchMemberPlan {
   const req = normReq(input.member.args);
   assertInsertReq(req);
@@ -149,6 +154,7 @@ export async function insertPreview(request: unknown, cwd: string, signal?: Abor
       signal,
     });
     const { editParams, anchorLine, contentSeparators } = buildInsertEdit(normalized, preload, ref, targetPath);
+    const anchorCarry = insertAnchorCarry(normalized.direction, editParams, anchorLine);
     const pipe = await execPipeline(targetPath, editParams, cwd, {
       accessMode: constants.R_OK,
       noPersist: true,
@@ -156,6 +162,7 @@ export async function insertPreview(request: unknown, cwd: string, signal?: Abor
       signal,
       stripWarning: insertStripWarning(anchorLine, normalized.direction),
       endingOverrides: contentSeparators,
+      ...(anchorCarry !== undefined ? { anchorCarry } : {}),
     });
     return previewFromPipe(pipe);
   } catch (error: unknown) {
@@ -241,21 +248,21 @@ export function buildInsertToolDef(flags: EditToolFlags = DEFAULT_EDIT_FLAGS): I
             maxLines: MAX_HASH_LINES,
           });
           const { editParams, anchorLine, contentSeparators } = buildInsertEdit(req, preload, ref, targetPath);
+          const anchorCarry = insertAnchorCarry(req.direction, editParams, anchorLine);
           const pipe = await execPipeline(targetPath, editParams, ctx.cwd, {
             accessMode: constants.R_OK | constants.W_OK,
             signal,
             preloadedNorm: preload,
             stripWarning: insertStripWarning(anchorLine, req.direction),
             endingOverrides: contentSeparators,
+            ...(anchorCarry !== undefined ? { anchorCarry } : {}),
           });
           return commitEdit(pipe, {
             path: pipe.path,
             absolutePath,
             mutationTargetPath,
             editAnchors: [editParams.remove_from, editParams.remove_to],
-            ...(anchorLine === undefined
-              ? {}
-              : { anchorCarry: req.direction === "after" ? 0 : editParams.text.length - 1 }),
+            ...(anchorCarry !== undefined ? { anchorCarry } : {}),
             signal,
             verb: "inserted",
             noopNoun: "Insertion",

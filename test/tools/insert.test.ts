@@ -513,6 +513,19 @@ describe("insert tool rendering", () => {
     });
   });
 
+  it("keeps the anchor line anchor in a before-insert preview", async () => {
+    await withTempFile("sample.ts", "alpha\nbeta\ngamma\n", async ({ cwd }) => {
+      const { ctx, readTool } = setupIntegrationTest(cwd);
+      const readResult = await readTool.execute("r1", { path: "sample.ts" }, undefined, undefined, ctx);
+      const betaHash = extractHash(getText(readResult).split("\n").find((l) => l.includes("│beta"))!);
+      const preview = await insertPreview({ anchor: betaHash, direction: "before", text: ["BETA0"] }, cwd);
+      const diff = (preview as { diff: string }).diff;
+      expect(diff).toContain(` ${betaHash}│beta`);
+      expect(diff).not.toMatch(/^-[A-Za-z]{4}│beta$/m);
+      expect(diff).not.toMatch(/^\+[A-Za-z]{4}│beta$/m);
+    });
+  });
+
   it("renders the post-insert diff via renderResult", () => {
     const tool = buildInsertToolDef();
     const theme = {

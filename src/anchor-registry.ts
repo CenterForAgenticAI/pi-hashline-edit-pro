@@ -7,7 +7,7 @@ import { sessionClaimsDir } from "./paths";
 import { contentChecksum } from "./hashline/hasher";
 import { ANCHOR_COUNT, anchorAt } from "./hashline/alphabet";
 import { HASH_PROBE_STRIDE } from "./hashline/hash";
-import { errCode, isRec, splitLines } from "./utils";
+import { errCode, isRec, splitLines, spliceAll } from "./utils";
 import * as Diff from "diff";
 import { lineChecksum } from "./hashline";
 import { getAllocatedState, persistSnapshot, type HashStore } from "./hash-store";
@@ -861,7 +861,7 @@ export function alignOwnershipWithSpans(
       state.everMinted.add(settled[k]!);
       state.owned.set(settled[k]!, { path, checksum: newChecksums[start + k]! });
     }
-    anchors.splice(start, spanLength, ...settled);
+    spliceAll(anchors, start, spanLength, settled);
     offset += span.replacementCount - spanLength;
   }
   const rows: [string, string][] = minted.map((m) => [m.anchor, m.checksum]);

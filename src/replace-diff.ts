@@ -164,7 +164,6 @@ function splitPlacedSpan(
   oldLines: string[],
   newLines: string[],
   oldHashes: string[],
-  newHashes: string[],
   newIndexByHash: ReadonlyMap<string, number>,
 ): PlacedSpan[] {
   if (span.oldStart > span.oldEnd || span.newStart > span.newEnd) return [span];
@@ -204,7 +203,9 @@ function trimPlacedSpans(
   const newIndexByHash = new Map<string, number>();
   for (let index = 0; index < newHashes.length; index++) newIndexByHash.set(newHashes[index]!, index);
   const out: PlacedSpan[] = [];
-  for (const span of placed) out.push(...splitPlacedSpan(span, oldLines, newLines, oldHashes, newHashes, newIndexByHash));
+  for (const span of placed) {
+    for (const piece of splitPlacedSpan(span, oldLines, newLines, oldHashes, newIndexByHash)) out.push(piece);
+  }
   return out;
 }
 
@@ -386,7 +387,7 @@ export function genDiff(
 ): { diff: string; firstChangedLine: number | undefined; lineNumbers: (number|undefined)[] } {
   const maxLineBytes = limits?.unlimited ? Number.POSITIVE_INFINITY : (limits?.maxLineBytes ?? DEFAULT_MAX_BYTES);
   const maxBytes = limits?.unlimited ? Number.POSITIVE_INFINITY : (limits?.maxBytes ?? DEFAULT_MAX_BYTES);
-  if (spans && newContentHashes && oldContentHashes) {
+  if (spans && spans.length > 0 && newContentHashes && oldContentHashes) {
     const anchored = genSpanDiff(oldContent, newContent, contextLines, newContentHashes, oldContentHashes, maxLineBytes, maxBytes, spans);
     if (anchored) {
       const diff = disambiguateDuplicateAnchors(anchored.diff);

@@ -144,4 +144,32 @@ describe("genDiff with true spans", () => {
     expect(diff).toContain("+Bbbb│hidden tail B");
     expect(diff).not.toContain(" Bbbb│hidden tail B");
   });
+
+  it("falls back when the span list is empty", () => {
+    const oldContent = "alpha\nbeta\ngamma";
+    const newContent = "alpha\nBETA\ngamma";
+    const oldHashes = ["Aaaa", "Bbbb", "Cccc"];
+    const newHashes = ["Aaaa", "Dddd", "Cccc"];
+    const { diff } = genDiff(oldContent, newContent, 1, newHashes, oldHashes, { unlimited: true }, []);
+    expect(diff).toContain("-Bbbb│beta");
+    expect(diff).toContain("+Dddd│BETA");
+  });
+
+  it("splits a wide alternating span without exhausting the call stack", () => {
+    const count = 260000;
+    const oldLines = new Array<string>(count);
+    const newLines = new Array<string>(count);
+    const oldHashes = new Array<string>(count);
+    const newHashes = new Array<string>(count);
+    for (let index = 0; index < count; index++) {
+      const even = index % 2 === 0;
+      oldLines[index] = `l${index}`;
+      newLines[index] = even ? `l${index}` : `l${index}!`;
+      oldHashes[index] = `A${index}`;
+      newHashes[index] = even ? `A${index}` : `B${index}`;
+    }
+    const spans = [{ start: 0, end: count - 1, replacementCount: count }];
+    const { diff } = genDiff(oldLines.join("\n"), newLines.join("\n"), 1, newHashes, oldHashes, { maxBytes: 4096, maxLineBytes: 4096 }, spans);
+    expect(diff).toContain("[diff truncated at");
+  });
 });
