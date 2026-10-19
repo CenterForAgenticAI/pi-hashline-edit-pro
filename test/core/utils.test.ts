@@ -235,7 +235,7 @@ describe("makePrepareArguments", () => {
     const removePrepare = makePrepareArguments("remove");
     expect(removePrepare({ replace_from: "a", replace_to: "b", text: "x" })).toEqual({ remove_from: "a", remove_to: "b", text: "x" });
     const replacePrepare = makePrepareArguments("replace");
-    expect(replacePrepare({ remove_from: "a", remove_to: "b", old_string: "x", new_string: "y" })).toEqual({ replace_from: "a", replace_to: "b", old_string: "x", new_string: "y" });
+    expect(replacePrepare({ remove_from: "a", remove_to: "b", match: "x", replacement: "y" })).toEqual({ replace_from: "a", replace_to: "b", match: "x", replacement: "y" });
   });
 });
 

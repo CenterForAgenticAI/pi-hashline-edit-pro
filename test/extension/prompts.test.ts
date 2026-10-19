@@ -279,11 +279,11 @@ describe("edit prompt flag variants", () => {
     expect(result.guidelines.some((g) => g.includes("strict-input mode is on"))).toBe(false);
   });
 
-  it("withReplaceMatchPrompts adds only its strict-input notice", () => {
+  it("withReplaceMatchPrompts adds no shared notices", () => {
     const result = withReplaceMatchPrompts(replaceBase, { ...DEFAULT_EDIT_FLAGS, requirePath: true, strictInput: true });
-    expect(result.guidelines.some((g) => g.includes("pass `path` matching the file the anchors were served for"))).toBe(false);
-    expect(result.guidelines.some((g) => g.includes("strict-input mode is on"))).toBe(false);
-    expect(result.guidelines.some((g) => g.includes("rejects an `old_string` that covers the whole range"))).toBe(true);
+    expect(result.guidelines).toEqual(replaceBase.guidelines.map((guideline) => guideline.text));
+    expect(result.description).toBe(replaceBase.description);
+    expect(result.snippet).toBe(replaceBase.snippet);
   });
 
   it("withReplaceMatchPrompts keeps its own guideline and names only enabled tools", () => {
@@ -316,15 +316,10 @@ describe("edit prompt flag variants", () => {
     expect(loadGuide("../tool-prompts/replace-match-guidelines.md").some((g) => g.includes("only the fragment that changes"))).toBe(true);
   });
 
-  it("keeps the replace_match whole-line and multi-line guidelines", () => {
-    expect(loadGuide("../tool-prompts/replace-match-guidelines.md").some((g) => g.includes("everything on the line except indentation and trailing punctuation"))).toBe(true);
-    expect(loadGuide("../tool-prompts/replace-match-guidelines.md").some((g) => g.includes("intended multi-line use"))).toBe(true);
-    expect(loadGuide("../tool-prompts/replace-match-guidelines.md").some((g) => g.includes("use `replace` with the same anchors"))).toBe(true);
-  });
-
-  it("withReplaceMatchPrompts documents strict rejection of retyped payloads", () => {
-    const strict = withReplaceMatchPrompts(withinBase, { ...DEFAULT_EDIT_FLAGS, strictInput: true });
-    expect(strict.guidelines.some((g) => g.includes("rejects an `old_string` that covers the whole range"))).toBe(true);
+  it("keeps the replace_match range and single-line guidelines", () => {
+    expect(loadGuide("../tool-prompts/replace-match-guidelines.md").some((g) => g.includes("the anchors bound the range searched"))).toBe(true);
+    expect(loadGuide("../tool-prompts/replace-match-guidelines.md").some((g) => g.includes("must each stay within one line"))).toBe(true);
+    expect(loadGuide("../tool-prompts/replace-match-guidelines.md").some((g) => g.includes("use `replace` with the same anchor"))).toBe(true);
   });
 
   it("withGrepPrompts drops copy and move when Copy/move is off", () => {

@@ -2,7 +2,6 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { lineHashes } from "../../src/hashline";
-import { writeConfig } from "../../src/config";
 import { replaceMatchPreview } from "../../src/replace-match";
 import { anchorFor, extractHash, getText, setupIntegrationTest, useTestHome, withTempFile, toolError } from "../support/fixtures";
 
@@ -22,7 +21,7 @@ describe("replace_match", () => {
       const anchor = anchorOf(text, '"checkout-5"');
       const result = await getTool("replace_match").execute(
         "w1",
-        { replace_from: anchor, replace_to: anchor, old_string: "legacyCheckout", new_string: "stableCheckout" },
+        { replace_from: anchor, replace_to: anchor, match: "legacyCheckout", replacement: "stableCheckout" },
         undefined, undefined, ctx,
       );
       expect(getText(result)).toContain("Successfully replaced");
@@ -40,8 +39,8 @@ describe("replace_match", () => {
       const rows = text.split("\n").filter((row) => row.includes('│  feature: "legacyCheckout"'));
       const first = rows[0]!.split("│")[0]!;
       const second = rows[1]!.split("│")[0]!;
-      await getTool("replace_match").execute("w1", { replace_from: first, replace_to: first, old_string: "legacyCheckout", new_string: "stableCheckout" }, undefined, undefined, ctx);
-      await getTool("replace_match").execute("w2", { replace_from: second, replace_to: second, old_string: "legacyCheckout", new_string: "stableCheckout" }, undefined, undefined, ctx);
+      await getTool("replace_match").execute("w1", { replace_from: first, replace_to: first, match: "legacyCheckout", replacement: "stableCheckout" }, undefined, undefined, ctx);
+      await getTool("replace_match").execute("w2", { replace_from: second, replace_to: second, match: "legacyCheckout", replacement: "stableCheckout" }, undefined, undefined, ctx);
       expect(await readFile(path, "utf-8")).toBe(['test("a", () => {', '  feature: "stableCheckout",', "});", 'test("b", () => {', '  feature: "stableCheckout",', "});", ""].join("\n"));
     });
   });
@@ -54,21 +53,21 @@ describe("replace_match", () => {
       const anchor = anchorOf(text, "feature:");
       await getTool("replace_match").execute(
         "w1",
-        { replace_from: anchor, replace_to: anchor, old_string: "legacy\u200bCheckout", new_string: "stable\u200bCheckout" },
+        { replace_from: anchor, replace_to: anchor, match: "legacy\u200bCheckout", replacement: "stable\u200bCheckout" },
         undefined, undefined, ctx,
       );
       expect(await readFile(path, "utf-8")).toBe('alpha\n    feature: "stable\u200bCheckout",\nomega\n');
     });
   });
 
-  it("refuses when old_string is not found and returns the current row", async () => {
+  it("refuses when match is not found and returns the current row", async () => {
     await withTempFile("routes.json", ROUTES, async ({ cwd }) => {
       const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
       const text = getText(await readTool.execute("r1", { path: "routes.json" }, undefined, undefined, ctx));
       const anchor = anchorOf(text, '"checkout-5"');
       const message = await toolError(() => getTool("replace_match").execute(
         "w1",
-        { replace_from: anchor, replace_to: anchor, old_string: "legacyCheckouX", new_string: "stableCheckout" },
+        { replace_from: anchor, replace_to: anchor, match: "legacyCheckouX", replacement: "stableCheckout" },
         undefined, undefined, ctx,
       ));
       expect(message).toMatch(/\[E_SUBSTRING_NOT_FOUND\]/);
@@ -76,49 +75,209 @@ describe("replace_match", () => {
     });
   });
 
-  it("replaces every occurrence of old_string inside the range", async () => {
-    await withTempFile("dup.txt", "legacy\nkeep\nlegacy\nlegacy\n", async ({ cwd, path }) => {
+  it("replaces every occurrence of match inside the line", async () => {
+    await withTempFile("dup.txt", "keep\nlegacy = legacy\nlegacy\n", async ({ cwd, path }) => {
       const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
       const text = getText(await readTool.execute("r1", { path: "dup.txt" }, undefined, undefined, ctx));
-      const legacyRows = text.split("\n").filter((row) => /│legacy$/.test(row));
-      expect(legacyRows).toHaveLength(3);
-      const first = extractHash(legacyRows[0]!);
-      const last = extractHash(legacyRows[1]!);
-      const result = await getTool("replace_match").execute("w1", { replace_from: first, replace_to: last, old_string: "legacy", new_string: "stable" }, undefined, undefined, ctx);
+      const anchor = anchorFor(text, "legacy = legacy");
+      const result = await getTool("replace_match").execute("w1", { replace_from: anchor, replace_to: anchor, match: "legacy", replacement: "stable" }, undefined, undefined, ctx);
       expect(getText(result)).toContain("Successfully replaced");
-      expect(await readFile(path, "utf-8")).toBe("stable\nkeep\nstable\nlegacy\n");
+      expect(await readFile(path, "utf-8")).toBe("keep\nstable = stable\nlegacy\n");
     });
   });
 
-  it("replaces across a range and keeps the anchors outside it", async () => {
-    await withTempFile("block.txt", "top\nfoo\nbar\nbottom\n", async ({ cwd, path }) => {
+  it("replaces the fragment on every line of the range", async () => {
+    await withTempFile("block.txt", "top\nlegacy = legacy\nkeep\nlegacy\nbottom\n", async ({ cwd, path }) => {
       const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
       const text = getText(await readTool.execute("r1", { path: "block.txt" }, undefined, undefined, ctx));
       const top = anchorFor(text, "top");
       const bottom = anchorFor(text, "bottom");
-      const foo = anchorFor(text, "foo");
-      const bar = anchorFor(text, "bar");
       const result = await getTool("replace_match").execute(
         "w1",
-        { replace_from: foo, replace_to: bar, old_string: "foo\nbar", new_string: "one\ntwo\nthree" },
+        { replace_from: top, replace_to: bottom, match: "legacy", replacement: "stable" },
         undefined, undefined, ctx,
       );
       expect(getText(result)).toContain("Successfully replaced");
-      expect(await readFile(path, "utf-8")).toBe("top\none\ntwo\nthree\nbottom\n");
+      expect(await readFile(path, "utf-8")).toBe("top\nstable = stable\nkeep\nstable\nbottom\n");
       const diff = (result.details as { diff?: string }).diff ?? "";
       expect(diff).toContain(` ${top}│top`);
       expect(diff).toContain(` ${bottom}│bottom`);
     });
   });
 
-  it("reports a noop when old_string and new_string are identical", async () => {
+  it("matches interior lines against the current file", async () => {
+    const content = "a\nb\nc\nd\n";
+    await withTempFile("sample.txt", content, async ({ cwd, path }) => {
+      const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
+      const text = getText(await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx));
+      const a = anchorFor(text, "a");
+      const c = anchorFor(text, "c");
+      const { writeFile } = await import("node:fs/promises");
+      await writeFile(path, "a\nB\nc\nd\n", "utf-8");
+      const result = await getTool("replace_match").execute(
+        "w1",
+        { replace_from: a, replace_to: c, match: "B", replacement: "b" },
+        undefined, undefined, ctx,
+      );
+      expect(getText(result)).toContain("Successfully replaced");
+      expect(await readFile(path, "utf-8")).toBe("a\nb\nc\nd\n");
+    });
+  });
+
+  it("keeps the trailing empty line when the range ends on it", async () => {
+    await withTempFile("checkout.md", "before\n\n```\n\n", async ({ cwd, path }) => {
+      const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
+      const text = getText(await readTool.execute("r1", { path: "checkout.md" }, undefined, undefined, ctx));
+      const fence = anchorFor(text, "```");
+      const trailingEmpty = text.split("\n").filter((row) => /^[A-Za-z]{4}│$/.test(row)).pop()!.split("│")[0]!;
+      const result = await getTool("replace_match").execute(
+        "w1",
+        { replace_from: fence, replace_to: trailingEmpty, match: "```", replacement: "```done" },
+        undefined, undefined, ctx,
+      );
+      expect(getText(result)).toContain("Successfully replaced");
+      expect(await readFile(path, "utf-8")).toBe("before\n\n```done\n\n");
+    });
+  });
+
+  it("keeps an interior blank line when the range ends on it", async () => {
+    await withTempFile("sample.txt", "a\nb\n\nc\n", async ({ cwd, path }) => {
+      const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
+      const text = getText(await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx));
+      const b = anchorFor(text, "b");
+      const blank = text.split("\n").filter((row) => /^[A-Za-z]{4}│$/.test(row)).pop()!.split("│")[0]!;
+      const result = await getTool("replace_match").execute(
+        "w1",
+        { replace_from: b, replace_to: blank, match: "b", replacement: "B" },
+        undefined, undefined, ctx,
+      );
+      expect(getText(result)).toContain("Successfully replaced");
+      expect(await readFile(path, "utf-8")).toBe("a\nB\n\nc\n");
+    });
+  });
+
+  it("accepts a trailing line break as the line's terminator", async () => {
+    await withTempFile("sample.txt", "alpha\nbeta\ngamma\n", async ({ cwd, path }) => {
+      const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
+      const text = getText(await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx));
+      const beta = anchorFor(text, "beta");
+      const result = await getTool("replace_match").execute(
+        "w1",
+        { replace_from: beta, replace_to: beta, match: "beta\n", replacement: "BETA\n" },
+        undefined, undefined, ctx,
+      );
+      expect(getText(result)).toContain("Successfully replaced");
+      expect(await readFile(path, "utf-8")).toBe("alpha\nBETA\ngamma\n");
+    });
+  });
+
+  it("keeps the line when the replacement is empty", async () => {
+    await withTempFile("sample.txt", "alpha\nbeta\ngamma\n", async ({ cwd, path }) => {
+      const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
+      const text = getText(await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx));
+      const beta = anchorFor(text, "beta");
+      const result = await getTool("replace_match").execute(
+        "w1",
+        { replace_from: beta, replace_to: beta, match: "beta", replacement: "" },
+        undefined, undefined, ctx,
+      );
+      expect(getText(result)).toContain("Successfully replaced");
+      expect(await readFile(path, "utf-8")).toBe("alpha\n\ngamma\n");
+    });
+  });
+
+  it("keeps one empty line per fully replaced line across a range", async () => {
+    await withTempFile("sample.txt", "legacy\nkeep\nlegacy\n", async ({ cwd, path }) => {
+      const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
+      const text = getText(await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx));
+      const legacyRows = text.split("\n").filter((row) => row.includes("│legacy"));
+      const first = legacyRows[0]!.split("│")[0]!;
+      const last = legacyRows[1]!.split("│")[0]!;
+      const result = await getTool("replace_match").execute(
+        "w1",
+        { replace_from: first, replace_to: last, match: "legacy", replacement: "" },
+        undefined, undefined, ctx,
+      );
+      expect(getText(result)).toContain("Successfully replaced");
+      expect(await readFile(path, "utf-8")).toBe("\nkeep\n\n");
+    });
+  });
+
+  it("counts a lone line break in replacement as an empty fragment", async () => {
+    await withTempFile("sample.txt", "alpha\nbeta\ngamma\n", async ({ cwd, path }) => {
+      const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
+      const text = getText(await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx));
+      const beta = anchorFor(text, "beta");
+      const result = await getTool("replace_match").execute(
+        "w1",
+        { replace_from: beta, replace_to: beta, match: "beta", replacement: "\n" },
+        undefined, undefined, ctx,
+      );
+      expect(getText(result)).toContain("Successfully replaced");
+      expect(await readFile(path, "utf-8")).toBe("alpha\n\ngamma\n");
+    });
+  });
+
+  it("refuses a lone line break as match", async () => {
+    await withTempFile("sample.txt", "alpha\nbeta\ngamma\n", async ({ cwd, path }) => {
+      const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
+      const text = getText(await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx));
+      const beta = anchorFor(text, "beta");
+      const message = await toolError(() => getTool("replace_match").execute(
+        "w1",
+        { replace_from: beta, replace_to: beta, match: "\n", replacement: "x" },
+        undefined, undefined, ctx,
+      ));
+      expect(message).toContain("[E_BAD_SHAPE]");
+      expect(message).toContain("must be a non-empty string holding the exact text to find");
+      expect(await readFile(path, "utf-8")).toBe("alpha\nbeta\ngamma\n");
+    });
+  });
+
+  it("points the old field names at their replacements", async () => {
+    await withTempFile("sample.txt", "alpha\nbeta\ngamma\n", async ({ cwd }) => {
+      const preview = await replaceMatchPreview(
+        { replace_from: "Hasu", replace_to: "Hasu", old_string: "beta", new_string: "BETA" },
+        cwd,
+      );
+      const message = "error" in preview ? preview.error : "";
+      expect(message).toContain("[E_BAD_SHAPE]");
+      expect(message).toContain('use "match"');
+      expect(message).toContain('"replacement"');
+    });
+  });
+
+  it("refuses a string that spans lines", async () => {
+    await withTempFile("sample.txt", "alpha\nbeta\ngamma\n", async ({ cwd, path }) => {
+      const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
+      const text = getText(await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx));
+      const beta = anchorFor(text, "beta");
+      const matchMessage = await toolError(() => getTool("replace_match").execute(
+        "w1",
+        { replace_from: beta, replace_to: beta, match: "beta\ngamma", replacement: "x" },
+        undefined, undefined, ctx,
+      ));
+      expect(matchMessage).toContain("[E_BAD_SHAPE]");
+      expect(matchMessage).toContain("match must stay within one line");
+      const replacementMessage = await toolError(() => getTool("replace_match").execute(
+        "w2",
+        { replace_from: beta, replace_to: beta, match: "beta", replacement: "x\ny" },
+        undefined, undefined, ctx,
+      ));
+      expect(replacementMessage).toContain("[E_BAD_SHAPE]");
+      expect(replacementMessage).toContain("replacement must stay within one line");
+      expect(await readFile(path, "utf-8")).toBe("alpha\nbeta\ngamma\n");
+    });
+  });
+
+  it("reports a noop when match and replacement are identical", async () => {
     await withTempFile("sample.txt", "alpha\nbeta\n", async ({ cwd, path }) => {
       const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
       const text = getText(await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx));
       const anchor = anchorFor(text, "beta");
       const result = await getTool("replace_match").execute(
         "w1",
-        { replace_from: anchor, replace_to: anchor, old_string: "beta", new_string: "beta" },
+        { replace_from: anchor, replace_to: anchor, match: "beta", replacement: "beta" },
         undefined, undefined, ctx,
       );
       expect(result.details.classification).toBe("noop");
@@ -132,21 +291,7 @@ describe("replace_match", () => {
       const text = getText(await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx));
       const anchor = anchorFor(text, "beta");
       await getTool("replace").execute("e1", { remove_from: anchor, remove_to: anchor, text: "BETA" }, undefined, undefined, ctx);
-      expect(await toolError(() => getTool("replace_match").execute("w1", { replace_from: anchor, replace_to: anchor, old_string: "BETA", new_string: "beta" }, undefined, undefined, ctx))).toMatch(/\[E_STALE_ANCHOR\]/);
-    });
-  });
-
-  it("matches the interior against the current file and tolerates an external interior change", async () => {
-    const content = "a\nb\nc\nd\n";
-    await withTempFile("sample.txt", content, async ({ cwd, path }) => {
-      const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
-      await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx);
-      const hashes = await lineHashes(content, join(cwd, "sample.txt"));
-      const { writeFile } = await import("node:fs/promises");
-      await writeFile(path, "a\nB\nc\nd\n", "utf-8");
-      const result = await getTool("replace_match").execute("w1", { replace_from: hashes[0]!, replace_to: hashes[2]!, old_string: "a\nB\nc", new_string: "a\nb\nc" }, undefined, undefined, ctx);
-      expect(getText(result)).toContain("Successfully replaced");
-      expect(await readFile(path, "utf-8")).toBe("a\nb\nc\nd\n");
+      expect(await toolError(() => getTool("replace_match").execute("w1", { replace_from: anchor, replace_to: anchor, match: "BETA", replacement: "beta" }, undefined, undefined, ctx))).toMatch(/\[E_STALE_ANCHOR\]/);
     });
   });
 
@@ -156,7 +301,7 @@ describe("replace_match", () => {
       const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
       await readTool.execute("r1", { path: "sample.txt", limit: 1 }, undefined, undefined, ctx);
       const hashes = await lineHashes(content, join(cwd, "sample.txt"));
-      expect(await toolError(() => getTool("replace_match").execute("w1", { replace_from: hashes[0]!, replace_to: hashes[3]!, old_string: "a", new_string: "A" }, undefined, undefined, ctx))).toMatch(/\[E_RANGE_STALE\]/);
+      expect(await toolError(() => getTool("replace_match").execute("w1", { replace_from: hashes[0]!, replace_to: hashes[3]!, match: "a", replacement: "A" }, undefined, undefined, ctx))).toMatch(/\[E_RANGE_STALE\]/);
     });
   });
 
@@ -165,7 +310,7 @@ describe("replace_match", () => {
       const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
       const text = getText(await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx));
       const anchor = anchorFor(text, "beta");
-      await getTool("replace_match").execute("w1", { replace_from: anchor, replace_to: anchor, old_string: "beta", new_string: "gamma" }, undefined, undefined, ctx);
+      await getTool("replace_match").execute("w1", { replace_from: anchor, replace_to: anchor, match: "beta", replacement: "gamma" }, undefined, undefined, ctx);
       expect(await readFile(path, "utf-8")).toBe("alpha\ngamma\n");
       const undone = await getTool("undo_last_change").execute("u1", { path: "sample.txt" }, undefined, undefined, ctx);
       expect(undone.isError).toBeFalsy();
@@ -180,7 +325,7 @@ describe("replace_match", () => {
       const anchor = anchorFor(text, "beta");
       const result = await getTool("replace_match").execute(
         "w1",
-        { remove_from: anchor, remove_to: anchor, old_string: "beta", new_string: "gamma" },
+        { remove_from: anchor, remove_to: anchor, match: "beta", replacement: "gamma" },
         undefined, undefined, ctx,
       );
       expect(getText(result)).toContain("Successfully replaced");
@@ -193,7 +338,7 @@ describe("replace_match", () => {
       const { ctx, readTool } = setupIntegrationTest(cwd);
       const text = getText(await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx));
       const anchor = anchorFor(text, "beta");
-      const preview = await replaceMatchPreview({ remove_from: anchor, remove_to: anchor, old_string: "beta", new_string: "gamma" }, cwd);
+      const preview = await replaceMatchPreview({ remove_from: anchor, remove_to: anchor, match: "beta", replacement: "gamma" }, cwd);
       expect(preview).toHaveProperty("diff");
       expect((preview as { diff: string }).diff).toContain("gamma");
       expect(await readFile(path, "utf-8")).toBe("alpha\nbeta\n");
@@ -216,17 +361,17 @@ describe("replace_match", () => {
     });
   });
 
-  it("hints at literal escaped text in new_string", async () => {
+  it("hints at literal escaped text in replacement", async () => {
     await withTempFile("sample.txt", "alpha\nbeta\n", async ({ cwd }) => {
       const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
       const text = getText(await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx));
       const anchor = anchorFor(text, "beta");
       const result = await getTool("replace_match").execute(
         "w1",
-        { replace_from: anchor, replace_to: anchor, old_string: "beta", new_string: String.raw`stable\u200bCheckout` },
+        { replace_from: anchor, replace_to: anchor, match: "beta", replacement: String.raw`stable\u200bCheckout` },
         undefined, undefined, ctx,
       );
-      expect(result.details.hints).toContainEqual(expect.stringContaining('[H_LITERAL_ESCAPE] new_string:'));
+      expect(result.details.hints).toContainEqual(expect.stringContaining('[H_LITERAL_ESCAPE] replacement:'));
       expect(result.details.metrics?.warnings).toBe(0);
     });
   });
@@ -236,113 +381,14 @@ describe("replace_match", () => {
       const { ctx, readTool } = setupIntegrationTest(cwd);
       const text = getText(await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx));
       const anchor = anchorFor(text, "beta");
-      const preview = await replaceMatchPreview({ replace_from: anchor, replace_to: anchor, old_string: "beta", new_string: "gamma" }, cwd);
+      const preview = await replaceMatchPreview({ replace_from: anchor, replace_to: anchor, match: "beta", replacement: "gamma" }, cwd);
       expect(preview).toHaveProperty("diff");
       expect((preview as { diff: string }).diff).toContain("gamma");
       expect(await readFile(path, "utf-8")).toBe("alpha\nbeta\n");
     });
   });
 
-  it("keeps the trailing empty line when the range ends on it", async () => {
-    await withTempFile("checkout.md", "before\n\n```\n\n", async ({ cwd, path }) => {
-      const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
-      const text = getText(await readTool.execute("r1", { path: "checkout.md" }, undefined, undefined, ctx));
-      const fence = anchorFor(text, "```");
-      const trailingEmpty = text.split("\n").filter((row) => /^[A-Za-z]{4}│$/.test(row)).pop()!.split("│")[0]!;
-      const result = await getTool("replace_match").execute(
-        "w1",
-        { replace_from: fence, replace_to: trailingEmpty, old_string: "```", new_string: "```done" },
-        undefined,
-        undefined,
-        ctx,
-      );
-      expect(getText(result)).toContain("Successfully replaced");
-      expect(await readFile(path, "utf-8")).toBe("before\n\n```done\n\n");
-    });
-  });
-
-  it("keeps an interior blank line when the range ends on it", async () => {
-    await withTempFile("sample.txt", "a\nb\n\nc\n", async ({ cwd, path }) => {
-      const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
-      const text = getText(await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx));
-      const b = anchorFor(text, "b");
-      const blank = text.split("\n").filter((row) => /^[A-Za-z]{4}│$/.test(row)).pop()!.split("│")[0]!;
-      const result = await getTool("replace_match").execute(
-        "w1",
-        { replace_from: b, replace_to: blank, old_string: "b", new_string: "B" },
-        undefined,
-        undefined,
-        ctx,
-      );
-      expect(getText(result)).toContain("Successfully replaced");
-      expect(await readFile(path, "utf-8")).toBe("a\nB\n\nc\n");
-    });
-  });
-
-  it("warns when old_string covers the whole range", async () => {
-    await withTempFile("block.txt", "top\nfoo\nbar\nbottom\n", async ({ cwd }) => {
-      const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
-      const text = getText(await readTool.execute("r1", { path: "block.txt" }, undefined, undefined, ctx));
-      const foo = anchorFor(text, "foo");
-      const bar = anchorFor(text, "bar");
-      const result = await getTool("replace_match").execute(
-        "w1",
-        { replace_from: foo, replace_to: bar, old_string: "foo\nbar", new_string: "one\ntwo\nthree" },
-        undefined, undefined, ctx,
-      );
-      expect(result.details.warnings).toContainEqual(expect.stringContaining("[W_REPLACE_MATCH_WHOLE_RANGE]"));
-      expect(result.details.warnings).toContainEqual(expect.stringContaining(`remove_from "${foo}"`));
-    });
-  });
-
-  it("warns when old_string retypes unchanged text", async () => {
-    const content = "top\nconst legacyCheckout = createCheckout({ retries: 3 });\nconst legacyReturn = createReturn({ retries: 3 });\nbottom\n";
-    await withTempFile("checkout.ts", content, async ({ cwd, path }) => {
-      const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
-      const text = getText(await readTool.execute("r1", { path: "checkout.ts" }, undefined, undefined, ctx));
-      const first = anchorOf(text, "legacyCheckout");
-      const second = anchorOf(text, "legacyReturn");
-      const result = await getTool("replace_match").execute(
-        "w1",
-        {
-          replace_from: first,
-          replace_to: second,
-          old_string: "const legacyCheckout = createCheckout({ retries: 3 });\nconst legacyReturn = createReturn({ retries: 3 });",
-          new_string: "const stableCheckout = createCheckout({ retries: 3 });\nconst legacyReturn = createReturn({ retries: 3 });",
-        },
-        undefined, undefined, ctx,
-      );
-      expect(result.details.warnings).toContainEqual(expect.stringContaining("[W_REPLACE_MATCH_RETYPE]"));
-      expect(result.details.warnings).toContainEqual(expect.stringContaining('Send old_string "legacy" and new_string "stable" instead.'));
-      expect(await readFile(path, "utf-8")).toContain("stableCheckout");
-    });
-  });
-
-  it("rejects a retyped old_string in strict-input mode", async () => {
-    const content = "top\nconst legacyCheckout = createCheckout({ retries: 3 });\nconst legacyReturn = createReturn({ retries: 3 });\nbottom\n";
-    await withTempFile("checkout.ts", content, async ({ cwd, path }) => {
-      await writeConfig({ autoRead: true, anchorGrepEnabled: true, strictInput: true });
-      const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
-      const text = getText(await readTool.execute("r1", { path: "checkout.ts" }, undefined, undefined, ctx));
-      const first = anchorOf(text, "legacyCheckout");
-      const second = anchorOf(text, "legacyReturn");
-      const message = await toolError(() => getTool("replace_match").execute(
-        "w1",
-        {
-          replace_from: first,
-          replace_to: second,
-          old_string: "const legacyCheckout = createCheckout({ retries: 3 });\nconst legacyReturn = createReturn({ retries: 3 });",
-          new_string: "const stableCheckout = createCheckout({ retries: 3 });\nconst legacyReturn = createReturn({ retries: 3 });",
-        },
-        undefined, undefined, ctx,
-      ));
-      expect(message).toContain("[E_BAD_SHAPE]");
-      expect(message).toContain("Strict-input mode");
-      expect(await readFile(path, "utf-8")).toBe(content);
-    });
-  });
-
-  it("names the first mismatch when old_string looks like a retyped copy", async () => {
+  it("names the first mismatch when match looks like a retyped copy", async () => {
     await withTempFile("routes.json", ROUTES, async ({ cwd }) => {
       const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
       const text = getText(await readTool.execute("r1", { path: "routes.json" }, undefined, undefined, ctx));
@@ -352,13 +398,13 @@ describe("replace_match", () => {
         {
           replace_from: anchor,
           replace_to: anchor,
-          old_string: '    {"id": "checkout-5", "feature": "legacyCheckouX", "retries": 3},',
-          new_string: "x",
+          match: '    {"id": "checkout-5", "feature": "legacyCheckouX", "retries": 3},',
+          replacement: "x",
         },
         undefined, undefined, ctx,
       ));
       expect(message).toContain("the first mismatch is at line 3");
-      expect(message).toContain("use replace with the same anchors");
+      expect(message).toContain("use replace with the same anchor");
     });
   });
 
@@ -373,14 +419,14 @@ describe("replace_match", () => {
         {
           replace_from: anchor,
           replace_to: anchor,
-          old_string: 'const label = "caf ";',
-          new_string: "x",
+          match: 'const label = "caf ";',
+          replacement: "x",
         },
         undefined, undefined, ctx,
       ));
       expect(message).toContain("the first mismatch is at line 1");
       expect(message).toContain(String.raw`the file has "\u00a0"`);
-      expect(message).toContain('where old_string has " "');
+      expect(message).toContain('where match has " "');
     });
   });
 
@@ -395,14 +441,14 @@ describe("replace_match", () => {
         {
           replace_from: anchor,
           replace_to: anchor,
-          old_string: 'const label = "cafe";',
-          new_string: "x",
+          match: 'const label = "cafe";',
+          replacement: "x",
         },
         undefined, undefined, ctx,
       ));
       expect(message).toContain("the first mismatch is at line 1");
       expect(message).toContain(String.raw`the file has "\u0435"`);
-      expect(message).toContain('where old_string has "e"');
+      expect(message).toContain('where match has "e"');
     });
   });
 
@@ -417,14 +463,14 @@ describe("replace_match", () => {
         {
           replace_from: anchor,
           replace_to: anchor,
-          old_string: '// note 😀 const label = "caf ";',
-          new_string: "x",
+          match: '// note 😀 const label = "caf ";',
+          replacement: "x",
         },
         undefined, undefined, ctx,
       ));
       expect(message).toContain("the first mismatch is at line 1, col 29");
       expect(message).toContain(String.raw`the file has "\u00a0"`);
-      expect(message).toContain('where old_string has " "');
+      expect(message).toContain('where match has " "');
     });
   });
 
@@ -439,14 +485,14 @@ describe("replace_match", () => {
         {
           replace_from: anchor,
           replace_to: anchor,
-          old_string: 'const label = "caf😁";',
-          new_string: "x",
+          match: 'const label = "caf😁";',
+          replacement: "x",
         },
         undefined, undefined, ctx,
       ));
       expect(message).toContain("the first mismatch is at line 1, col 19");
       expect(message).toContain(String.raw`the file has "\ud83d\ude00"`);
-      expect(message).toContain(String.raw`where old_string has "\ud83d\ude01"`);
+      expect(message).toContain(String.raw`where match has "\ud83d\ude01"`);
     });
   });
 });
@@ -460,9 +506,9 @@ describe("replace_match requirePath", () => {
       const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
       const text = getText(await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx));
       const anchor = anchorFor(text, "beta");
-      expect(await toolError(() => getTool("replace_match").execute("w1", { replace_from: anchor, replace_to: anchor, old_string: "beta", new_string: "gamma" }, undefined, undefined, ctx))).toMatch(/requires a non-empty "path"/);
-      expect(await toolError(() => getTool("replace_match").execute("w2", { path: "other.txt", replace_from: anchor, replace_to: anchor, old_string: "beta", new_string: "gamma" }, undefined, undefined, ctx))).toMatch(/does not match anchor ownership/);
-      await getTool("replace_match").execute("w3", { path: "sample.txt", replace_from: anchor, replace_to: anchor, old_string: "beta", new_string: "gamma" }, undefined, undefined, ctx);
+      expect(await toolError(() => getTool("replace_match").execute("w1", { replace_from: anchor, replace_to: anchor, match: "beta", replacement: "gamma" }, undefined, undefined, ctx))).toMatch(/requires a non-empty "path"/);
+      expect(await toolError(() => getTool("replace_match").execute("w2", { path: "other.txt", replace_from: anchor, replace_to: anchor, match: "beta", replacement: "gamma" }, undefined, undefined, ctx))).toMatch(/does not match anchor ownership/);
+      await getTool("replace_match").execute("w3", { path: "sample.txt", replace_from: anchor, replace_to: anchor, match: "beta", replacement: "gamma" }, undefined, undefined, ctx);
       expect(await readFile(path, "utf-8")).toBe("alpha\ngamma\n");
     });
   });

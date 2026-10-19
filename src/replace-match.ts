@@ -1,10 +1,9 @@
 import type { ExtensionAPI, ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { constants } from "node:fs";
-import * as Diff from "diff";
 import { execPipeline, noteAnchorError, previewFromPipe, previewError, type ReplaceDetails } from "./replace";
 import { commitEdit } from "./commit";
 import { readNormFile, type NormFile } from "./file-reader";
-import { fmtRegion, MAX_HASH_LINES, parseHashRef, parsePayloadText, planEdit, preserveDeletionSeparators, resEdit, resolveAnchorLine, stripAnchorRow, type Anchor } from "./hashline";
+import { fmtRegion, MAX_HASH_LINES, parseHashRef, planEdit, preserveDeletionSeparators, resEdit, resolveAnchorLine, stripAnchorRow, type Anchor } from "./hashline";
 import { servedForPath, withAnchorSession } from "./anchor-registry";
 import { batchMemberFor, executeBatchMember, noteBatchFailure, registerBatchPlanner, type BatchMemberPlan, type BatchPlannerInput } from "./batch";
 import { loadP, loadGuidelines } from "./prompts";
@@ -13,13 +12,13 @@ import {
   buildReplaceMatchToolSchema,
   getReplaceMatchInput,
   normReq,
+  singleLineFragment,
   type ReplaceMatchReq,
 } from "./payload-contract";
 import { literalEscapeHints, makePrepareArguments, splitLines } from "./utils";
-import { toLF, type LineEnding } from "./normalize";
-import { formatCharEscape, isFidelitySensitiveChar } from "./edit-fidelity";
-import { countNewlines, splitWithEndings } from "./line-endings";
+import { type LineEnding } from "./normalize";
 import { MAX_RANGE_STALE_LINES } from "./constants";
+import { formatCharEscape, isFidelitySensitiveChar } from "./edit-fidelity";
 import {
   assertBoundaryLinesServed,
   DEFAULT_EDIT_FLAGS,
@@ -43,72 +42,38 @@ interface MatchRefs {
 
 export interface MatchPlan {
   editParams: { remove_from: string; remove_to: string; text: string };
-  warnings: string[];
   contentSeparators: (LineEnding | undefined)[];
   servedOverride?: ReadonlyMap<string, string>;
 }
 
-function formatMatchRange(start: number, end: number): string {
-  return start === end ? `line ${start}` : `lines ${start}-${end}`;
-}
-
 function replaceAllOccurrences(
-  text: string,
-  oldText: string,
-  newText: string,
-): { text: string; separators: (LineEnding | undefined)[]; count: number } {
+  line: string,
+  matchText: string,
+  replacementText: string,
+): { text: string; count: number } {
   const parts: string[] = [];
-  const inserted: Array<{ start: number; end: number }> = [];
-  let length = 0;
-  const append = (chunk: string, fromNewText: boolean): void => {
-    if (fromNewText) inserted.push({ start: length, end: length + chunk.length });
-    parts.push(chunk);
-    length += chunk.length;
-  };
   let cursor = 0;
   let count = 0;
   for (;;) {
-    const found = text.indexOf(oldText, cursor);
+    const found = line.indexOf(matchText, cursor);
     if (found < 0) break;
-    append(text.slice(cursor, found), false);
-    append(newText, true);
-    cursor = found + oldText.length;
+    parts.push(line.slice(cursor, found), replacementText);
+    cursor = found + matchText.length;
     count += 1;
   }
-  if (count === 0) return { text, separators: [], count: 0 };
-  append(text.slice(cursor), false);
-  const replacement = parts.join("");
-  const parsed = splitWithEndings(replacement);
-  const separators: (LineEnding | undefined)[] = [];
-  let offset = 0;
-  let insertedIndex = 0;
-  for (let index = 0; index < parsed.lines.length; index++) {
-    offset += parsed.lines[index]!.length;
-    const ending = parsed.endings[index];
-    if (ending === undefined) continue;
-    while (insertedIndex < inserted.length && inserted[insertedIndex]!.end <= offset) insertedIndex += 1;
-    const fromNewText = insertedIndex < inserted.length && offset >= inserted[insertedIndex]!.start && offset < inserted[insertedIndex]!.end;
-    separators.push(fromNewText ? ending : undefined);
-    offset += ending.length;
-  }
-  return { text: replacement, separators, count };
+  if (count === 0) return { text: line, count: 0 };
+  parts.push(line.slice(cursor));
+  return { text: parts.join(""), count };
 }
 
-const RETYPE_DIFF_MAX_CHARS = 20_000;
-const RETYPE_MAX_EDIT_LENGTH = 2000;
-const RETYPE_MIN_UNCHANGED_CHARS = 40;
-const RETYPE_MIN_UNCHANGED_MULTILINE = 20;
-const RETYPE_EXAMPLE_MAX_CHARS = 40;
-const WHOLE_RANGE_MIN_CHARS = 40;
-const WHOLE_RANGE_MIN_LINES = 2;
-const NEAR_MISS_MIN_OLD_CHARS = 20;
+function linesToPayloadText(lines: string[]): string {
+  if (lines.length === 0) return "";
+  const joined = lines.join("\n");
+  return lines[lines.length - 1] === "" ? `${joined}\n` : joined;
+}
+
+const NEAR_MISS_MIN_MATCH_CHARS = 20;
 const NEAR_MISS_MATCH_RATIO = 0.8;
-
-interface RetypeAnalysis {
-  changed: number;
-  unchanged: number;
-  middle: { oldFragment: string; newFragment: string };
-}
 
 function commonPrefixLength(left: string, right: string): number {
   const limit = Math.min(left.length, right.length);
@@ -122,61 +87,6 @@ function commonSuffixLength(left: string, right: string, prefix: number): number
   let suffix = 0;
   while (suffix < limit && left[left.length - 1 - suffix] === right[right.length - 1 - suffix]) suffix += 1;
   return suffix;
-}
-
-function analyzeRetype(oldText: string, newText: string): RetypeAnalysis {
-  const prefix = commonPrefixLength(oldText, newText);
-  const suffix = commonSuffixLength(oldText, newText, prefix);
-  const middle = {
-    oldFragment: oldText.slice(prefix, oldText.length - suffix),
-    newFragment: newText.slice(prefix, newText.length - suffix),
-  };
-  if (oldText.length + newText.length <= RETYPE_DIFF_MAX_CHARS) {
-    const parts = Diff.diffChars(oldText, newText, { maxEditLength: RETYPE_MAX_EDIT_LENGTH }) as Array<{ added?: boolean; removed?: boolean; value: string }> | undefined;
-    if (parts !== undefined) {
-      let changed = 0;
-      let removed = 0;
-      for (const part of parts) {
-        if (part.added === true) changed += part.value.length;
-        else if (part.removed === true) {
-          changed += part.value.length;
-          removed += part.value.length;
-        }
-      }
-      return { changed, unchanged: oldText.length - removed, middle };
-    }
-  }
-  return { changed: middle.oldFragment.length + middle.newFragment.length, unchanged: prefix + suffix, middle };
-}
-
-function retypeSuggestion(analysis: RetypeAnalysis): string {
-  const { oldFragment, newFragment } = analysis.middle;
-  if (oldFragment.length === 0 && newFragment.length === 0) return "Send only the fragment that changes instead.";
-  if (oldFragment.length === 0) return "Send the added text with insert instead.";
-  if (
-    oldFragment.length > RETYPE_EXAMPLE_MAX_CHARS ||
-    newFragment.length > RETYPE_EXAMPLE_MAX_CHARS ||
-    oldFragment.includes("\n") ||
-    newFragment.includes("\n")
-  ) {
-    return "Send only the fragment that changes instead.";
-  }
-  return `Send old_string ${JSON.stringify(oldFragment)} and new_string ${JSON.stringify(newFragment)} instead.`;
-}
-
-function retypeWarning(oldText: string, newText: string): string | undefined {
-  const analysis = analyzeRetype(oldText, newText);
-  if (analysis.changed === 0) return undefined;
-  const minUnchanged = oldText.includes("\n") ? RETYPE_MIN_UNCHANGED_MULTILINE : RETYPE_MIN_UNCHANGED_CHARS;
-  if (analysis.unchanged < minUnchanged) return undefined;
-  const lineCount = oldText.split("\n").length;
-  return `[W_REPLACE_MATCH_RETYPE] "old_string" retypes ${analysis.unchanged} unchanged character(s) across ${lineCount} line(s). ${retypeSuggestion(analysis)}`;
-}
-
-function wholeRangeWarning(oldText: string, rangeText: string, lineCount: number, start: number, end: number, startHash: string, endHash: string): string | undefined {
-  if (oldText !== rangeText) return undefined;
-  if (lineCount < WHOLE_RANGE_MIN_LINES && oldText.length < WHOLE_RANGE_MIN_CHARS) return undefined;
-  return `[W_REPLACE_MATCH_WHOLE_RANGE] "old_string" is the entire selected range (${formatMatchRange(start, end)}); the anchors already identify it. Use replace with remove_from "${startHash}", remove_to "${endHash}" and the new text, or send only the fragment that changes.`;
 }
 
 function charAt(text: string, index: number): string | undefined {
@@ -197,30 +107,32 @@ function describeChar(char: string | undefined): string {
   return isFidelitySensitiveChar(char) || codePoint > 0x7e ? `"${formatCharEscape(char)}"` : JSON.stringify(char);
 }
 
-function nearMissDetail(oldText: string, rangeText: string, start: number): string | undefined {
-  if (oldText.length < NEAR_MISS_MIN_OLD_CHARS && !oldText.includes("\n")) return undefined;
-  const prefix = commonPrefixLength(oldText, rangeText);
-  const suffix = commonSuffixLength(oldText, rangeText, prefix);
-  const comparable = Math.min(oldText.length, rangeText.length);
+function nearMissDetail(matchText: string, lineText: string, line: number): string | undefined {
+  if (matchText.length < NEAR_MISS_MIN_MATCH_CHARS) return undefined;
+  const prefix = commonPrefixLength(matchText, lineText);
+  const suffix = commonSuffixLength(matchText, lineText, prefix);
+  const comparable = Math.min(matchText.length, lineText.length);
   if (prefix + suffix < Math.floor(comparable * NEAR_MISS_MATCH_RATIO)) return undefined;
-  const lineOffset = countNewlines(rangeText.slice(0, prefix));
-  const fileStart = codePointStart(rangeText, prefix);
-  const oldStart = codePointStart(oldText, prefix);
-  const lineStart = rangeText.lastIndexOf("\n", fileStart - 1) + 1;
-  const column = [...rangeText.slice(lineStart, fileStart)].length + 1;
-  return `the first mismatch is at line ${start + lineOffset}, col ${column}: the file has ${describeChar(charAt(rangeText, fileStart))} where old_string has ${describeChar(charAt(oldText, oldStart))}.`;
+  const fileStart = codePointStart(lineText, prefix);
+  const matchStart = codePointStart(matchText, prefix);
+  const column = [...lineText.slice(0, fileStart)].length + 1;
+  return `the first mismatch is at line ${line}, col ${column}: the file has ${describeChar(charAt(lineText, fileStart))} where match has ${describeChar(charAt(matchText, matchStart))}.`;
 }
 
-function notFoundMessage(displayPath: string, start: number, end: number, fileHashes: string[], fileLines: string[], rangeText: string, oldText: string): string {
+function formatMatchRange(start: number, end: number): string {
+  return start === end ? `line ${start}` : `lines ${start}-${end}`;
+}
+
+function notFoundMessage(displayPath: string, start: number, end: number, fileHashes: string[], fileLines: string[], rangeText: string, matchText: string): string {
   const rangeLength = end - start + 1;
   const shownCount = Math.min(rangeLength, MAX_RANGE_STALE_LINES);
   const shown = fmtRegion(fileHashes.slice(start - 1, start - 1 + shownCount), fileLines.slice(start - 1, start - 1 + shownCount));
-  const more = rangeLength > shownCount ? `\n[The range has ${rangeLength} lines; showing the first ${shownCount}.]` : "";
-  const nearMiss = nearMissDetail(oldText, rangeText, start);
+  const more = rangeLength > shownCount ? `\n[The range has ${rangeLength} lines; showing the first ${shownCount}. Call read with offset=${start + shownCount} to see the rest.]` : "";
+  const nearMiss = start === end ? nearMissDetail(matchText, rangeText, start) : undefined;
   const advice = nearMiss !== undefined
-    ? `${nearMiss} That looks like a retyped copy of the range; send only the fragment that changes (copy it from the served row), or use replace with the same anchors.`
-    : "Copy only the fragment that changes from the served row (comparison uses LF breaks and excludes the last line's terminator) and retry; for a whole-line or whole-range rewrite use replace with the same anchors.";
-  return `[E_SUBSTRING_NOT_FOUND] "old_string" was not found in ${formatMatchRange(start, end)} of ${displayPath}. Current rows:\n\n${shown}${more}\n\n${advice}`;
+    ? `${nearMiss} That looks like a retyped copy of the line; send only the fragment that changes (copy it from the served row), or use replace with the same anchor.`
+    : "Copy only the fragment that changes from the served row (a trailing line break is accepted and dropped) and retry; for a whole-line rewrite use replace with the same anchors.";
+  return `[E_SUBSTRING_NOT_FOUND] "match" was not found in ${formatMatchRange(start, end)} of ${displayPath}. Current rows:\n\n${shown}${more}\n\n${advice}`;
 }
 
 export function parseMatchAnchors(req: ReplaceMatchReq): { refs: MatchRefs; warnings: string[] } {
@@ -237,6 +149,8 @@ export function buildReplaceMatchEdit(
   displayPath: string,
   served?: ReadonlyMap<string, string>,
 ): MatchPlan {
+  const matchText = singleLineFragment("match", req.match);
+  const replacementText = singleLineFragment("replacement", req.replacement);
   const fileLines = splitLines(preload.normalized);
   const fromLine = resolveAnchorLine(refs.from, fileLines, preload.fileHashes, displayPath);
   const toLine = resolveAnchorLine(refs.to, fileLines, preload.fileHashes, displayPath);
@@ -244,33 +158,27 @@ export function buildReplaceMatchEdit(
   const end = Math.max(fromLine, toLine);
   assertBoundaryLinesServed(fileLines, preload.fileHashes, served, start, end, displayPath);
   const rangeLines = fileLines.slice(start - 1, end);
-  const rangeText = `${rangeLines.join("\n")}${rangeLines[rangeLines.length - 1] === "" ? "\n" : ""}`;
-  const oldText = toLF(req.old_string);
-  const newText = toLF(req.new_string);
-  const { text: replacement, separators: replacementSeparators, count } = replaceAllOccurrences(rangeText, oldText, req.new_string);
+  const rangeText = linesToPayloadText(rangeLines);
+  let count = 0;
+  const replacementLines = rangeLines.map((line) => {
+    const result = replaceAllOccurrences(line, matchText, replacementText);
+    count += result.count;
+    return result.text;
+  });
   if (count === 0) {
-    throw new Error(notFoundMessage(displayPath, start, end, preload.fileHashes, fileLines, rangeText, oldText));
+    throw new Error(notFoundMessage(displayPath, start, end, preload.fileHashes, fileLines, rangeText, matchText));
   }
-  const contentSeparators = parsePayloadText(replacement).lines.map((_, index) => replacementSeparators[index]);
+  const replacement = linesToPayloadText(replacementLines);
   const startRef = fromLine <= toLine ? refs.from : refs.to;
   const endRef = fromLine <= toLine ? refs.to : refs.from;
   const servedOverride = trustRangeServed(fileLines, preload.fileHashes, served, start, end);
-  const warnings: string[] = [];
-  const retype = retypeWarning(oldText, newText);
-  if (retype !== undefined) {
-    warnings.push(retype);
-  } else {
-    const wholeRange = wholeRangeWarning(oldText, rangeText, rangeLines.length, start, end, startRef.hash, endRef.hash);
-    if (wholeRange !== undefined) warnings.push(wholeRange);
-  }
   return {
     editParams: {
       remove_from: startRef.hash,
       remove_to: endRef.hash,
       text: replacement,
     },
-    warnings,
-    contentSeparators,
+    contentSeparators: replacementLines.map(() => undefined),
     ...(servedOverride !== undefined ? { servedOverride } : {}),
   };
 }
@@ -279,7 +187,7 @@ function planReplaceMatchBatchMember(input: BatchPlannerInput): BatchMemberPlan 
   const req = normReq(input.member.args, "replace");
   assertReplaceMatchReq(req);
   const { refs, warnings } = parseMatchAnchors(req);
-  const hints = [...literalEscapeHints([req.old_string], "old_string"), ...literalEscapeHints([req.new_string], "new_string")];
+  const hints = [...literalEscapeHints([req.match], "match"), ...literalEscapeHints([req.replacement], "replacement")];
   const preload = { normalized: input.base.content, fileHashes: input.base.hashes } as NormFile;
   const matchPlan = buildReplaceMatchEdit(req, refs, preload, input.displayPath, input.served);
   const resWarnings: string[] = [];
@@ -293,11 +201,10 @@ function planReplaceMatchBatchMember(input: BatchPlannerInput): BatchMemberPlan 
   });
   return {
     hedit,
-    warnings: [...warnings, ...hints, ...resWarnings, ...matchPlan.warnings],
+    warnings: [...warnings, ...hints, ...resWarnings],
     contentSeparators: matchPlan.contentSeparators,
     planned,
     foldedLines: 0,
-    ...(matchPlan.servedOverride !== undefined ? { servedOverride: matchPlan.servedOverride } : {}),
   };
 }
 
@@ -324,7 +231,6 @@ export async function replaceMatchPreview(request: unknown, cwd: string, signal?
       signal,
     });
     const plan = buildReplaceMatchEdit(req, refs, preload, targetPath, servedForPath(preload.absolutePath));
-    await throwIfStrictInput(plan.warnings);
     const pipe = await execPipeline(targetPath, plan.editParams, cwd, {
       accessMode: constants.R_OK,
       noPersist: true,
@@ -379,7 +285,7 @@ export function buildReplaceMatchToolDef(flags: EditToolFlags = DEFAULT_EDIT_FLA
           if (member) noteBatchFailure(member, error);
           throw error;
         }
-        const hints = [...literalEscapeHints([req.old_string], "old_string"), ...literalEscapeHints([req.new_string], "new_string")];
+        const hints = [...literalEscapeHints([req.match], "match"), ...literalEscapeHints([req.replacement], "replacement")];
         const targetPath = await resolveEditTargetWithRequirement({
           removeFrom: req.replace_from,
           removeTo: req.replace_to,
@@ -406,7 +312,6 @@ export function buildReplaceMatchToolDef(flags: EditToolFlags = DEFAULT_EDIT_FLA
             await noteAnchorError(mutationTargetPath, error);
             throw error;
           }
-          await throwIfStrictInput(plan.warnings);
           const pipe = await execPipeline(targetPath, plan.editParams, ctx.cwd, {
             accessMode: constants.R_OK | constants.W_OK,
             signal,
@@ -419,7 +324,7 @@ export function buildReplaceMatchToolDef(flags: EditToolFlags = DEFAULT_EDIT_FLA
             absolutePath,
             mutationTargetPath,
             editAnchors: [plan.editParams.remove_from, plan.editParams.remove_to],
-            prefixWarnings: [...warnings, ...hints, ...plan.warnings],
+            prefixWarnings: [...warnings, ...hints],
             signal,
             verb: "replaced",
             noopNoun: "Replacement",

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { readFile } from "fs/promises";
-import { anchorFor, assistantMessage, getText, setupIntegrationTest, toolCall, withTempFile } from "../support/fixtures";
+import { anchorFor, assistantMessage, getText, setupIntegrationTest, toolCall, toolError, withTempFile } from "../support/fixtures";
 
 describe("line endings via embedded breaks", () => {
   it("adds a missing final newline when the last line is replaced with a trailing break", async () => {
@@ -165,32 +165,14 @@ describe("line endings via embedded breaks", () => {
 });
 
 describe("line endings preserved by replace_match", () => {
-  it("keeps CRLF endings when a multi-line range is rewritten", async () => {
-    await withTempFile("sample.txt", "alpha\r\nbeta\r\ngamma\r\ndelta\r\n", async ({ cwd, path }) => {
-      const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
-      const text = getText(await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx));
-      const alpha = anchorFor(text, "alpha");
-      const gamma = anchorFor(text, "gamma");
-      await getTool("replace_match").execute(
-        "m1",
-        { replace_from: alpha, replace_to: gamma, old_string: "beta", new_string: "BETA" },
-        undefined,
-        undefined,
-        ctx,
-      );
-      expect(await readFile(path, "utf-8")).toBe("alpha\r\nBETA\r\ngamma\r\ndelta\r\n");
-    });
-  });
-
-  it("keeps a CRLF ending that spans the new_string boundary whole", async () => {
+  it("keeps the line's CRLF ending", async () => {
     await withTempFile("sample.txt", "alpha\r\nbeta\r\ngamma\r\n", async ({ cwd, path }) => {
       const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
       const text = getText(await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx));
-      const alpha = anchorFor(text, "alpha");
-      const gamma = anchorFor(text, "gamma");
+      const beta = anchorFor(text, "beta");
       await getTool("replace_match").execute(
         "m1",
-        { replace_from: alpha, replace_to: gamma, old_string: "beta", new_string: "BETA\r" },
+        { replace_from: beta, replace_to: beta, match: "beta", replacement: "BETA" },
         undefined,
         undefined,
         ctx,
@@ -199,20 +181,52 @@ describe("line endings preserved by replace_match", () => {
     });
   });
 
-  it("honors an explicit ending inside new_string and inherits the rest", async () => {
-    await withTempFile("sample.txt", "alpha\r\nbeta\r\ngamma\r\n", async ({ cwd, path }) => {
+  it("keeps CRLF endings when the range spans lines", async () => {
+    await withTempFile("sample.txt", "alpha\r\nbeta\r\ngamma\r\ndelta\r\n", async ({ cwd, path }) => {
       const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
       const text = getText(await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx));
       const alpha = anchorFor(text, "alpha");
       const gamma = anchorFor(text, "gamma");
       await getTool("replace_match").execute(
         "m1",
-        { replace_from: alpha, replace_to: gamma, old_string: "beta", new_string: "BETA\r\nEXTRA" },
+        { replace_from: alpha, replace_to: gamma, match: "beta", replacement: "BETA" },
         undefined,
         undefined,
         ctx,
       );
-      expect(await readFile(path, "utf-8")).toBe("alpha\r\nBETA\r\nEXTRA\r\ngamma\r\n");
+      expect(await readFile(path, "utf-8")).toBe("alpha\r\nBETA\r\ngamma\r\ndelta\r\n");
+    });
+  });
+
+  it("drops a trailing line break from replacement and keeps the file's ending", async () => {
+    await withTempFile("sample.txt", "alpha\r\nbeta\r\ngamma\r\n", async ({ cwd, path }) => {
+      const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
+      const text = getText(await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx));
+      const beta = anchorFor(text, "beta");
+      await getTool("replace_match").execute(
+        "m1",
+        { replace_from: beta, replace_to: beta, match: "beta\r\n", replacement: "BETA\r\n" },
+        undefined,
+        undefined,
+        ctx,
+      );
+      expect(await readFile(path, "utf-8")).toBe("alpha\r\nBETA\r\ngamma\r\n");
+    });
+  });
+
+  it("refuses a replacement that spans lines", async () => {
+    await withTempFile("sample.txt", "alpha\r\nbeta\r\ngamma\r\n", async ({ cwd, path }) => {
+      const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
+      const text = getText(await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx));
+      const beta = anchorFor(text, "beta");
+      expect(await toolError(() => getTool("replace_match").execute(
+        "m1",
+        { replace_from: beta, replace_to: beta, match: "beta", replacement: "BETA\r\nEXTRA" },
+        undefined,
+        undefined,
+        ctx,
+      ))).toContain("[E_BAD_SHAPE]");
+      expect(await readFile(path, "utf-8")).toBe("alpha\r\nbeta\r\ngamma\r\n");
     });
   });
 
@@ -220,10 +234,9 @@ describe("line endings preserved by replace_match", () => {
     await withTempFile("sample.txt", "alpha\r\nbeta\r\ngamma\r\ndelta\r\n", async ({ cwd, path }) => {
       const { ctx, readTool, getTool, handlers } = setupIntegrationTest(cwd);
       const text = getText(await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx));
-      const alpha = anchorFor(text, "alpha");
-      const gamma = anchorFor(text, "gamma");
+      const beta = anchorFor(text, "beta");
       const delta = anchorFor(text, "delta");
-      const matchArgs = { replace_from: alpha, replace_to: gamma, old_string: "beta", new_string: "BETA" };
+      const matchArgs = { replace_from: beta, replace_to: beta, match: "beta", replacement: "BETA" };
       const replaceArgs = { remove_from: delta, remove_to: delta, text: "DELTA" };
       const message = assistantMessage([toolCall("m1", "replace_match", matchArgs), toolCall("m2", "replace", replaceArgs)]);
       await handlers.get("message_end")!({ type: "message_end", message }, ctx);

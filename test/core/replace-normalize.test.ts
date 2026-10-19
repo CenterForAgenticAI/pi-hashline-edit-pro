@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normReq } from "../../src/payload-contract";
+import { normReq, singleLineFragment } from "../../src/payload-contract";
 
 describe("normReq", () => {
 	it("returns non-record input as-is", () => {
@@ -211,7 +211,7 @@ describe("normReq - anchor aliases", () => {
   });
 
   it("maps remove_from/remove_to onto replace_from/replace_to for the replace_match shape", () => {
-    const result = normReq({ remove_from: "ATIm", remove_to: "BeSR", old_string: "a", new_string: "b" }, "replace") as Record<string, unknown>;
+    const result = normReq({ remove_from: "ATIm", remove_to: "BeSR", match: "a", replacement: "b" }, "replace") as Record<string, unknown>;
     expect(result.replace_from).toBe("ATIm");
     expect(result.replace_to).toBe("BeSR");
     expect(result.remove_from).toBeUndefined();
@@ -233,4 +233,17 @@ describe("normReq - anchor aliases", () => {
     expect(result.remove_from).toBeUndefined();
     expect(result.remove_to).toBeUndefined();
   });
+});
+
+describe("singleLineFragment", () => {
+	it("drops one trailing break and refuses a lone break as match", () => {
+		expect(singleLineFragment("match", "beta\n")).toBe("beta");
+		expect(singleLineFragment("replacement", "\n")).toBe("");
+		expect(() => singleLineFragment("match", "\n")).toThrow("must be a non-empty string");
+	});
+
+	it("counts the line-break column in code points", () => {
+		expect(() => singleLineFragment("match", "ab\nc")).toThrow("line break at column 3");
+		expect(() => singleLineFragment("match", "a😀b\nc")).toThrow("line break at column 4");
+	});
 });

@@ -173,7 +173,7 @@ describe("planAssistantMessage", () => {
       await planAssistantMessage(
         assistantMessage([
           toolCall("c1", "replace", { replace_from: hashes[0], replace_to: hashes[0], text: ["x"] }),
-          toolCall("c2", "replace_match", { remove_from: hashes[2], remove_to: hashes[2], old_string: "ccc", new_string: "y" }),
+          toolCall("c2", "replace_match", { remove_from: hashes[2], remove_to: hashes[2], match: "ccc", replacement: "y" }),
         ]),
         cwd,
       );

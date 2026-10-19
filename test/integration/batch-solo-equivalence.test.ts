@@ -149,8 +149,8 @@ function argsFor(edit: EditSpec, anchors: string[]): Record<string, unknown> {
     return {
       replace_from: anchors[edit.start - 1]!,
       replace_to: anchors[edit.end - 1]!,
-      old_string: edit.oldText ?? "",
-      new_string: edit.newText ?? "",
+      match: edit.oldText ?? "",
+      replacement: edit.newText ?? "",
     };
   }
   return {

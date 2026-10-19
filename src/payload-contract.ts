@@ -1,6 +1,7 @@
 import { Type } from "typebox";
 import { isRec, normalizeRequest, rejectUnknownFields, assertNoNul } from "./utils";
 import { TEXT_ENDING_NOTE, TEXT_NOT_STRING_MSG, NEW_CONTENT_NOT_STRING_MSG } from "./constants";
+import { toLF } from "./normalize";
 
 const textSchema = Type.String({
   description:
@@ -166,25 +167,44 @@ export function assertTransferReq(request: unknown): asserts request is Transfer
   }
 }
 
-const MATCH_KS = new Set(["path", "replace_from", "replace_to", "old_string", "new_string"]);
+const MATCH_KS = new Set(["path", "replace_from", "replace_to", "match", "replacement"]);
 
 export interface ReplaceMatchReq {
   path?: string;
   replace_from: string;
   replace_to: string;
-  old_string: string;
-  new_string: string;
+  match: string;
+  replacement: string;
+}
+
+export function singleLineFragment(field: "match" | "replacement", raw: string): string {
+  const text = toLF(raw);
+  const fragment = text.endsWith("\n") ? text.slice(0, -1) : text;
+  const lineBreak = fragment.indexOf("\n");
+  if (lineBreak >= 0) {
+    const column = [...fragment.slice(0, lineBreak)].length + 1;
+    throw new Error(
+      `[E_BAD_SHAPE] ${field} must stay within one line, but the value contains a line break at column ${column}. A trailing line break is accepted as the line's own terminator; text on another line belongs to replace.`,
+    );
+  }
+  if (field === "match" && fragment.length === 0) {
+    throw new Error('[E_BAD_SHAPE] Replace-match request field "match" must be a non-empty string holding the exact text to find.');
+  }
+  return fragment;
 }
 
 export function assertReplaceMatchReq(request: unknown): asserts request is ReplaceMatchReq {
   if (!isRec(request)) {
     throw new Error("[E_BAD_SHAPE] Replace-match request must be an object.");
   }
+  if ("old_string" in request || "new_string" in request) {
+    throw new Error('[E_BAD_SHAPE] Replace-match request no longer accepts "old_string"/"new_string"; use "match" for the text to find and "replacement" for the new text.');
+  }
   rejectUnknownFields(request, MATCH_KS, "Replace-match request");
   if (request.path !== undefined && typeof request.path !== "string") {
     throw new Error('[E_BAD_SHAPE] Replace-match request field "path" must be a string when provided.');
   }
-  for (const key of ["replace_from", "replace_to", "old_string", "new_string"] as const) {
+  for (const key of ["replace_from", "replace_to", "match", "replacement"] as const) {
     if (typeof (request as Record<string, unknown>)[key] !== "string") {
       throw new Error(`[E_BAD_SHAPE] Replace-match request requires a "${key}" string.`);
     }
@@ -193,13 +213,12 @@ export function assertReplaceMatchReq(request: unknown): asserts request is Repl
   if (within.replace_from.length === 0 || within.replace_to.length === 0) {
     throw new Error('[E_BAD_SHAPE] Replace-match request requires non-empty "replace_from" and "replace_to" anchors.');
   }
-  if (within.old_string.length === 0) {
-    throw new Error('[E_BAD_SHAPE] Replace-match request field "old_string" must be a non-empty string holding the exact text to find.');
-  }
-  assertNoNul([within.new_string]);
+  singleLineFragment("match", within.match);
+  singleLineFragment("replacement", within.replacement);
+  assertNoNul([within.replacement]);
 }
 
-export function getReplaceMatchInput(args: unknown): { path?: string; replace_from: string; replace_to: string; old_string: string; new_string: string } | null {
+export function getReplaceMatchInput(args: unknown): { path?: string; replace_from: string; replace_to: string; match: string; replacement: string } | null {
   let normalized: unknown;
   try {
     normalized = normalizeRequest(args, "replace");
@@ -210,8 +229,8 @@ export function getReplaceMatchInput(args: unknown): { path?: string; replace_fr
   if (
     typeof normalized.replace_from !== "string" ||
     typeof normalized.replace_to !== "string" ||
-    typeof normalized.old_string !== "string" ||
-    typeof normalized.new_string !== "string"
+    typeof normalized.match !== "string" ||
+    typeof normalized.replacement !== "string"
   ) {
     return null;
   }
@@ -219,8 +238,8 @@ export function getReplaceMatchInput(args: unknown): { path?: string; replace_fr
     ...(typeof normalized.path === "string" ? { path: normalized.path } : {}),
     replace_from: normalized.replace_from,
     replace_to: normalized.replace_to,
-    old_string: normalized.old_string,
-    new_string: normalized.new_string,
+    match: normalized.match,
+    replacement: normalized.replacement,
   };
 }
 
@@ -230,15 +249,15 @@ const replaceMatchFromSchema = Type.String({
 });
 const replaceMatchToSchema = Type.String({
   description:
-    "4-char anchor of the LAST line of the range searched; same as replace_from for a single line.",
+    "4-char anchor of the LAST line of the range searched; same as `replace_from` for a single line.",
 });
-const replaceMatchOldStringSchema = Type.String({
+const replaceMatchMatchSchema = Type.String({
   description:
-    "The exact text to find inside the selected line(s), copied from the served row: only the fragment that changes, never text that `new_string` leaves unchanged. If `old_string` is everything on the line except indentation and trailing punctuation, that is a whole-line match: use `replace` instead. Every occurrence inside the range is replaced; the text around each match is left untouched. Matching uses LF line breaks and excludes the last line's terminator.",
+    "The exact text to find inside the selected lines, copied from the served row: only the fragment that changes, never text that `replacement` leaves unchanged. It must stay within one line and hold text: a single trailing line break is accepted as the line's own terminator, a line break anywhere else is refused, and a value that is only a line break leaves nothing to find and is refused. Every occurrence inside the range is replaced; the text around each match is left untouched. If `match` is an entire single-line range except indentation and trailing punctuation, that is a whole-line match: use `replace` instead.",
 });
-const replaceMatchNewStringSchema = Type.String({
+const replaceMatchReplacementSchema = Type.String({
   description:
-    `The exact replacement for every matched occurrence. "" deletes the matches. ${TEXT_ENDING_NOTE} The rest of the range is kept byte-for-byte.`,
+    `The exact replacement for every matched occurrence within the range. "" deletes the matches. It must stay within one line: a single trailing line break is accepted and dropped (a value that is only a line break counts as ""), and a line break anywhere else is refused. The rest of each line is kept byte-for-byte.`,
 });
 const replaceMatchPathRequiredSchema = Type.String({
   description:
@@ -249,8 +268,8 @@ export const replaceMatchToolSchema = Type.Object(
   {
     replace_from: replaceMatchFromSchema,
     replace_to: replaceMatchToSchema,
-    old_string: replaceMatchOldStringSchema,
-    new_string: replaceMatchNewStringSchema,
+    match: replaceMatchMatchSchema,
+    replacement: replaceMatchReplacementSchema,
   },
   { additionalProperties: true },
 );
@@ -262,8 +281,8 @@ export function buildReplaceMatchToolSchema(requirePath: boolean): typeof replac
       path: replaceMatchPathRequiredSchema,
       replace_from: replaceMatchFromSchema,
       replace_to: replaceMatchToSchema,
-      old_string: replaceMatchOldStringSchema,
-      new_string: replaceMatchNewStringSchema,
+      match: replaceMatchMatchSchema,
+      replacement: replaceMatchReplacementSchema,
     },
     { additionalProperties: true },
   ) as typeof replaceMatchToolSchema;

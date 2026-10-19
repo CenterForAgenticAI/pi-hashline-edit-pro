@@ -257,12 +257,12 @@ describe("read codemode contract", () => {
 			const { readTool, getTool, ctx } = setupIntegrationTest(cwd);
 			const text = getText(await readTool.execute("r1", { path: "sample.ts" }, undefined, undefined, ctx));
 			const beta = anchorFor(text, "beta");
-			const missing = await getTool("replace_match").execute("m1", { replace_from: beta, replace_to: beta, old_string: "missing", new_string: "x" }, undefined, undefined, ctx);
+			const missing = await getTool("replace_match").execute("m1", { replace_from: beta, replace_to: beta, match: "missing", replacement: "x" }, undefined, undefined, ctx);
 			const missingSc = structured(missing);
 			expect(missing.isError).toBe(true);
 			expect(missingSc.error!.code).toBe("E_SUBSTRING_NOT_FOUND");
 			expect(missingSc.error!.message).toContain("Current rows");
-			const applied = await getTool("replace_match").execute("m2", { replace_from: beta, replace_to: beta, old_string: "beta", new_string: "BETA" }, undefined, undefined, ctx);
+			const applied = await getTool("replace_match").execute("m2", { replace_from: beta, replace_to: beta, match: "beta", replacement: "BETA" }, undefined, undefined, ctx);
 			const appliedSc = structured(applied);
 			expect(appliedSc.verb).toBe("replaced");
 			expect(appliedSc.classification).toBe("applied");

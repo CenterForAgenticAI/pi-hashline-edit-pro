@@ -92,7 +92,7 @@ function batchGuideline(flags: EditToolFlags): string {
   const tools = operationNames(SHARED_EDIT_OPS, flags);
   const outcome = flags.autoRead ? "diff" : "result";
   const script = flags.codemode ? ` ${SCRIPT_BATCH_GUIDELINE}` : "";
-  return `${tools}: same-file calls in one message commit as one batch; earlier calls reply \`In batch N (queued)\`, the last shows the combined ${outcome}, and one undo reverts all. A request-invalid call (anchors, shape, or \`old_string\`) fails alone; a failure while the batch runs aborts it.${script}`;
+  return `${tools}: same-file calls in one message commit as one batch; earlier calls reply \`In batch N (queued)\`, the last shows the combined ${outcome}, and one undo reverts all. A request-invalid call (anchors, shape, or \`match\`) fails alone; a failure while the batch runs aborts it.${script}`;
 }
 
 function diffGuideline(flags: EditToolFlags): string {
@@ -157,10 +157,8 @@ export function withInsertPrompts(base: { description: string; snippet: string; 
   return { description: base.description, snippet: base.snippet, guidelines: base.guidelines.map((guideline) => guideline.text) };
 }
 
-export function withReplaceMatchPrompts(base: { description: string; snippet: string; guidelines: Guideline[] }, flags: EditToolFlags): { description: string; snippet: string; guidelines: string[] } {
-  const guidelines = base.guidelines.map((guideline) => guideline.text);
-  if (flags.strictInput) guidelines.push("`replace_match`: strict-input mode rejects an `old_string` that covers the whole range or retypes unchanged text.");
-  return { description: base.description, snippet: base.snippet, guidelines };
+export function withReplaceMatchPrompts(base: { description: string; snippet: string; guidelines: Guideline[] }, _flags: EditToolFlags): { description: string; snippet: string; guidelines: string[] } {
+  return { description: base.description, snippet: base.snippet, guidelines: base.guidelines.map((guideline) => guideline.text) };
 }
 
 function gatedEditOps(ops: string[], flags: EditToolFlags): string[] {
@@ -299,7 +297,7 @@ export async function resolveEditTargetWithRequirement(input: PathRequirementInp
   return anchorTarget;
 }
 
-const STRICT_INPUT_REJECT_CODES = ["[W_BAD_SHAPE]", "[W_BAD_REF]", "[W_INVALID_PATCH]", "[W_BARE_HASH_PREFIX]", "[W_REPLACE_MATCH_WHOLE_RANGE]", "[W_REPLACE_MATCH_RETYPE]"];
+const STRICT_INPUT_REJECT_CODES = ["[W_BAD_SHAPE]", "[W_BAD_REF]", "[W_INVALID_PATCH]", "[W_BARE_HASH_PREFIX]"];
 export async function throwIfStrictInput(warnings: string[]): Promise<void> {
   const fixes = warnings.filter((warning) => STRICT_INPUT_REJECT_CODES.some((code) => warning.startsWith(code)));
   if (fixes.length === 0) return;

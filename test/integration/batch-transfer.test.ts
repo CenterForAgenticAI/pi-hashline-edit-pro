@@ -25,7 +25,7 @@ describe("batched replace_match", () => {
       const beta = anchorFor(text, "beta");
       const gamma = anchorFor(text, "gamma");
       const replaceArgs = { remove_from: beta, remove_to: beta, text: ["BETA"] };
-      const matchArgs = { replace_from: gamma, replace_to: gamma, old_string: "gamma", new_string: "GAMMA" };
+      const matchArgs = { replace_from: gamma, replace_to: gamma, match: "gamma", replacement: "GAMMA" };
       const message = assistantMessage([toolCall("m1", "replace", replaceArgs), toolCall("m2", "replace_match", matchArgs)]);
       await handlers.get("message_end")!({ type: "message_end", message }, ctx);
 
@@ -57,7 +57,7 @@ describe("batched replace_match", () => {
       const beta = anchorFor(text, "beta");
       const gamma = anchorFor(text, "gamma");
       const replaceArgs = { remove_from: beta, remove_to: beta, text: ["BETA"] };
-      const matchArgs = { replace_from: gamma, replace_to: gamma, old_string: "missing", new_string: "GAMMA" };
+      const matchArgs = { replace_from: gamma, replace_to: gamma, match: "missing", replacement: "GAMMA" };
       const message = assistantMessage([toolCall("m1", "replace", replaceArgs), toolCall("m2", "replace_match", matchArgs)]);
       await handlers.get("message_end")!({ type: "message_end", message }, ctx);
 
@@ -66,6 +66,31 @@ describe("batched replace_match", () => {
 
       const failure = await toolError(() => match.execute("m2", matchArgs, undefined, undefined, ctx));
       expect(failure).toContain("[E_SUBSTRING_NOT_FOUND]");
+      expect(failure).not.toContain("Aborts batch");
+      expect(await readFile(path, "utf-8")).toBe("alpha\nBETA\ngamma\n");
+    });
+  });
+
+  it("demotes a replace_match whose match spans lines and applies the valid sibling", async () => {
+    await withTempFile("sample.txt", "alpha\nbeta\ngamma\n", async ({ cwd, path }) => {
+      const { handlers, getTool, ctx } = setupIntegrationTest(cwd);
+      const read = getTool("read");
+      const replace = getTool("replace");
+      const match = getTool("replace_match");
+
+      const text = getText(await read.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx));
+      const beta = anchorFor(text, "beta");
+      const gamma = anchorFor(text, "gamma");
+      const replaceArgs = { remove_from: beta, remove_to: beta, text: ["BETA"] };
+      const matchArgs = { replace_from: gamma, replace_to: gamma, match: "beta\ngamma", replacement: "GAMMA" };
+      const message = assistantMessage([toolCall("m1", "replace", replaceArgs), toolCall("m2", "replace_match", matchArgs)]);
+      await handlers.get("message_end")!({ type: "message_end", message }, ctx);
+
+      const first = await replace.execute("m1", replaceArgs, undefined, undefined, ctx);
+      expect(getText(first)).toContain("Batch 1: 1 edit applied");
+
+      const failure = await toolError(() => match.execute("m2", matchArgs, undefined, undefined, ctx));
+      expect(failure).toContain("[E_BAD_SHAPE]");
       expect(failure).not.toContain("Aborts batch");
       expect(await readFile(path, "utf-8")).toBe("alpha\nBETA\ngamma\n");
     });

@@ -1,3 +1,3 @@
-- `replace_match`: `old_string` is only the fragment that changes — never text that `new_string` leaves unchanged; every occurrence inside the range is replaced, so scope the range when only some lines should change.
-- `replace_match`: if `old_string` is everything on the line except indentation and trailing punctuation, that match is the whole line — use `replace`. A shorter fragment repeated on several lines (a value, a name) is the intended multi-line use.
-- `replace_match`: when the change covers whole lines or the whole range, use `replace` with the same anchors and the exact text.
+- `replace_match`: `match` is only the fragment that changes — never text that `replacement` leaves unchanged; every occurrence inside the range is replaced, so narrow the anchors when only some lines should change.
+- `replace_match`: the anchors bound the range searched, and `match`/`replacement` must each stay within one line — a trailing line break is the line's terminator, an interior one belongs to `replace`, and a lone break cannot be a `match`.
+- `replace_match`: when the change covers the whole line, use `replace` with the same anchor and the exact text.

@@ -1,1 +1,1 @@
-Replace part of a line or range by anchor: every `old_string` occurrence inside `replace_from`/`replace_to` becomes `new_string`; the rest of the line stays untouched
+Replace part of a line or range by anchor: every `match` occurrence inside the range becomes `replacement`; the rest of each line stays untouched
