@@ -72,6 +72,10 @@ function linesToPayloadText(lines: string[]): string {
   return lines[lines.length - 1] === "" ? `${joined}\n` : joined;
 }
 
+function fileInheritedEndings(lineCount: number): (LineEnding | undefined)[] {
+  return new Array<LineEnding | undefined>(lineCount).fill(undefined);
+}
+
 const NEAR_MISS_MIN_MATCH_CHARS = 20;
 const NEAR_MISS_MATCH_RATIO = 0.8;
 
@@ -158,7 +162,6 @@ export function buildReplaceMatchEdit(
   const end = Math.max(fromLine, toLine);
   assertBoundaryLinesServed(fileLines, preload.fileHashes, served, start, end, displayPath);
   const rangeLines = fileLines.slice(start - 1, end);
-  const rangeText = linesToPayloadText(rangeLines);
   let count = 0;
   const replacementLines = rangeLines.map((line) => {
     const result = replaceAllOccurrences(line, matchText, replacementText);
@@ -166,7 +169,7 @@ export function buildReplaceMatchEdit(
     return result.text;
   });
   if (count === 0) {
-    throw new Error(notFoundMessage(displayPath, start, end, preload.fileHashes, fileLines, rangeText, matchText));
+    throw new Error(notFoundMessage(displayPath, start, end, preload.fileHashes, fileLines, linesToPayloadText(rangeLines), matchText));
   }
   const replacement = linesToPayloadText(replacementLines);
   const startRef = fromLine <= toLine ? refs.from : refs.to;
@@ -178,7 +181,7 @@ export function buildReplaceMatchEdit(
       remove_to: endRef.hash,
       text: replacement,
     },
-    contentSeparators: replacementLines.map(() => undefined),
+    contentSeparators: fileInheritedEndings(replacementLines.length),
     ...(servedOverride !== undefined ? { servedOverride } : {}),
   };
 }

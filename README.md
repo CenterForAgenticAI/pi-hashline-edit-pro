@@ -223,7 +223,7 @@ After a successful edit, the diff is capped at 50KB. A row over 50KB is shown as
 
 `remove_from` and `remove_to` are accepted as aliases for `replace_from` and `replace_to`.
 
-`match` is matched against the range's text (LF line breaks) and every non-overlapping occurrence is replaced, left to right — since `match` stays within one line, so does each replacement. A missing match is refused with `[E_SUBSTRING_NOT_FOUND]` and the current `anchor│content` rows, so the retry needs no `read`. The two boundary anchors are verified against what was last shown; lines strictly inside the range are searched as they currently stand on disk.
+`match` is matched against each selected line's text (LF line breaks) and every non-overlapping occurrence is replaced, left to right — since `match` stays within one line, so does each replacement. A missing match is refused with `[E_SUBSTRING_NOT_FOUND]` and the current `anchor│content` rows, so the retry needs no `read`. The two boundary anchors are verified against what was last shown; lines strictly inside the range are searched as they currently stand on disk.
 
 In a same-message batch it joins the other calls on its file: the batch validates everything against the pre-batch state and commits once, with one undo. A missing `match` fails that call on its own and is left out of the batch; the rest of the batch still commits. The post-edit diff carries fresh anchors, and the edit is undoable with `undo_last_change`.
 
