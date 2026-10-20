@@ -393,7 +393,7 @@ const grepToolSchema = Type.Object(
     limit: Type.Optional(
       Type.Integer({
         minimum: 1,
-        description: "Maximum number of matched lines to return",
+        description: "Maximum number of matched lines to return (default 100)",
       }),
     ),
   },

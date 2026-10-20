@@ -60,7 +60,7 @@ const replacePrompt = readFileSync(
 
 describe("tool-prompts/replace.md (model-facing contract)", () => {
   it("declares the tool purpose", () => {
-    expect(replacePrompt).toMatch(/Replace a range of lines \(or a single line\) in a text file.*anchors/);
+    expect(replacePrompt).toMatch(/Replace a range of lines \(or a single line\) in a text file by anchor/);
   });
 });
 
@@ -322,13 +322,12 @@ describe("edit prompt flag variants", () => {
     expect(loadGuide("../tool-prompts/replace-match-guidelines.md").some((g) => g.includes("use `replace` with the same anchor"))).toBe(true);
   });
 
-  it("withGrepPrompts drops copy and move when Copy/move is off", () => {
+  it("withGrepPrompts keeps the grep description verbatim for every flag combination", () => {
     const on = withGrepPrompts(grepBase, DEFAULT_EDIT_FLAGS);
-    expect(on.description).toContain("replace, insert, copy, or move");
+    expect(on.description).toBe(grepBase.description);
+    expect(on.description).not.toContain("replace, insert, copy, or move");
     const off = withGrepPrompts(grepBase, { ...DEFAULT_EDIT_FLAGS, copyMoveEnabled: false });
-    expect(off.description).not.toContain("copy");
-    expect(off.description).not.toContain("or move");
-    expect(off.description).toContain("replace or insert");
+    expect(off.description).toBe(grepBase.description);
   });
 
   it("withGrepPrompts keeps the literal-matching and row-marker guidelines", () => {

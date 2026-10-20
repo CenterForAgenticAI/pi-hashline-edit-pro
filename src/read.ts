@@ -320,7 +320,7 @@ function buildReadToolSchema(codemode: boolean) {
 		limit: Type.Optional(
 			Type.Integer({
 				minimum: 1,
-				description: "Maximum number of lines to read from offset",
+				description: "Maximum number of lines to read from offset; counted from the anchor row when `offset` is an anchor",
 			}),
 		),
 		...(codemode

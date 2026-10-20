@@ -190,8 +190,6 @@ Edge cases:
 | `remove_to` | 4-char anchor marking the LAST line to remove (inclusive). |
 | `text` | The exact text to write in place of the removed range, as one string: `""` deletes the range. A trailing line break sets the newline of the last line written instead of adding a blank line; a lone newline writes one blank line. Embedded `\r\n`/`\r`/`\n` are preserved; escapes in the tool call are decoded once when the call is parsed, and the tool then writes the string it receives as-is, never decoding again — `\uXXXX` is the character, `\\uXXXX` the literal text. Legacy arrays are converted to text (elements joined with LF); prefer the string form. |
 
-`replace_from` and `replace_to` are accepted as aliases for `remove_from` and `remove_to`.
-
 Example: read showed `Hasu│old` and `arvm│old2`; to replace both:
 
 ```json
@@ -220,8 +218,6 @@ After a successful edit, the diff is capped at 50KB. A row over 50KB is shown as
 ### replace_match
 
 `replace_match` changes part of a line — or the same fragment on several lines of a range — without retyping the rest. `replace_from` and `replace_to` are bare anchors from served `anchor│content` rows marking the first and last line of the range searched (the same anchor for a single line). `match` is the exact text to find inside that range, and `replacement` replaces every occurrence of it; every other character stays untouched. Both stay within one line: a single trailing line break is accepted as the line's own terminator and dropped, so the file keeps its separator, while a line break anywhere else is refused with `[E_BAD_SHAPE]` (a `match` that is only that trailing line break leaves nothing to find and is refused; in `replacement` it counts as `""` and deletes the matches). Send `match` as only the fragment that changes — never include text that `replacement` leaves unchanged — and use `replace` with the same anchors when the change covers whole lines; if `match` is an entire single-line range except indentation and trailing punctuation, that is a whole-line change. The anchors bound the search, so `match` only needs to be unique inside the selected range, not file-wide. That makes it the tool for a change the request quotes as a substring: a whole-line `replace` has to reproduce the rest of the lines, so a slipped character becomes a wrong byte, while `replace_match` leaves everything the request did not name untouched. It is enabled by default; turn Replace match off in `/hashline-config` to remove the tool.
-
-`remove_from` and `remove_to` are accepted as aliases for `replace_from` and `replace_to`.
 
 `match` is matched against each selected line's text (LF line breaks) and every non-overlapping occurrence is replaced, left to right — since `match` stays within one line, so does each replacement. A missing match is refused with `[E_SUBSTRING_NOT_FOUND]` and the current `anchor│content` rows, so the retry needs no `read`. The two boundary anchors are verified against what was last shown; lines strictly inside the range are searched as they currently stand on disk.
 

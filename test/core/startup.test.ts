@@ -276,7 +276,7 @@ describe("copy/move default", () => {
         expect(getActive()).toContain("move");
         expect(getActive()).not.toContain("edit");
         expect(getTool("undo_last_change").description).toContain("insert, copy, or move");
-        expect(getTool("grep").description).toContain("replace, insert, copy, or move");
+        expect(getTool("grep").description).toContain("anchor│content");
       } finally {
         vi.unstubAllEnvs();
         const { shutdownHashStore } = await import("../../src/hash-store");
@@ -307,7 +307,6 @@ describe("copy/move default", () => {
         expect(getActive()).toContain("read");
         expect(getTool("undo_last_change").description).not.toContain("or move");
         expect(getTool("undo_last_change").description).not.toContain("copy");
-        expect(getTool("grep").description).not.toContain("copy");
       } finally {
         vi.unstubAllEnvs();
         const { shutdownHashStore } = await import("../../src/hash-store");

@@ -80,7 +80,6 @@ const UNDO_WRITE_CLEARS_ID = "undo-write-clears";
 const UNDO_CROSS_FILE_MOVE_ID = "undo-cross-file-move";
 const NEUTRAL_READ_REREAD = "`read`: call again after an edit when you need anchors you lack.";
 const NEUTRAL_UNDO_WRITE_CLEARS = "`undo_last_change`: only the last `replace`/`replace_match`/`insert`/`copy`/`move` per file is undoable; a `write` clears it, so undo before any other edit or write.";
-const GREP_OPS_PHRASE = "replace, insert, copy, or move";
 const UNDO_OPS_PHRASE = "replace, replace_match, insert, copy, or move";
 const UNDO_GUIDELINE_OPS_PHRASE = "`replace`/`replace_match`/`insert`/`copy`/`move`";
 
@@ -181,9 +180,7 @@ function joinOps(ops: string[], options?: { backtick?: boolean; separator?: "/" 
 export function withGrepPrompts(base: { description: string; snippet: string; guidelines: Guideline[] }, flags: EditToolFlags): { description: string; snippet: string; guidelines: string[] } {
   const guidelines = base.guidelines.map((guideline) => guideline.text);
   if (flags.codemode) guidelines.push(GREP_SCRIPT_GUIDELINE);
-  if (flags.copyMoveEnabled) return { description: base.description, snippet: base.snippet, guidelines };
-  const description = base.description.replaceAll(GREP_OPS_PHRASE, joinOps(gatedEditOps(["replace", "insert", "copy", "move"], flags)));
-  return { description, snippet: base.snippet, guidelines };
+  return { description: base.description, snippet: base.snippet, guidelines };
 }
 
 export function withUndoPrompts(base: { description: string; snippet: string; guidelines: Guideline[] }, flags: EditToolFlags): { description: string; snippet: string; guidelines: string[] } {

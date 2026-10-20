@@ -17,7 +17,7 @@ const removeToSchema = Type.String({
   description:
     "4-char anchor of the LAST line to remove.",
 });
-const pathRequiredSchema = Type.String({
+export const pathRequiredSchema = Type.String({
   description:
     "Path to the file the anchors were served for; required and must match anchor ownership.",
 });
@@ -253,15 +253,11 @@ const replaceMatchToSchema = Type.String({
 });
 const replaceMatchMatchSchema = Type.String({
   description:
-    "The exact text to find inside the selected lines, copied from the served row: only the fragment that changes, never text that `replacement` leaves unchanged. It must stay within one line and hold text: a single trailing line break is accepted as the line's own terminator, a line break anywhere else is refused, and a value that is only a line break leaves nothing to find and is refused. Every occurrence inside the range is replaced; the text around each match is left untouched. If `match` is an entire single-line range except indentation and trailing punctuation, that is a whole-line match: use `replace` instead.",
+    "The exact text to find inside the selected lines. It must stay within one line and hold text: a single trailing line break is accepted as the line's own terminator, a line break anywhere else is refused, and a value that is only a line break leaves nothing to find and is refused. Every occurrence inside the range is replaced; the text around each match is left untouched.",
 });
 const replaceMatchReplacementSchema = Type.String({
   description:
     `The exact replacement for every matched occurrence within the range. "" deletes the matches. It must stay within one line: a single trailing line break is accepted and dropped (a value that is only a line break counts as ""), and a line break anywhere else is refused. The rest of each line is kept byte-for-byte.`,
-});
-const replaceMatchPathRequiredSchema = Type.String({
-  description:
-    "Path to the file the anchors were served for; required and must match anchor ownership.",
 });
 
 export const replaceMatchToolSchema = Type.Object(
@@ -278,7 +274,7 @@ export function buildReplaceMatchToolSchema(requirePath: boolean): typeof replac
   if (!requirePath) return replaceMatchToolSchema;
   return Type.Object(
     {
-      path: replaceMatchPathRequiredSchema,
+      path: pathRequiredSchema,
       replace_from: replaceMatchFromSchema,
       replace_to: replaceMatchToSchema,
       match: replaceMatchMatchSchema,

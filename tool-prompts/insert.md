@@ -1,1 +1,1 @@
-Insert text after or before one existing line, addressed by `anchor` (a bare anchor from any served `anchor│content` row). `direction` places `text` after or before the anchor line; `text` is the exact text to insert.
+Insert text next to an existing line without removing anything. The anchor line stays in place, and `anchor` is a bare 4-character anchor from any served `anchor│content` row.

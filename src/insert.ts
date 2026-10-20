@@ -11,7 +11,7 @@ import type { LineEnding } from "./normalize";
 import { stripAnchorRow } from "./hashline/resolve";
 import { withAnchorSession } from "./anchor-registry";
 import { loadP, loadGuidelines } from "./prompts";
-import { assertInsertReq, normReq, type InsertReq } from "./payload-contract";
+import { assertInsertReq, normReq, pathRequiredSchema, type InsertReq } from "./payload-contract";
 import { anchorCarryIndex, isRec, literalEscapeHints, splitLines } from "./utils";
 import { queuedEdit, editToolBase, editRenderCallWrapper, editRenderResultWrapper, resolveEditTargetWithRequirement, throwIfStrictInput, withInsertPrompts, DEFAULT_EDIT_FLAGS, type EditToolFlags } from "./edit-common";
 import type { RPreview, RRState } from "./replace-render";
@@ -32,11 +32,6 @@ const insertTextSchema = Type.String({
     `The exact text to insert; an empty string inserts one blank line. ${TEXT_ENDING_NOTE} Never include the anchor line.`,
 });
 
-const insertPathRequiredSchema = Type.String({
-  description:
-    "Path to the file the anchor was served for; required and must match anchor ownership.",
-});
-
 const insertToolSchema = Type.Object(
   {
     anchor: insertAnchorSchema,
@@ -50,7 +45,7 @@ export function buildInsertToolSchema(requirePath: boolean): typeof insertToolSc
   if (!requirePath) return insertToolSchema;
   return Type.Object(
     {
-      path: insertPathRequiredSchema,
+      path: pathRequiredSchema,
       anchor: insertAnchorSchema,
       direction: insertDirectionSchema,
       text: insertTextSchema,
