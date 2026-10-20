@@ -253,7 +253,7 @@ const replaceMatchToSchema = Type.String({
 });
 const replaceMatchMatchSchema = Type.String({
   description:
-    "The exact text to find inside the selected lines. It must stay within one line and hold text: a single trailing line break is accepted as the line's own terminator, a line break anywhere else is refused, and a value that is only a line break leaves nothing to find and is refused. Every occurrence inside the range is replaced; the text around each match is left untouched.",
+    "The exact text to find inside the selected lines, copied from the served row: only the fragment that changes, never text that `replacement` leaves unchanged. It must stay within one line and hold text: a single trailing line break is accepted as the line's own terminator, a line break anywhere else is refused, and a value that is only a line break leaves nothing to find and is refused. Every occurrence inside the range is replaced; the text around each match is left untouched.",
 });
 const replaceMatchReplacementSchema = Type.String({
   description:

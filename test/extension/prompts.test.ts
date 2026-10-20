@@ -325,7 +325,7 @@ describe("edit prompt flag variants", () => {
   it("withGrepPrompts keeps the grep description verbatim for every flag combination", () => {
     const on = withGrepPrompts(grepBase, DEFAULT_EDIT_FLAGS);
     expect(on.description).toBe(grepBase.description);
-    expect(on.description).not.toContain("replace, insert, copy, or move");
+    expect(on.description).toContain("editable with replace, insert, copy, or move without a new read");
     const off = withGrepPrompts(grepBase, { ...DEFAULT_EDIT_FLAGS, copyMoveEnabled: false });
     expect(off.description).toBe(grepBase.description);
   });

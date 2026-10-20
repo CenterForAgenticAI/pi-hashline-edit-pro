@@ -91,7 +91,7 @@ function batchGuideline(flags: EditToolFlags): string {
   const tools = operationNames(SHARED_EDIT_OPS, flags);
   const outcome = flags.autoRead ? "diff" : "result";
   const script = flags.codemode ? ` ${SCRIPT_BATCH_GUIDELINE}` : "";
-  return `${tools}: same-file calls in one message commit as one batch; earlier calls reply \`In batch N (queued)\`, the last shows the combined ${outcome}, and one undo reverts all. A request-invalid call (anchors, shape, or \`match\`) fails alone; a failure while the batch runs aborts it.${script}`;
+  return `${tools}: same-file calls in one message commit as one batch. If you already know all the edits and their anchors, send them together instead of one turn at a time; an edit that needs anchors from a previous result waits for the next turn. Earlier calls reply \`In batch N (queued)\`, the last shows the combined ${outcome}, and one undo reverts all. A request-invalid call (anchors, shape, or \`match\`) fails alone; a failure while the batch runs aborts it.${script}`;
 }
 
 function diffGuideline(flags: EditToolFlags): string {
