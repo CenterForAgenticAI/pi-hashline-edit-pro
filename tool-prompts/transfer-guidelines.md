@@ -1,4 +1,4 @@
-- `copy`/`move`: only the source's two boundary rows and the destination line need serving; to append to the end of a file, anchor that file's last line with `direction: "after"` — not a marker line and not the block's own end.
+- `copy`/`move`: only the first and last marker rows and the destination line need anchors — grep the markers, the body is copied; to append to the end of a file, anchor that file's last line with `direction: "after"`.
 - `copy`/`move`: within one file the insertion point must fall before the source range's first line or after its last; anchoring the block's last line with `direction: "after"` (or its first line with `direction: "before"`) targets the gap right beside the block.
 - `copy`/`move`: `source_from` and `source_to` may live in a different file than `anchor`; an empty destination file is seeded with the copied or moved lines.
 - `move`: a batched cross-file move does not display the source file's diff; its removal commits with the batch, and the source file needs a read for fresh anchors.

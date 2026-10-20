@@ -96,7 +96,7 @@ function batchGuideline(flags: EditToolFlags): string {
 
 function diffGuideline(flags: EditToolFlags): string {
   const tools = operationNames(SHARED_DIFF_OPS, flags);
-  return `${tools}: in the post-edit diff, \`-anchor│\` rows are dead anchors; \`+anchor│\` and \` anchor│\` rows carry live anchors for the next edit.`;
+  return `${tools}: in the post-edit diff, \`-anchor│\` rows are dead anchors; \`+anchor│\` and \` anchor│\` rows carry live anchors for the next edit. Rows the diff does not show keep their anchors, so a follow-up edit on them needs no re-read.`;
 }
 
 function pathGuideline(flags: EditToolFlags): string {

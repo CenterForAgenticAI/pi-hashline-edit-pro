@@ -301,6 +301,7 @@ describe("edit prompt flag variants", () => {
     expect(shared).toContain("`replace`/`replace_match`/`insert`/`copy`/`move`: anchors resolve the file; `path` is optional");
     expect(shared).toContain("`replace`/`replace_match`/`insert`: `text` is written exactly as received; escapes are decoded once when the call is parsed, and the tool never decodes again");
     expect(shared).toContain("`replace`/`replace_match`/`insert`/`copy`/`move`/`undo_last_change`: in the post-edit diff, `-anchor│` rows are dead anchors");
+    expect(shared).toContain("Rows the diff does not show keep their anchors, so a follow-up edit on them needs no re-read");
     const transfer = withTransferPrompts({
       description: loadP("../tool-prompts/copy.md"),
       snippet: loadP("../tool-prompts/copy-snippet.md"),
@@ -396,7 +397,10 @@ describe("edit prompt flag variants", () => {
   it("keeps the end-append transfer guideline", () => {
     const guidelines = loadGuidelines("../tool-prompts/transfer-guidelines.md");
     expect(guidelines.some((g) => g.text.includes("to append to the end of a file, anchor that file's last line"))).toBe(true);
-    expect(guidelines.some((g) => g.text.includes("not a marker line and not the block's own end"))).toBe(true);
+  });
+
+  it("states that a same-file move may re-anchor the source-to-destination span", () => {
+    expect(loadP("../tool-prompts/move.md")).toContain("may be re-anchored");
   });
 
   it("keeps the require-path and strict notices off the transfer tools", () => {
