@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fidelityHints, formatCharEscape, isFidelitySensitiveChar } from "../../src/edit-fidelity";
+import { dedupeLiteralEscapeHints, fidelityHints, formatCharEscape, isFidelitySensitiveChar } from "../../src/edit-fidelity";
 import type { DiffSpan } from "../../src/replace-diff";
 
 const ZWSP = "\u200b";
@@ -503,5 +503,27 @@ describe("fidelityHints", () => {
     expect(hints).toHaveLength(1);
     expect(hints[0]).toContain("[H_TRAILING_WHITESPACE]");
     expect(hints[0]).toContain("Bbbb│ had 2.");
+  });
+});
+
+describe("dedupeLiteralEscapeHints", () => {
+  it("suppresses a lost hint when a literal-escape hint names the same row and escape", () => {
+    const hints = [
+      String.raw`[H_LITERAL_ESCAPE] text: "\u200b" written as literal text (Zbbb│ col 4).`,
+      String.raw`[H_UNICODE_LOST] Zbbb│ missing "\u200b"; Aaaa│ has it at col 7.`,
+      String.raw`[H_UNICODE_LOST] Zccc│ missing "\u200b"; Aaaa│ has it at col 7.`,
+      String.raw`[H_LITERAL_ESCAPE] match: "\u2060" written as literal text (Zddd│ col 2).`,
+      String.raw`[H_UNICODE_LOST] Zddd│ missing "\u2060"; Aaaa│ has it at col 3.`,
+    ];
+    expect(dedupeLiteralEscapeHints(hints)).toEqual([hints[0], hints[2], hints[3]]);
+  });
+
+  it("keeps a hint when the escape differs or the row has no literal-escape match", () => {
+    const hints = [
+      String.raw`[H_LITERAL_ESCAPE] text: "\u200b" written as literal text (Zbbb│ col 4).`,
+      String.raw`[H_UNICODE_LOST] Zbbb│ missing "\u2060"; Aaaa│ has it at col 7.`,
+      String.raw`[H_UNICODE_LOST] Zccc│ missing "\u200b"; Aaaa│ has it at col 7.`,
+    ];
+    expect(dedupeLiteralEscapeHints(hints)).toEqual(hints);
   });
 });

@@ -269,6 +269,31 @@ describe("buildChanged", () => {
     expect(hint).toContain(`${resultHashes[1]}│ col 7`);
   });
 
+  it("drops the lost-character hint when a literal-escape hint names the same row", async () => {
+    const original = "aaa\nbbb\nccc\n";
+    const result = "aaa\nBBB\nccc\n";
+    const originalHashes = await lineHashes(original, home.testPath);
+    const resultHashes = await lineHashes(result, home.testPath);
+    const output = buildChanged({
+      path: "test.txt",
+      originalNormalized: original,
+      originalHashes,
+      result,
+      resultHashes,
+      warnings: [
+        String.raw`[H_LITERAL_ESCAPE] text: "\u200b" written as literal text (Zbbb│ col 4).`,
+        String.raw`[H_UNICODE_LOST] Zbbb│ missing "\u200b"; Aaaa│ has it at col 7.`,
+      ],
+      snapshotId: "snap1",
+      editMeta: { editsAttempted: 1, noopEditsCount: 0, firstChangedLine: 2, lastChangedLine: 2, addedLines: 1, removedLines: 1 },
+      spans: [{ start: 1, end: 1, replacementCount: 1 }],
+    });
+    const hints = output.details.hints ?? [];
+    expect(hints.some((hint) => hint.includes("[H_LITERAL_ESCAPE]"))).toBe(true);
+    expect(hints.some((hint) => hint.includes("[H_UNICODE_LOST]"))).toBe(false);
+    expect(output.content[0].text).not.toContain("[H_UNICODE_LOST]");
+  });
+
   it("replaces the anchor list with the recovery when many rows carry the literal escape", async () => {
     const original = "aaa\nbbb\nccc\n";
     const result = "aaa\nrow-0 stable\\u200bCheckout\nrow-1 stable\\u200bCheckout\nrow-2 stable\\u200bCheckout\nrow-3 stable\\u200bCheckout\nccc\n";

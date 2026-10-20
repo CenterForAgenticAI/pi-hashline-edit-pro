@@ -396,6 +396,25 @@ export function annotateLiteralEscapeHints(
   });
 }
 
+const LITERAL_ESCAPE_DETAIL_RE = /^\[H_LITERAL_ESCAPE\] [^:]*: "(.*?)" written as literal text(?: \((.*)\))?\.?$/;
+const LITERAL_ESCAPE_ANCHOR_RE = /([A-Za-z]{4})│/g;
+const UNICODE_LOST_DETAIL_RE = /^\[H_UNICODE_LOST\] ([A-Za-z]{4})│ missing "([^"]*)"/;
+
+export function dedupeLiteralEscapeHints(hints: readonly string[]): string[] {
+  const suppressed = new Set<string>();
+  for (const hint of hints) {
+    const literal = LITERAL_ESCAPE_DETAIL_RE.exec(hint);
+    if (literal === null) continue;
+    const escape = literal[1] ?? "";
+    for (const anchor of (literal[2] ?? "").matchAll(LITERAL_ESCAPE_ANCHOR_RE)) suppressed.add(`${anchor[1]}\0${escape}`);
+  }
+  if (suppressed.size === 0) return [...hints];
+  return hints.filter((hint) => {
+    const lost = UNICODE_LOST_DETAIL_RE.exec(hint);
+    return lost === null || !suppressed.has(`${lost[1]}\0${lost[2]}`);
+  });
+}
+
 function separatorLostHint(oldLines: string[], span: DiffSpan, originalHashes?: readonly string[]): string | undefined {
   if (span.replacementCount !== 0 || span.end < span.start) return undefined;
   const beforeIndex = span.start - 1;

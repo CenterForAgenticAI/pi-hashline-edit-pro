@@ -2,7 +2,7 @@ import { HASH_SEP, type NEdit } from "./hashline";
 import type { ReplaceDetails } from "./replace";
 import { genDiff, genPatch, type DiffSpan } from "./replace-diff";
 import { visLines, clipLine } from "./utils";
-import { annotateLiteralEscapeHints, fidelityHints } from "./edit-fidelity";
+import { annotateLiteralEscapeHints, dedupeLiteralEscapeHints, fidelityHints } from "./edit-fidelity";
 import { anchoredLine, anchoredLinesFromDiff, diffAnchorsOmitted, toEditVerb, type EditStructured, type EditVerb, type Json } from "./structured";
 
 export type TResult = {
@@ -164,7 +164,8 @@ export function buildChanged(input: SuccessInput, verb = "replaced", diffContext
   });
   const { warnings: noticeWarnings, hints } = splitNotices(fidelity.length > 0 ? [...(warnings ?? []), ...fidelity] : warnings);
   const annotatedHints = annotateLiteralEscapeHints(hints, result, spans, resultHashes);
-  const noticesBlock = `${warnBlock(noticeWarnings)}${hintBlock(annotatedHints)}`;
+  const dedupedHints = dedupeLiteralEscapeHints(annotatedHints);
+  const noticesBlock = `${warnBlock(noticeWarnings)}${hintBlock(dedupedHints)}`;
   const successPrefix = `Successfully ${verb} in ${path}.`;
   const lineSummary = addedLines > 0 || removedLines > 0
     ? ` Added ${addedLines} line(s), removed ${removedLines} line(s).`
@@ -203,7 +204,7 @@ export function buildChanged(input: SuccessInput, verb = "replaced", diffContext
 		text,
 		diff: diffResult.diff,
 		warnings: [...noticeWarnings],
-		hints: [...annotatedHints],
+		hints: [...dedupedHints],
 		firstChangedLine: editMeta.firstChangedLine ?? diffResult.firstChangedLine ?? null,
 		anchors,
 		anchorsOmitted,
@@ -220,7 +221,7 @@ export function buildChanged(input: SuccessInput, verb = "replaced", diffContext
       metrics,
       diffLineNumbers: diffResult.lineNumbers.map((line) => line ?? null),
       ...(noticeWarnings.length ? { warnings: [...noticeWarnings] } : {}),
-      ...(annotatedHints.length ? { hints: [...annotatedHints] } : {}),
+      ...(dedupedHints.length ? { hints: [...dedupedHints] } : {}),
     },
     structuredContent,
   };
