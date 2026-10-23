@@ -94,9 +94,9 @@ export function parseTransferAnchors(req: TransferReq): { refs: TransferRefs; wa
   const destination = stripAnchorRow(req.anchor.trim(), "anchor entry", warnings);
   return {
     refs: {
-      sourceFrom: parseHashRef(from),
-      sourceTo: parseHashRef(to),
-      anchor: parseHashRef(destination),
+      sourceFrom: parseHashRef(from, warnings, "source_from"),
+      sourceTo: parseHashRef(to, warnings, "source_to"),
+      anchor: parseHashRef(destination, warnings, "anchor"),
       direction: req.direction,
     },
     warnings,
@@ -890,15 +890,15 @@ function getTransferInput(args: unknown): { path?: string; source_from?: string;
 
 const transferSourceFromSchema = Type.String({
   description:
-    "4-char anchor of the FIRST source line to copy.",
+    "5-char anchor of the FIRST source line to copy.",
 });
 const transferSourceToSchema = Type.String({
   description:
-    "4-char anchor of the LAST source line to copy.",
+    "5-char anchor of the LAST source line to copy.",
 });
 const transferAnchorSchema = Type.String({
   description:
-    "4-char anchor of the destination line; the block lands before or after it and it may live in another file.",
+    "5-char anchor of the destination line; the block lands before or after it and it may live in another file.",
 });
 const transferDirectionSchema = Type.Union(
   [Type.Literal("after"), Type.Literal("before")],

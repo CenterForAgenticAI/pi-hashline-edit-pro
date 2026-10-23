@@ -107,7 +107,7 @@ describe("planAssistantMessage", () => {
       await planAssistantMessage(
         assistantMessage([
           toolCall("c1", "replace", { remove_from: hashes[0], remove_to: hashes[0], text: ["x"] }),
-          toolCall("c2", "replace", { remove_from: "ZZZZ", remove_to: "ZZZZ", text: ["y"] }),
+          toolCall("c2", "replace", { remove_from: "zzzzx", remove_to: "zzzzx", text: ["y"] }),
         ]),
         cwd,
       );

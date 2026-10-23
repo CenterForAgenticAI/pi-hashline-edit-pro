@@ -13,40 +13,40 @@ beforeAll(async () => {
 
 describe("write-hook findServedHashEcho", () => {
   it("returns undefined when served set is empty", () => {
-    expect(findServedHashEcho("ATIm│hello\n", new Set())).toBeUndefined();
+    expect(findServedHashEcho("atimx│hello\n", new Set())).toBeUndefined();
   });
   it("returns undefined when no line matches served hash", () => {
-    expect(findServedHashEcho("ATIm│hello\n", new Set(["xY9"]))).toBeUndefined();
+    expect(findServedHashEcho("atimx│hello\n", new Set(["xY9"]))).toBeUndefined();
   });
   it("returns first matching line and hash", () => {
-    const served = new Set(["ATIm", "ioor"]);
-    const content = "zzz\nioor│second\nHasu│third\n";
+    const served = new Set(["atimx", "ioorx"]);
+    const content = "zzz\nioorx│second\nhasux│third\n";
     const result = findServedHashEcho(content, served);
-    expect(result).toEqual({ line: 2, hash: "ioor" });
+    expect(result).toEqual({ line: 2, hash: "ioorx" });
   });
   it("matches a hash at the start of a row, not inside content", () => {
-    const served = new Set(["ATIm"]);
-    expect(findServedHashEcho(" xx ATIm│hello\n", served)).toBeUndefined();
-    expect(findServedHashEcho("ATIm│hello\n", served)).toEqual({ line: 1, hash: "ATIm" });
+    const served = new Set(["atimx"]);
+    expect(findServedHashEcho(" xx atimx│hello\n", served)).toBeUndefined();
+    expect(findServedHashEcho("atimx│hello\n", served)).toEqual({ line: 1, hash: "atimx" });
   });
   it("handles empty content", () => {
-    expect(findServedHashEcho("", new Set(["ATIm"]))).toBeUndefined();
+    expect(findServedHashEcho("", new Set(["atimx"]))).toBeUndefined();
   });
   it("matches copied diff-preview rows", () => {
-    const served = new Set(["ATIm"]);
-    expect(findServedHashEcho("+ATIm│hello\n", served)).toEqual({ line: 1, hash: "ATIm" });
-    expect(findServedHashEcho(" ATIm│hello\n", served)).toEqual({ line: 1, hash: "ATIm" });
-    expect(findServedHashEcho("-ATIm│hello\n", served)).toEqual({ line: 1, hash: "ATIm" });
+    const served = new Set(["atimx"]);
+    expect(findServedHashEcho("+atimx│hello\n", served)).toEqual({ line: 1, hash: "atimx" });
+    expect(findServedHashEcho(" atimx│hello\n", served)).toEqual({ line: 1, hash: "atimx" });
+    expect(findServedHashEcho("-atimx│hello\n", served)).toEqual({ line: 1, hash: "atimx" });
   });
   it("matches numbered grep rows", () => {
-    const served = new Set(["ioor"]);
-    expect(findServedHashEcho("12 │ ioor│second\n", served)).toEqual({ line: 1, hash: "ioor" });
-    expect(findServedHashEcho("  3 │ ioor│second\n", served)).toEqual({ line: 1, hash: "ioor" });
-    expect(findServedHashEcho("12:│ ioor│second\n", served)).toEqual({ line: 1, hash: "ioor" });
-    expect(findServedHashEcho("  3-│ ioor│second\n", served)).toEqual({ line: 1, hash: "ioor" });
+    const served = new Set(["ioorx"]);
+    expect(findServedHashEcho("12 │ ioorx│second\n", served)).toEqual({ line: 1, hash: "ioorx" });
+    expect(findServedHashEcho("  3 │ ioorx│second\n", served)).toEqual({ line: 1, hash: "ioorx" });
+    expect(findServedHashEcho("12:│ ioorx│second\n", served)).toEqual({ line: 1, hash: "ioorx" });
+    expect(findServedHashEcho("  3-│ ioorx│second\n", served)).toEqual({ line: 1, hash: "ioorx" });
   });
   it("ignores padded deletion rows without a hash", () => {
-    expect(findServedHashEcho("-    │hello\n", new Set(["ATIm"]))).toBeUndefined();
+    expect(findServedHashEcho("-     │hello\n", new Set(["atimx"]))).toBeUndefined();
   });
 });
 
@@ -55,7 +55,7 @@ describe("write-hook servedHashEchoDenial", () => {
     await withTempDir("pi-hashline-writehook-test-", async () => {
       const dir = await mkdtemp(join(await getWritableTempRoot(), "writehook-no-served-"));
       try {
-        const result = await servedHashEchoDenial("test.txt", "ATIm│hello\n", dir);
+        const result = await servedHashEchoDenial("test.txt", "atimx│hello\n", dir);
         expect(result).toBeUndefined();
       } finally {
         await rm(dir, { recursive: true, force: true });
@@ -69,7 +69,7 @@ describe("write-hook servedHashEchoDenial", () => {
         const filePath = join(dir, "test.txt");
         await writeFile(filePath, "hello\n", "utf-8");
         await initRegistry(join(dir, "session.jsonl"));
-        adoptAnchors(filePath, new Map([["ATIm", "ATIm"]]));
+        adoptAnchors(filePath, new Map([["atimx", "atimx"]]));
         const result = await servedHashEchoDenial("test.txt", "clean content\n", dir);
         expect(result).toBeUndefined();
       } finally {
@@ -84,10 +84,10 @@ describe("write-hook servedHashEchoDenial", () => {
         const filePath = join(dir, "test.txt");
         await writeFile(filePath, "hello\n", "utf-8");
         await initRegistry(join(dir, "session.jsonl"));
-        adoptAnchors(filePath, new Map([["ATIm", "ATIm"]]));
-        const result = await servedHashEchoDenial("test.txt", "ATIm│copied\n", dir);
+        adoptAnchors(filePath, new Map([["atimx", "atimx"]]));
+        const result = await servedHashEchoDenial("test.txt", "atimx│copied\n", dir);
         expect(result).toContain("[E_WRITE_HASH_ECHO]");
-        expect(result).toContain("ATIm│");
+        expect(result).toContain("atimx│");
       } finally {
         await rm(dir, { recursive: true, force: true });
       }
@@ -99,7 +99,7 @@ describe("write-hook servedHashEchoDenial", () => {
       try {
         const controller = new AbortController();
         controller.abort();
-        await expect(servedHashEchoDenial("test.txt", "ATIm│hello\n", dir, controller.signal)).rejects.toThrow("Operation aborted");
+        await expect(servedHashEchoDenial("test.txt", "atimx│hello\n", dir, controller.signal)).rejects.toThrow("Operation aborted");
       } finally {
         await rm(dir, { recursive: true, force: true });
       }
@@ -113,7 +113,7 @@ describe("write-hook servedHashEchoDenial", () => {
         await writeFile(filePath, "hello\n", "utf-8");
         await initRegistry(join(dir, "session.jsonl"));
         adoptAnchors(filePath, new Map());
-        const result = await servedHashEchoDenial("empty.txt", "ATIm│hello\n", dir);
+        const result = await servedHashEchoDenial("empty.txt", "atimx│hello\n", dir);
         expect(result).toBeUndefined();
       } finally {
         await rm(dir, { recursive: true, force: true });
@@ -161,11 +161,11 @@ describe("write-hook registerWriteHook", () => {
         const filePath = join(dir, "blocked.txt");
         await writeFile(filePath, "hello\n", "utf-8");
         await initRegistry(join(dir, "session.jsonl"));
-        adoptAnchors(filePath, new Map([["ATIm", "ATIm"]]));
+        adoptAnchors(filePath, new Map([["atimx", "atimx"]]));
         const { pi, handlers } = makePi();
         registerWriteHook(pi);
         const handler = handlers.get("tool_call") as (event: unknown, ctx: unknown) => Promise<unknown>;
-        const result = await handler({ toolName: "write", input: { path: "blocked.txt", content: "ATIm│echo\n" } }, { cwd: dir, signal: undefined });
+        const result = await handler({ toolName: "write", input: { path: "blocked.txt", content: "atimx│echo\n" } }, { cwd: dir, signal: undefined });
         expect(result).toEqual(expect.objectContaining({ block: true, reason: expect.stringContaining("[E_WRITE_HASH_ECHO]") }));
       } finally {
         await rm(dir, { recursive: true, force: true });
@@ -179,7 +179,7 @@ describe("write-hook registerWriteHook", () => {
         const filePath = join(dir, "allowed.txt");
         await writeFile(filePath, "hello\n", "utf-8");
         await initRegistry(join(dir, "session.jsonl"));
-        adoptAnchors(filePath, new Map([["ATIm", "ATIm"]]));
+        adoptAnchors(filePath, new Map([["atimx", "atimx"]]));
         const { pi, handlers } = makePi();
         registerWriteHook(pi);
         const handler = handlers.get("tool_call") as (event: unknown, ctx: unknown) => Promise<unknown>;
@@ -197,11 +197,11 @@ describe("write-hook registerWriteHook", () => {
         const filePath = join(dir, "alias.txt");
         await writeFile(filePath, "hello\n", "utf-8");
         await initRegistry(join(dir, "session.jsonl"));
-        adoptAnchors(filePath, new Map([["ATIm", "ATIm"]]));
+        adoptAnchors(filePath, new Map([["atimx", "atimx"]]));
         const { pi, handlers } = makePi();
         registerWriteHook(pi);
         const handler = handlers.get("tool_call") as (event: unknown, ctx: unknown) => Promise<unknown>;
-        const result = await handler({ toolName: "write", input: { file_path: "alias.txt", content: "ATIm│echo\n" } }, { cwd: dir, signal: undefined });
+        const result = await handler({ toolName: "write", input: { file_path: "alias.txt", content: "atimx│echo\n" } }, { cwd: dir, signal: undefined });
         expect(result).toBeUndefined();
       } finally {
         await rm(dir, { recursive: true, force: true });
@@ -212,7 +212,7 @@ describe("write-hook registerWriteHook", () => {
     const { pi, handlers } = makePi();
     registerWriteHook(pi);
     const handler = handlers.get("tool_call") as (event: unknown, ctx: unknown) => Promise<unknown>;
-    const result = await handler({ toolName: "write", input: { path: "missing.txt", content: "ATIm│hello\n" } }, { cwd: "/nonexistent_xyz", signal: undefined });
+    const result = await handler({ toolName: "write", input: { path: "missing.txt", content: "atimx│hello\n" } }, { cwd: "/nonexistent_xyz", signal: undefined });
     expect(result).toBeUndefined();
   });
   it("rethrows abort errors", async () => {

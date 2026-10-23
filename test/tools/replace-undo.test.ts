@@ -23,7 +23,7 @@ async function servedAnchors(getTool: (name: string) => any, ctx: any, name: str
   const read = await getTool("read").execute(`srv-${name}`, { path: name }, undefined, undefined, ctx);
   return getText(read)
     .split("\n")
-    .filter((line) => /^[A-Za-z]{4}│/.test(line))
+    .filter((line) => /^[a-z]{5}│/.test(line))
     .map(extractHash);
 }
 
@@ -176,7 +176,7 @@ describe("undo_last_change", () => {
       const readPost = await getTool("read").execute("srv-post", { path: "sample.ts" }, undefined, undefined, ctx);
       const postHashes = getText(readPost)
         .split("\n")
-        .filter((line) => /^[A-Za-z]{4}│/.test(line))
+        .filter((line) => /^[a-z]{5}│/.test(line))
         .map(extractHash);
       const undoResult = await undo.execute(
         "u1",

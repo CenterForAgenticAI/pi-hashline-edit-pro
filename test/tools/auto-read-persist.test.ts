@@ -36,7 +36,7 @@ describe("auto-read after write persists the snapshot", () => {
       const shown = result.content[1]!.text;
       const shownAnchors = shown
         .split("\n")
-        .map((row) => /^([A-Za-z]{4})│/.exec(row)?.[1])
+        .map((row) => /^([a-z]{5})│/.exec(row)?.[1])
         .filter((anchor): anchor is string => typeof anchor === "string");
       expect(shownAnchors).toHaveLength(2);
 

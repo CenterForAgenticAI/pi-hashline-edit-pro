@@ -754,7 +754,7 @@ describe("same-turn edit batches", () => {
       const lastText = last.content[0].text as string;
       expect(lastText).toContain("File is empty. Use replace on ");
       expect(await readFile(path, "utf-8")).toBe("");
-      const emptyAnchor = lastText.match(/([A-Za-z]{4})│/)![1]!;
+      const emptyAnchor = lastText.match(/([a-z]{5})│/)![1]!;
       expect(emptyAnchor).not.toBe(aRef);
 
       await (handlers.get("turn_end")!(

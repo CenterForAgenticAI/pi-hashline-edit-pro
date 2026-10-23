@@ -44,8 +44,8 @@ describe("gap mkMdTheme", () => {
 
 describe("gap payload contract", () => {
   it("rejects non-string path", () => {
-    expect(() => assertReq({ path: 42, remove_from: "Hasu", remove_to: "Hasu", text: [] })).toThrow("[E_BAD_SHAPE]");
-    expect(() => assertInsertReq({ path: 42, anchor: "Hasu", direction: "after", text: [] })).toThrow("[E_BAD_SHAPE]");
+    expect(() => assertReq({ path: 42, remove_from: "hasux", remove_to: "hasux", text: [] })).toThrow("[E_BAD_SHAPE]");
+    expect(() => assertInsertReq({ path: 42, anchor: "hasux", direction: "after", text: [] })).toThrow("[E_BAD_SHAPE]");
   });
   it("covers getPreviewInput catch via throwing getter", () => {
     const evil = {};
@@ -61,21 +61,21 @@ describe("gap payload contract", () => {
 
 describe("gap resolve", () => {
   it("throws on misaligned inputs", () => {
-    expect(() => valEdit({ content_lines: [], hash_bounds: [{ hash: "Hasu" }, { hash: "Hasu" }] }, ["a"], ["x", "y"], [], undefined)).toThrow("must match");
+    expect(() => valEdit({ content_lines: [], hash_bounds: [{ hash: "hasux" }, { hash: "hasux" }] }, ["a"], ["x", "y"], [], undefined)).toThrow("must match");
     expect(() => fmtRegion(["a"], ["x", "y"])).toThrow("must match");
   });
   it("rejects non-string anchors in resEdit", () => {
-    expect(() => resEdit({ text: [], remove_from: 42 as unknown as string, remove_to: "Hasu" })).toThrow("remove_from");
-    expect(() => resEdit({ text: [], remove_from: "Hasu", remove_to: 42 as unknown as string })).toThrow("remove_to");
+    expect(() => resEdit({ text: [], remove_from: 42 as unknown as string, remove_to: "hasux" })).toThrow("remove_from");
+    expect(() => resEdit({ text: [], remove_from: "hasux", remove_to: 42 as unknown as string })).toThrow("remove_to");
   });
   it("throws AnchorMismatchError for unknown anchor", () => {
-    expect(() => resolveAnchorLine({ hash: "ZZZZ" }, ["a"], ["Hasu"], undefined)).toThrow("[E_STALE_ANCHOR]");
+    expect(() => resolveAnchorLine({ hash: "zzzzx" }, ["a"], ["hasux"], undefined)).toThrow("[E_STALE_ANCHOR]");
   });
 });
 
 describe("gap apply and hashes", () => {
   it("requires precomputed hashes", () => {
-    expect(() => applyEdit("a", { content_lines: ["b"], hash_bounds: [{ hash: "Hasu" }, { hash: "Hasu" }] })).toThrow("[E_BAD_SHAPE]");
+    expect(() => applyEdit("a", { content_lines: ["b"], hash_bounds: [{ hash: "hasux" }, { hash: "hasux" }] })).toThrow("[E_BAD_SHAPE]");
   });
   it("hashes without path", async () => {
     const hashes = await lineHashes("a\nb");
@@ -140,9 +140,9 @@ describe("gap read rendering", () => {
     expect(missing).toBeDefined();
     const errCtx = tool.renderResult({ content: [{ type: "text", text: "boom" }] }, { isPartial: false }, theme, { isError: true });
     expect(errCtx).toBeDefined();
-    const collapsed = tool.renderResult({ content: [{ type: "text", text: "Hasu│hi" }] }, { isPartial: false }, theme, { expanded: false });
+    const collapsed = tool.renderResult({ content: [{ type: "text", text: "hasux│hi" }] }, { isPartial: false }, theme, { expanded: false });
     expect(collapsed).toBeDefined();
-    const expanded = tool.renderResult({ content: [{ type: "text", text: "Hasu│hi" }] }, { isPartial: false, expanded: true }, theme, { expanded: false, args: { offset: 3 }, state: {} });
+    const expanded = tool.renderResult({ content: [{ type: "text", text: "hasux│hi" }] }, { isPartial: false, expanded: true }, theme, { expanded: false, args: { offset: 3 }, state: {} });
     expect(expanded).toBeDefined();
   });
 });
@@ -152,7 +152,7 @@ describe("gap insert preview", () => {
     await withTempDir("insert-gap-", async (dir) => {
       const controller = new AbortController();
       controller.abort();
-      await expect(insertPreview({ anchor: "Hasu", direction: "after", text: ["x"] }, dir, controller.signal)).rejects.toThrow();
+      await expect(insertPreview({ anchor: "hasux", direction: "after", text: ["x"] }, dir, controller.signal)).rejects.toThrow();
     });
   });
   it("covers getInsertInput via renderCall", async () => {
@@ -187,7 +187,7 @@ describe("gap commit guards", () => {
         originalEnding: "\n" as const,
         hadUtf8DecodeErrors: false,
         warnings: [],
-        originalHashes: ["Hasu"],
+        originalHashes: ["hasux"],
         resultHashes: ["arvm"],
         totalAddedLines: 1,
         totalRemovedLines: 1,
@@ -208,7 +208,7 @@ describe("gap commit guards", () => {
         originalEnding: "\n" as const,
         hadUtf8DecodeErrors: false,
         warnings: [],
-        originalHashes: ["Hasu"],
+        originalHashes: ["hasux"],
         resultHashes: ["arvm"],
         totalAddedLines: 1,
         totalRemovedLines: 1,

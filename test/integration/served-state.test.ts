@@ -12,7 +12,7 @@ async function servedFor(cwd: string, name: string): Promise<Map<string, string>
 }
 
 function feedbackRows(message: string): string[] {
-  return message.split("\n").filter((line) => /^[A-Za-z]{4}│/.test(line));
+  return message.split("\n").filter((line) => /^[a-z]{5}│/.test(line));
 }
 
 beforeEach(async () => {
@@ -108,9 +108,9 @@ describe("served-state range verification", () => {
       expect(staleError).toMatch(/E_STALE_ANCHOR/);
       expect(staleError).toContain("Current context around resolved anchor");
 
-      const contextRow = staleError.split("\n").find((l: string) => /^  +[0-9]+: [A-Za-z]{4}│C$/.test(l));
+      const contextRow = staleError.split("\n").find((l: string) => /^  +[0-9]+: [a-z]{5}│C$/.test(l));
       expect(contextRow).toBeDefined();
-      const contextHash = contextRow!.match(/([A-Za-z]{4})│/)![1]!;
+      const contextHash = contextRow!.match(/([a-z]{5})│/)![1]!;
 
       const served = await servedFor(cwd, "sample.ts");
       expect(served!.has(contextHash)).toBe(true);
@@ -329,7 +329,7 @@ describe("served-state range verification", () => {
       expect(served).toBeDefined();
       for (const line of lines) {
         const hash = extractHash(line);
-        if (/^[A-Za-z]{4}$/.test(hash)) expect(served!.has(hash)).toBe(true);
+        if (/^[a-z]{5}$/.test(hash)) expect(served!.has(hash)).toBe(true);
       }
     });
   });
@@ -352,7 +352,7 @@ describe("served-state range verification", () => {
       const served = await servedFor(cwd, "sample.ts");
       expect(served).toBeDefined();
       for (const row of diff.split("\n")) {
-        const match = row.match(/^[+ ]([A-Za-z]{4})│/);
+        const match = row.match(/^[+ ]([a-z]{5})│/);
         if (match) expect(served!.has(match[1]!)).toBe(true);
       }
     });
@@ -420,7 +420,7 @@ describe("served-state range verification", () => {
       expect(servedAfterWrite!.has(aHash)).toBe(false);
       const servedText = (result as { content: Array<{ type: string; text: string }> }).content[1].text;
       for (const row of servedText.split("\n")) {
-        const match = row.match(/^([A-Za-z]{4})│/);
+        const match = row.match(/^([a-z]{5})│/);
         if (match) expect(servedAfterWrite!.has(match[1]!)).toBe(true);
       }
       shutdownHashStore();

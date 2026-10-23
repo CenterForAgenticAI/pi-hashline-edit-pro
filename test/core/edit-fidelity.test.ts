@@ -9,9 +9,9 @@ const WORD_JOINER = "\u2060";
 const NB_HYPHEN = "\u2011";
 const NNBSP = "\u202f";
 
-const ANCHORS = ["Aaaa", "Bbbb", "Cccc", "Dddd", "Eeee", "Ffff", "Gggg", "Hhhh", "Iiii", "Jjjj", "Kkkk", "Llll", "Mmmm", "Nnnn", "Oooo", "Pppp"];
+const ANCHORS = ["aaaaz", "bbbbz", "ccccz", "ddddz", "eeeey", "ffffx", "ggggx", "hhhhx", "iiiix", "jjjjx", "kkkkx", "llllx", "mmmmx", "nnnnx", "oooox", "ppppx"];
 
-const RESULT_ANCHORS = ["Zaaa", "Zbbb", "Zccc", "Zddd", "Zeee", "Zfff", "Zggg", "Zhhh", "Ziii", "Zjjj", "Zkkk", "Zlll", "Zmmm", "Znnn", "Zooo", "Zppp"];
+const RESULT_ANCHORS = ["zaaax", "zbbbx", "zcccx", "zdddx", "zeeex", "zfffx", "zgggx", "zhhhx", "ziiix", "zjjjx", "zkkkx", "zlllx", "zmmmx", "znnnx", "zooox", "zpppx"];
 
 function replaceSpan(start: number, end: number, replacementCount: number): DiffSpan {
   return { start, end, replacementCount };
@@ -92,8 +92,8 @@ describe("fidelityHints", () => {
     const hints = fidelityHints(old, result, [replaceSpan(1, 1, 1)], ANCHORS, { resultHashes: RESULT_ANCHORS });
     expect(hints).toHaveLength(1);
     expect(hints[0]).toContain("[H_UNICODE_LOST]");
-    expect(hints[0]).toContain(String.raw`Zbbb│ missing "\u200b"`);
-    expect(hints[0]).toContain(String.raw`Zbbb│ missing "\u200b"; the replaced row had it at col ${row.indexOf(ZWSP) + 1}`);
+    expect(hints[0]).toContain(String.raw`zbbbx│ missing "\u200b"`);
+    expect(hints[0]).toContain(String.raw`zbbbx│ missing "\u200b"; the replaced row had it at col ${row.indexOf(ZWSP) + 1}`);
     expect(hints[0].split("\n")[0]).toContain(String.raw`\u200b`);
   });
 
@@ -107,7 +107,7 @@ describe("fidelityHints", () => {
     const hints = fidelityHints(`legacy${NBSP}Checkout\n`, "stableCheckout\n", [replaceSpan(0, 0, 1)], ANCHORS, { resultHashes: RESULT_ANCHORS });
     expect(hints).toHaveLength(1);
     expect(hints[0]).toContain(String.raw`\u00a0`);
-    expect(hints[0]).toContain(String.raw`Zaaa│ missing "\u00a0"`);
+    expect(hints[0]).toContain(String.raw`zaaax│ missing "\u00a0"`);
   });
 
   it("flags dropped smart quotes and look-alike dashes when other text also changed", () => {
@@ -133,9 +133,9 @@ describe("fidelityHints", () => {
     const row = `- status: done${WORD_JOINER}`;
     const hints = fidelityHints(old, result, [insertSpan(1, 2, 0)], ANCHORS, { resultHashes: RESULT_ANCHORS });
     expect(hints).toHaveLength(1);
-    expect(hints[0]).toContain("Zccc│ missing");
-    expect(hints[0]).toContain("; Bbbb│ has it at col ");
-    expect(hints[0]).toContain(String.raw`Zccc│ missing "\u2060"; Bbbb│ has it at col ${row.indexOf(WORD_JOINER) + 1}`);
+    expect(hints[0]).toContain("zcccx│ missing");
+    expect(hints[0]).toContain("; bbbbz│ has it at col ");
+    expect(hints[0]).toContain(String.raw`zcccx│ missing "\u2060"; bbbbz│ has it at col ${row.indexOf(WORD_JOINER) + 1}`);
     expect(hints[0].split("\n")[0]).toContain(String.raw`\u2060`);
   });
 
@@ -146,8 +146,8 @@ describe("fidelityHints", () => {
     expect(hints).toHaveLength(1);
     expect(hints[0]).toContain("[H_UNICODE_SWAPPED]");
     expect(hints[0]).toContain(String.raw`"\u0020" at col 34`);
-    expect(hints[0]).toContain("Zbbb│ has");
-    expect(hints[0]).toContain(String.raw`; Bbbb│ has "\u00a0"`);
+    expect(hints[0]).toContain("zbbbx│ has");
+    expect(hints[0]).toContain(String.raw`; bbbbz│ has "\u00a0"`);
   });
 
   it("flags an ASCII period substituted for an ideographic full stop in an inserted line", () => {
@@ -157,7 +157,7 @@ describe("fidelityHints", () => {
     expect(hints).toHaveLength(1);
     expect(hints[0]).toContain("[H_UNICODE_SWAPPED]");
     expect(hints[0]).toContain(String.raw`"\u002e" at col`);
-    expect(hints[0]).toContain(String.raw`; Bbbb│ has "\u3002"`);
+    expect(hints[0]).toContain(String.raw`; bbbbz│ has "\u3002"`);
   });
 
   it("does not flag hidden characters for inserted lines that do not match the context", () => {
@@ -178,8 +178,8 @@ describe("fidelityHints", () => {
     const hints = fidelityHints(old, result, [insertSpan(1, 2, 1)], ANCHORS, { resultHashes: RESULT_ANCHORS });
     expect(hints).toHaveLength(1);
     expect(hints[0]).toContain("[H_INDENT_MISMATCH]");
-    expect(hints[0]).toContain("new line Zbbb│ has 0 leading whitespace characters; neighboring line Bbbb│ has 2.");
-    expect(hints[0]).toContain("Bbbb│ has");
+    expect(hints[0]).toContain("new line zbbbx│ has 0 leading whitespace characters; neighboring line bbbbz│ has 2.");
+    expect(hints[0]).toContain("bbbbz│ has");
   });
 
   it("stays silent when the inserted line keeps the anchor line's indentation", () => {
@@ -194,7 +194,7 @@ describe("fidelityHints", () => {
     const hints = fidelityHints(old, result, [replaceSpan(1, 1, 1)], ANCHORS, { resultHashes: RESULT_ANCHORS });
     expect(hints).toHaveLength(1);
     expect(hints[0]).toContain("[H_INDENT_MISMATCH]");
-    expect(hints[0]).toContain("new line Zbbb│ has 0 leading whitespace characters; neighboring line Bbbb│ has 1.");
+    expect(hints[0]).toContain("new line zbbbx│ has 0 leading whitespace characters; neighboring line bbbbz│ has 1.");
   });
 
   it("flags an unindented inserted line that echoes a nearby body line", () => {
@@ -203,7 +203,7 @@ describe("fidelityHints", () => {
     const hints = fidelityHints(old, result, [insertSpan(2, 2, 1)], ANCHORS);
     expect(hints).toHaveLength(1);
     expect(hints[0]).toContain("[H_INDENT_MISMATCH]");
-    expect(hints[0]).toContain("Bbbb│ has");
+    expect(hints[0]).toContain("bbbbz│ has");
   });
 
   it("does not flag an unindented inserted line when no nearby row shares a long run", () => {
@@ -224,7 +224,7 @@ describe("fidelityHints", () => {
     const hints = fidelityHints(old, result, [insertSpan(2, 2, 1)], ANCHORS, { resultHashes: RESULT_ANCHORS });
     expect(hints).toHaveLength(1);
     expect(hints[0]).toContain("[H_INDENT_MISMATCH]");
-    expect(hints[0]).toContain("new line Zccc│ has 0 leading whitespace characters; neighboring line Bbbb│ has 2.");
+    expect(hints[0]).toContain("new line zcccx│ has 0 leading whitespace characters; neighboring line bbbbz│ has 2.");
   });
 
   it("does not flag an adjacent call line with a different callee", () => {
@@ -245,7 +245,7 @@ describe("fidelityHints", () => {
     const hints = fidelityHints(old, result, [insertSpan(2, 3, 2)], ANCHORS, { separatorMoved: true });
     expect(hints).toHaveLength(1);
     expect(hints[0]).toContain("[H_SEPARATOR_MOVED]");
-    expect(hints[0]).toContain("blank separator above Cccc│ was displaced; add a blank line before Cccc│ if unintended.");
+    expect(hints[0]).toContain("blank separator above ccccz│ was displaced; add a blank line before ccccz│ if unintended.");
   });
 
 
@@ -256,7 +256,7 @@ describe("fidelityHints", () => {
     const hints = fidelityHints(old, result, [insertSpan(1, 3, 0)], ANCHORS, { separatorMoved: true });
     expect(hints).toHaveLength(1);
     expect(hints[0]).toContain("[H_SEPARATOR_MOVED]");
-    expect(hints[0]).toContain("blank separator below Bbbb│ was displaced; add a blank line after Bbbb│ if unintended.");
+    expect(hints[0]).toContain("blank separator below bbbbz│ was displaced; add a blank line after bbbbz│ if unintended.");
   });
 
   it("does not flag the separator when the option is off or the payload is one line", () => {
@@ -323,7 +323,7 @@ describe("fidelityHints", () => {
     const result = "keep\nAB\nmid\nCD\ntail\n";
     const hints = fidelityHints(old, result, [replaceSpan(1, 1, 1), replaceSpan(3, 3, 1)], ANCHORS, { resultHashes: RESULT_ANCHORS });
     expect(hints).toHaveLength(1);
-    expect(hints[0]).toContain(String.raw`Zbbb│ missing "\u200b"`);
+    expect(hints[0]).toContain(String.raw`zbbbx│ missing "\u200b"`);
     expect(hints[0]).toContain(String.raw`\u200b`);
   });
 
@@ -341,7 +341,7 @@ describe("fidelityHints", () => {
     const hints = fidelityHints(old, result, [replaceSpan(1, 1, 1)], ANCHORS, { resultHashes: RESULT_ANCHORS });
     expect(hints).toHaveLength(1);
     expect(hints[0]).toContain("[H_UNICODE_SWAPPED]");
-    expect(hints[0]).toContain(String.raw`Zbbb│ has "\u200d" at col 7; expected "\u200b"`);
+    expect(hints[0]).toContain(String.raw`zbbbx│ has "\u200d" at col 7; expected "\u200b"`);
     expect(hints[0]).toContain(String.raw`\u200b`);
     expect(hints[0]).toContain(String.raw`\u200d`);
   });
@@ -353,7 +353,7 @@ describe("fidelityHints", () => {
     expect(hints).toHaveLength(1);
     expect(hints[0]).toContain("[H_UNICODE_SWAPPED]");
     expect(hints[0]).toContain(String.raw`"\u2060" at col`);
-    expect(hints[0]).toContain(String.raw`Zbbb│ has "\u2060" at col 7; expected "\u200b"`);
+    expect(hints[0]).toContain(String.raw`zbbbx│ has "\u2060" at col 7; expected "\u200b"`);
   });
 
   it("reports the substitute's own column when the rows differ in length", () => {
@@ -362,7 +362,7 @@ describe("fidelityHints", () => {
     const hints = fidelityHints(old, result, [replaceSpan(1, 1, 1)], ANCHORS, { resultHashes: RESULT_ANCHORS });
     expect(hints).toHaveLength(1);
     expect(hints[0]).toContain("[H_UNICODE_SWAPPED]");
-    expect(hints[0]).toContain(String.raw`Zbbb│ has "\u2060" at col 7; expected "\u200b"`);
+    expect(hints[0]).toContain(String.raw`zbbbx│ has "\u2060" at col 7; expected "\u200b"`);
   });
 
   it("prefers a same-length candidate at the same column over an earlier different-length one", () => {
@@ -371,8 +371,8 @@ describe("fidelityHints", () => {
     const hints = fidelityHints(old, result, [replaceSpan(1, 1, 2)], ANCHORS, { resultHashes: RESULT_ANCHORS });
     expect(hints).toHaveLength(1);
     expect(hints[0]).toContain("[H_UNICODE_SWAPPED]");
-    expect(hints[0]).toContain(String.raw`Zccc│ has "\u200d" at col 3; expected "\u200b"`);
-    expect(hints[0]).not.toContain("Zbbb│");
+    expect(hints[0]).toContain(String.raw`zcccx│ has "\u200d" at col 3; expected "\u200b"`);
+    expect(hints[0]).not.toContain("zbbbx│");
   });
 
   it("prefers an echo row over an aligned look-alike on an unrelated row", () => {
@@ -381,8 +381,8 @@ describe("fidelityHints", () => {
     const hints = fidelityHints(old, result, [replaceSpan(1, 1, 2)], ANCHORS, { resultHashes: RESULT_ANCHORS });
     expect(hints).toHaveLength(1);
     expect(hints[0]).toContain("[H_UNICODE_SWAPPED]");
-    expect(hints[0]).toContain(String.raw`Zccc│ has "\u200d" at col 9; expected "\u200b"`);
-    expect(hints[0]).not.toContain("Zbbb│");
+    expect(hints[0]).toContain(String.raw`zcccx│ has "\u200d" at col 9; expected "\u200b"`);
+    expect(hints[0]).not.toContain("zbbbx│");
   });
 
   it("does not name a reference anchor replaced by another span", () => {
@@ -391,11 +391,11 @@ describe("fidelityHints", () => {
     const hints = fidelityHints(old, result, [replaceSpan(1, 1, 1), replaceSpan(3, 3, 1)], ANCHORS, { resultHashes: RESULT_ANCHORS });
     expect(hints).toHaveLength(2);
     expect(hints[0]).toContain("[H_UNICODE_SWAPPED]");
-    expect(hints[0]).toContain(String.raw`Zbbb│ has "\u200d" at col 4; expected "\u200b"`);
-    expect(hints[0]).not.toContain("Dddd│");
+    expect(hints[0]).toContain(String.raw`zbbbx│ has "\u200d" at col 4; expected "\u200b"`);
+    expect(hints[0]).not.toContain("ddddz│");
     expect(hints[1]).toContain("[H_UNICODE_LOST]");
-    expect(hints[1]).toContain(String.raw`Zddd│ missing "\u200b"`);
-    expect(hints[1]).not.toContain("Dddd│");
+    expect(hints[1]).toContain(String.raw`zdddx│ missing "\u200b"`);
+    expect(hints[1]).not.toContain("ddddz│");
   });
 
   it("names the substitute's own row when a replaced line expands", () => {
@@ -404,8 +404,8 @@ describe("fidelityHints", () => {
     const hints = fidelityHints(old, result, [replaceSpan(1, 1, 2)], ANCHORS, { resultHashes: RESULT_ANCHORS });
     expect(hints).toHaveLength(1);
     expect(hints[0]).toContain("[H_UNICODE_SWAPPED]");
-    expect(hints[0]).toContain(String.raw`Zccc│ has "\u2060"`);
-    expect(hints[0]).not.toContain("Zbbb│");
+    expect(hints[0]).toContain(String.raw`zcccx│ has "\u2060"`);
+    expect(hints[0]).not.toContain("zbbbx│");
   });
 
   it("names the similar live row when a lost character expands into several lines", () => {
@@ -415,7 +415,7 @@ describe("fidelityHints", () => {
     const hints = fidelityHints(old, result, [replaceSpan(1, 1, 2)], ANCHORS, { resultHashes: RESULT_ANCHORS });
     expect(hints).toHaveLength(1);
     expect(hints[0]).toContain("[H_UNICODE_LOST]");
-    expect(hints[0]).toContain(String.raw`Zccc│ missing "\u200b"`);
+    expect(hints[0]).toContain(String.raw`zcccx│ missing "\u200b"`);
     expect(hints[0]).toContain(`the replaced row had it at col ${row.indexOf(ZWSP) + 1}`);
   });
 
@@ -426,8 +426,8 @@ describe("fidelityHints", () => {
     const hints = fidelityHints(old, result, [replaceSpan(1, 2, 2)], ANCHORS, { resultHashes: RESULT_ANCHORS });
     expect(hints).toHaveLength(1);
     expect(hints[0]).toContain("[H_UNICODE_LOST]");
-    expect(hints[0]).toContain(String.raw`Zccc│ missing "\u200b"`);
-    expect(hints[0]).not.toContain("Zbbb│");
+    expect(hints[0]).toContain(String.raw`zcccx│ missing "\u200b"`);
+    expect(hints[0]).not.toContain("zbbbx│");
   });
 
   it("does not name a carried reference anchor when the carried line content changed", () => {
@@ -438,7 +438,7 @@ describe("fidelityHints", () => {
     expect(hints).toHaveLength(1);
     expect(hints[0]).toContain("[H_UNICODE_LOST]");
     expect(hints[0]).toContain(`the replaced row had it at col ${row.indexOf(ZWSP) + 1}`);
-    expect(hints[0]).not.toContain("Bbbb│");
+    expect(hints[0]).not.toContain("bbbbz│");
   });
 
   it("names the replacement character as the substitute for a dropped no-break space", () => {
@@ -448,7 +448,7 @@ describe("fidelityHints", () => {
     expect(hints).toHaveLength(1);
     expect(hints[0]).toContain("[H_UNICODE_SWAPPED]");
     expect(hints[0]).toContain(String.raw`"\ufffd" at col`);
-    expect(hints[0]).toContain(String.raw`Zaaa│ has "\ufffd" at col 5; expected "\u00a0"`);
+    expect(hints[0]).toContain(String.raw`zaaax│ has "\ufffd" at col 5; expected "\u00a0"`);
   });
 
   it("flags the replacement character as fidelity sensitive", () => {
@@ -461,8 +461,8 @@ describe("fidelityHints", () => {
     const hints = fidelityHints(old, result, [replaceSpan(2, 2, 1)], ANCHORS, { resultHashes: RESULT_ANCHORS });
     expect(hints).toHaveLength(1);
     expect(hints[0]).toContain("[H_UNICODE_SWAPPED]");
-    expect(hints[0]).toContain("Zccc│ has");
-    expect(hints[0]).toContain(String.raw`; Aaaa│ has "\u200b"`);
+    expect(hints[0]).toContain("zcccx│ has");
+    expect(hints[0]).toContain(String.raw`; aaaaz│ has "\u200b"`);
   });
 
   it("flags fullwidth punctuation used in place of its ASCII counterpart", () => {
@@ -473,7 +473,7 @@ describe("fidelityHints", () => {
     expect(hints[0]).toContain("[H_UNICODE_SWAPPED]");
     expect(hints[0]).toContain(String.raw`\uff1d`);
     expect(hints[0]).toContain(String.raw`\u003d`);
-    expect(hints[0]).toContain(String.raw`where Bbbb│ has "\u003d"`);
+    expect(hints[0]).toContain(String.raw`where bbbbz│ has "\u003d"`);
   });
 
   it("stays silent when fullwidth punctuation is normalized to ASCII", () => {
@@ -493,7 +493,7 @@ describe("fidelityHints", () => {
     expect(hints).toHaveLength(1);
     expect(hints[0]).toContain("[H_TRAILING_WHITESPACE]");
     expect(hints[0]).toContain("at col 7");
-    expect(hints[0]).toContain("Bbbb│ had 0.");
+    expect(hints[0]).toContain("bbbbz│ had 0.");
   });
 
   it("flags trailing whitespace removed from a replaced line", () => {
@@ -502,27 +502,27 @@ describe("fidelityHints", () => {
     const hints = fidelityHints(old, result, [replaceSpan(1, 1, 1)], ANCHORS);
     expect(hints).toHaveLength(1);
     expect(hints[0]).toContain("[H_TRAILING_WHITESPACE]");
-    expect(hints[0]).toContain("Bbbb│ had 2.");
+    expect(hints[0]).toContain("bbbbz│ had 2.");
   });
 });
 
 describe("dedupeLiteralEscapeHints", () => {
   it("suppresses a lost hint when a literal-escape hint names the same row and escape", () => {
     const hints = [
-      String.raw`[H_LITERAL_ESCAPE] text: "\u200b" written as literal text (Zbbb│ col 4).`,
-      String.raw`[H_UNICODE_LOST] Zbbb│ missing "\u200b"; Aaaa│ has it at col 7.`,
-      String.raw`[H_UNICODE_LOST] Zccc│ missing "\u200b"; Aaaa│ has it at col 7.`,
-      String.raw`[H_LITERAL_ESCAPE] match: "\u2060" written as literal text (Zddd│ col 2).`,
-      String.raw`[H_UNICODE_LOST] Zddd│ missing "\u2060"; Aaaa│ has it at col 3.`,
+      String.raw`[H_LITERAL_ESCAPE] text: "\u200b" written as literal text (zbbbx│ col 4).`,
+      String.raw`[H_UNICODE_LOST] zbbbx│ missing "\u200b"; aaaaz│ has it at col 7.`,
+      String.raw`[H_UNICODE_LOST] zcccx│ missing "\u200b"; aaaaz│ has it at col 7.`,
+      String.raw`[H_LITERAL_ESCAPE] match: "\u2060" written as literal text (zdddx│ col 2).`,
+      String.raw`[H_UNICODE_LOST] zdddx│ missing "\u2060"; aaaaz│ has it at col 3.`,
     ];
     expect(dedupeLiteralEscapeHints(hints)).toEqual([hints[0], hints[2], hints[3]]);
   });
 
   it("keeps a hint when the escape differs or the row has no literal-escape match", () => {
     const hints = [
-      String.raw`[H_LITERAL_ESCAPE] text: "\u200b" written as literal text (Zbbb│ col 4).`,
-      String.raw`[H_UNICODE_LOST] Zbbb│ missing "\u2060"; Aaaa│ has it at col 7.`,
-      String.raw`[H_UNICODE_LOST] Zccc│ missing "\u200b"; Aaaa│ has it at col 7.`,
+      String.raw`[H_LITERAL_ESCAPE] text: "\u200b" written as literal text (zbbbx│ col 4).`,
+      String.raw`[H_UNICODE_LOST] zbbbx│ missing "\u2060"; aaaaz│ has it at col 7.`,
+      String.raw`[H_UNICODE_LOST] zcccx│ missing "\u200b"; aaaaz│ has it at col 7.`,
     ];
     expect(dedupeLiteralEscapeHints(hints)).toEqual(hints);
   });

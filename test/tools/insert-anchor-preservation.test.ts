@@ -15,7 +15,7 @@ import {
 function liveAnchor(diff: string, needle: string): string | undefined {
   for (const row of diff.split("\n")) {
     if (!(row.startsWith("+") || row.startsWith(" "))) continue;
-    const match = /^[+ ]([A-Za-z]{4})│/.exec(row);
+    const match = /^[+ ]([a-z]{5})│/.exec(row);
     if (!match) continue;
     const sep = row.indexOf("│");
     if (row.slice(sep + 1) === needle) return match[1];
@@ -65,7 +65,7 @@ describe("insert anchor preservation", () => {
       const diff = (result.details as { diff?: string }).diff ?? "";
       const addedRow = diff.split("\n").find((row) => row.startsWith("+"));
       expect(addedRow).toBeDefined();
-      const addedAnchor = /^\+([A-Za-z]{4})│/.exec(addedRow!)?.[1];
+      const addedAnchor = /^\+([a-z]{5})│/.exec(addedRow!)?.[1];
       expect(addedAnchor).toBeDefined();
       expect(addedAnchor).not.toBe(bHash);
       expect(diff.split("\n").some((row) => row.startsWith(" ") && row.includes(`│bbb`) && row.includes(bHash))).toBe(true);

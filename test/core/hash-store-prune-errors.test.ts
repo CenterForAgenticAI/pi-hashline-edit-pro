@@ -62,8 +62,8 @@ describe("hash-store - pruneMissing error handling", () => {
     shutdownHashStore();
     const store = await loadHashStore();
     const locked = join(tmpHome, "locked.ts");
-    await putSnapshot(store, locked, "locked\n", ["ATIm"]);
-    const undo = { content: "old", bom: "", ending: "\n", hashes: ["ATIm"], resultContent: "locked\n" };
+    await putSnapshot(store, locked, "locked\n", ["atimx"]);
+    const undo = { content: "old", bom: "", ending: "\n", hashes: ["atimx"], resultContent: "locked\n" };
     upsertUndo(store, locked, undo);
     const errors = vi.spyOn(console, "error").mockImplementation(() => {});
     const warnings = vi.spyOn(console, "warn").mockImplementation(() => {});
@@ -74,7 +74,7 @@ describe("hash-store - pruneMissing error handling", () => {
     expect(warnings).not.toHaveBeenCalled();
     shutdownHashStore();
     const reopened = await loadHashStore();
-    expect(getSnapshot(reopened, locked, "locked\n")).toEqual(["ATIm"]);
+    expect(getSnapshot(reopened, locked, "locked\n")).toEqual(["atimx"]);
     expect(getUndoEntry(reopened, locked)).toEqual(undo);
   });
 
@@ -83,7 +83,7 @@ describe("hash-store - pruneMissing error handling", () => {
     shutdownHashStore();
     const store = await loadHashStore();
     const loop = join(tmpHome, "loop.ts");
-    await putSnapshot(store, loop, "loop\n", ["BeSR"]);
+    await putSnapshot(store, loop, "loop\n", ["besrx"]);
 
     const error = statError("ELOOP", "too many symbolic links");
     const errors = vi.spyOn(console, "error").mockImplementation(() => {});
@@ -92,7 +92,7 @@ describe("hash-store - pruneMissing error handling", () => {
 
     expect(errors).toHaveBeenCalledWith("Failed to stat hash store path:", loop, error);
     shutdownHashStore();
-    expect(getSnapshot(await loadHashStore(), loop, "loop\n")).toEqual(["BeSR"]);
+    expect(getSnapshot(await loadHashStore(), loop, "loop\n")).toEqual(["besrx"]);
   });
 
   it("still prunes paths that stat reports as ENOENT", async () => {
@@ -100,7 +100,7 @@ describe("hash-store - pruneMissing error handling", () => {
     shutdownHashStore();
     const store = await loadHashStore();
     const gone = join(tmpHome, "gone.ts");
-    await putSnapshot(store, gone, "gone\n", ["DAfo"]);
+    await putSnapshot(store, gone, "gone\n", ["dafox"]);
 
     state.statErrors.set(gone, statError("ENOENT", "no such file"));
     await pruneMissing(store);
@@ -113,7 +113,7 @@ describe("hash-store - pruneMissing error handling", () => {
     shutdownHashStore();
     const store = await loadHashStore();
     const blocked = join(tmpHome, "blocked.ts");
-    await putSnapshot(store, blocked, "blocked\n", ["EdgA"]);
+    await putSnapshot(store, blocked, "blocked\n", ["edgax"]);
 
     state.statErrors.set(blocked, statError("ENOTDIR", "not a directory"));
     await pruneMissing(store);

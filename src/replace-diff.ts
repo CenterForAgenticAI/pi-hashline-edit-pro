@@ -114,7 +114,7 @@ export function disambiguateDuplicateAnchors(diff: string): string {
     if (!match || match[1] !== "-") return line;
     if (!live.has(match[2]!)) return line;
     changed = true;
-    return `-    │${line.slice(match[0].length)}`;
+    return `-${" ".repeat(ANCHOR_LEN)}│${line.slice(match[0].length)}`;
   });
   return changed ? out.join("\n") : diff;
 }

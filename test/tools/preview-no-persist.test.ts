@@ -93,7 +93,7 @@ describe("compPreview no-persist guarantee", () => {
       );
       const hashes = await lineHashes(content, absolutePath);
       const db = new DatabaseSync(hashStorePath(), { defensive: false } as any);
-      db.prepare("UPDATE snapshots SET hashes = ? WHERE path = ?").run('["ZZ", "ZZZZ"]', absolutePath);
+      db.prepare("UPDATE snapshots SET hashes = ? WHERE path = ?").run('["ZZ", "zzzzx"]', absolutePath);
       db.close();
 
       const preview = await compPreview(

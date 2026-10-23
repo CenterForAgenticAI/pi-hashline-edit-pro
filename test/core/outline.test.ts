@@ -7,11 +7,19 @@ import {
 	type OutlineSymbol,
 } from "../../src/outline";
 
-const HASHES = ["Aaaa", "Bbbb", "Cccc", "Dddd", "Eeee"];
+const HASHES = ["aaaaz", "bbbbz", "ccccz", "ddddz", "eeeey"];
+
+const ANCHOR_BY_LETTER: Record<string, string> = {
+	A: "aaaaz", B: "baaax", C: "caaax", D: "daaax", E: "eaaax", F: "faaax",
+	G: "gaaax", H: "haaax", I: "iaaax", J: "jaaax", K: "kaaax", L: "laaax",
+	M: "maaax", N: "naaax", O: "oaaax", P: "paaax", Q: "qaaax", R: "raaax",
+	S: "saaax", T: "taaax", U: "uaaax", V: "vaaax", W: "waaax", X: "xaaax",
+	Y: "yaaax", Z: "zaaax",
+};
 
 function anchorsFor(content: string): string[] {
 	const lines = content.endsWith("\n") ? content.slice(0, -1).split("\n") : content.split("\n");
-	return lines.map((_, index) => `${String.fromCharCode(65 + index)}aaa`);
+	return lines.map((_, index) => ANCHOR_BY_LETTER[String.fromCharCode(65 + index)]!);
 }
 
 describe("renderSymbolOutline", () => {
@@ -34,9 +42,9 @@ describe("renderSymbolOutline", () => {
 			symbols,
 		});
 		expect(result.text).toContain("=== src/app.ts (TypeScript) — 5 lines ===");
-		expect(result.text).toContain("Bbbb│class App (1 children) [limit 4]");
-		expect(result.text).toContain("Cccc│  method run (speed: number) [limit 2]");
-		expect(result.servedHashes).toEqual(["Bbbb", "Cccc"]);
+		expect(result.text).toContain("bbbbz│class App (1 children) [limit 4]");
+		expect(result.text).toContain("ccccz│  method run (speed: number) [limit 2]");
+		expect(result.servedHashes).toEqual(["bbbbz", "ccccz"]);
 		expect(result.truncated).toBe(false);
 	});
 
@@ -63,7 +71,7 @@ describe("renderSymbolOutline", () => {
 		};
 		const result = renderSymbolOutline({ displayPath: "a.ts", totalLines: 3, hashes: HASHES, lines: ["class outer {", "  inner()", "}"], symbols: [parent], maxDepth: 0 });
 		expect(result.text).toContain("(1 nested items)");
-		expect(result.servedHashes).toEqual(["Aaaa"]);
+		expect(result.servedHashes).toEqual(["aaaaz"]);
 	});
 
 	it("skips symbols whose start line is outside the hash range", () => {
@@ -129,65 +137,65 @@ describe("buildFileOutline", () => {
 		const content = ["export class App {", "  run(speed: number) {", "    return speed;", "  }", "}", ""].join("\n");
 		const result = await buildFileOutline({ displayPath: "app.ts", content, hashes: HASHES });
 		expect(result.text).toContain("(TypeScript)");
-		expect(result.text).toContain("Aaaa│class App (1 children) [limit 5]");
-		expect(result.text).toContain("Bbbb│  method run (speed: number) [limit 3]");
-		expect(result.servedHashes).toEqual(["Aaaa", "Bbbb"]);
+		expect(result.text).toContain("aaaaz│class App (1 children) [limit 5]");
+		expect(result.text).toContain("bbbbz│  method run (speed: number) [limit 3]");
+		expect(result.servedHashes).toEqual(["aaaaz", "bbbbz"]);
 	});
 
 	it("outlines exported declarations", async () => {
-		const result = await buildFileOutline({ displayPath: "app.ts", content: "export function run() {\n  return 1;\n}\n", hashes: ["Aaaa", "Bbbb"] });
-		expect(result.text).toContain("Aaaa│function run () [limit 3]");
+		const result = await buildFileOutline({ displayPath: "app.ts", content: "export function run() {\n  return 1;\n}\n", hashes: ["aaaaz", "bbbbz"] });
+		expect(result.text).toContain("aaaaz│function run () [limit 3]");
 	});
 
 	it("outlines anonymous default exports", async () => {
 		const content = ["export default function (pi) {", "  return pi;", "}", "export default class {", "  run() {}", "}", ""].join("\n");
 		const result = await buildFileOutline({ displayPath: "entry.ts", content, hashes: HASHES });
-		expect(result.text).toContain("Aaaa│function default (pi) [limit 3]");
-		expect(result.text).toContain("Dddd│class default (1 children) [limit 3]");
-		expect(result.text).toContain("Eeee│  run() {}");
+		expect(result.text).toContain("aaaaz│function default (pi) [limit 3]");
+		expect(result.text).toContain("ddddz│class default (1 children) [limit 3]");
+		expect(result.text).toContain("eeeey│  run() {}");
 	});
 
 	it("shows single-line symbols as their content without a limit marker", async () => {
 		const content = ["const value = 1;", "export function run() {", "  return value;", "}", ""].join("\n");
 		const result = await buildFileOutline({ displayPath: "app.ts", content, hashes: anchorsFor(content) });
-		expect(result.text).toContain("Aaaa│const value = 1;");
+		expect(result.text).toContain("aaaaz│const value = 1;");
 		expect(result.text).not.toContain("[limit 1]");
-		expect(result.text).toContain("Baaa│function run () [limit 3]");
+		expect(result.text).toContain("baaax│function run () [limit 3]");
 	});
 
 	it("outlines function expressions and variable declarators", async () => {
 		const content = ["const config = defineConfig({", "  run() {},", "});", "const handler = function () {", "  return 1;", "};", ""].join("\n");
 		const result = await buildFileOutline({ displayPath: "config.ts", content, hashes: HASHES });
-		expect(result.text).toContain("Aaaa│variable config [limit 3]");
-		expect(result.text).toContain("Dddd│function handler () [limit 3]");
+		expect(result.text).toContain("aaaaz│variable config [limit 3]");
+		expect(result.text).toContain("ddddz│function handler () [limit 3]");
 	});
 
 	it("outlines an arrow default export", async () => {
 		const result = await buildFileOutline({ displayPath: "hook.ts", content: "export default () => {\n  return 1;\n};\n", hashes: HASHES });
-		expect(result.text).toContain("Aaaa│arrow_function default () [limit 3]");
+		expect(result.text).toContain("aaaaz│arrow_function default () [limit 3]");
 	});
 
 	it("outlines test calls", async () => {
 		const content = ['describe("math", () => {', '  it("adds", () => {', "    expect(1 + 1).toBe(2);", "  });", '  test("subtracts", () => {});', "});", ""].join("\n");
 		const result = await buildFileOutline({ displayPath: "math.test.ts", content, hashes: HASHES });
-		expect(result.text).toContain("Aaaa│describe math (2 children) [limit 6]");
-		expect(result.text).toContain("Bbbb│  it adds [limit 3]");
-		expect(result.text).toContain('Eeee│  test("subtracts", () => {});');
+		expect(result.text).toContain("aaaaz│describe math (2 children) [limit 6]");
+		expect(result.text).toContain("bbbbz│  it adds [limit 3]");
+		expect(result.text).toContain('eeeey│  test("subtracts", () => {});');
 	});
 
 	it("falls back to a preview for unsupported files", async () => {
-		const result = await buildFileOutline({ displayPath: "notes.txt", content: "alpha\nbeta\n", hashes: ["Aaaa", "Bbbb"] });
+		const result = await buildFileOutline({ displayPath: "notes.txt", content: "alpha\nbeta\n", hashes: ["aaaaz", "bbbbz"] });
 		expect(result.text).toContain("=== notes.txt — 2 lines ===");
-		expect(result.text).toContain("Aaaa│alpha");
-		expect(result.text).toContain("Bbbb│beta");
+		expect(result.text).toContain("aaaaz│alpha");
+		expect(result.text).toContain("bbbbz│beta");
 	});
 
 	it("serves the empty-line anchor for an empty file", async () => {
-		const result = await buildFileOutline({ displayPath: "empty.txt", content: "", hashes: ["Aaaa"] });
+		const result = await buildFileOutline({ displayPath: "empty.txt", content: "", hashes: ["aaaaz"] });
 		expect(result.text).toContain("=== empty.txt — 0 lines ===");
-		expect(result.text).toContain("Aaaa│");
+		expect(result.text).toContain("aaaaz│");
 		expect(result.text).toContain("File is empty. Use replace to insert content.");
-		expect(result.servedHashes).toEqual(["Aaaa"]);
+		expect(result.servedHashes).toEqual(["aaaaz"]);
 		expect(result.rows).toHaveLength(1);
 	});
 
@@ -214,11 +222,11 @@ describe("buildFileOutline", () => {
 		].join("\n");
 		const result = await buildFileOutline({ displayPath: "app/UserController.php", content, hashes: anchorsFor(content) });
 		expect(result.text).toContain("=== app/UserController.php (PHP) — 17 lines ===");
-		expect(result.text).toContain("Gaaa│class UserController abstract extends Base implements Repository (3 children) [limit 11]");
-		expect(result.text).toContain("Jaaa│    protected string $name;");
-		expect(result.text).toContain("Kaaa│    public const VERSION = '1.0';");
-		expect(result.text).toContain("Maaa│  method index public (): array [limit 4]");
-		expect(result.servedHashes).toEqual(["Gaaa", "Jaaa", "Kaaa", "Maaa"]);
+		expect(result.text).toContain("gaaax│class UserController abstract extends Base implements Repository (3 children) [limit 11]");
+		expect(result.text).toContain("jaaax│    protected string $name;");
+		expect(result.text).toContain("kaaax│    public const VERSION = '1.0';");
+		expect(result.text).toContain("maaax│  method index public (): array [limit 4]");
+		expect(result.servedHashes).toEqual(["gaaax", "jaaax", "kaaax", "maaax"]);
 	});
 
 	it("outlines PHP interfaces, traits, enums, and functions", async () => {
@@ -247,17 +255,17 @@ describe("buildFileOutline", () => {
 			"",
 		].join("\n");
 		const result = await buildFileOutline({ displayPath: "app/Domain.php", content, hashes: anchorsFor(content) });
-		expect(result.text).toContain("Caaa│interface Repository extends Countable, Iterator (1 children) [limit 4]");
-		expect(result.text).toContain("Eaaa│    public function all(): array;");
-		expect(result.text).toContain("Haaa│trait Logs (1 children) [limit 4]");
-		expect(result.text).toContain("Jaaa│    public function log(string $message): void {}");
-		expect(result.text).toContain("Maaa│enum Suit : string implements HasColor (2 children) [limit 5]");
-		expect(result.text).toContain("Oaaa│    case Hearts = 'H';");
-		expect(result.text).toContain("Paaa│    public function color(): string { return 'red'; }");
-		expect(result.text).toContain("Saaa│const TOP = 1;");
-		expect(result.text).toContain("Taaa│$closure = static function (int $x): int { return $x; };");
-		expect(result.text).toContain("Uaaa│$arrow = static fn (): string => 'x';");
-		expect(result.servedHashes).toEqual(["Caaa", "Eaaa", "Haaa", "Jaaa", "Maaa", "Oaaa", "Paaa", "Saaa", "Taaa", "Uaaa"]);
+		expect(result.text).toContain("caaax│interface Repository extends Countable, Iterator (1 children) [limit 4]");
+		expect(result.text).toContain("eaaax│    public function all(): array;");
+		expect(result.text).toContain("haaax│trait Logs (1 children) [limit 4]");
+		expect(result.text).toContain("jaaax│    public function log(string $message): void {}");
+		expect(result.text).toContain("maaax│enum Suit : string implements HasColor (2 children) [limit 5]");
+		expect(result.text).toContain("oaaax│    case Hearts = 'H';");
+		expect(result.text).toContain("paaax│    public function color(): string { return 'red'; }");
+		expect(result.text).toContain("saaax│const TOP = 1;");
+		expect(result.text).toContain("taaax│$closure = static function (int $x): int { return $x; };");
+		expect(result.text).toContain("uaaax│$arrow = static fn (): string => 'x';");
+		expect(result.servedHashes).toEqual(["caaax", "eaaax", "haaax", "jaaax", "maaax", "oaaax", "paaax", "saaax", "taaax", "uaaax"]);
 	});
 
 	it("outlines a Blade template with directives and components", async () => {
@@ -288,16 +296,16 @@ describe("buildFileOutline", () => {
 		].join("\n");
 		const result = await buildFileOutline({ displayPath: "resources/views/home.blade.php", content, hashes: anchorsFor(content) });
 		expect(result.text).toContain("=== resources/views/home.blade.php (Blade) — 22 lines ===");
-		expect(result.text).toContain("Aaaa│@extends('layouts.app')");
-		expect(result.text).toContain("Caaa│section content (4 children) [limit 8]");
-		expect(result.text).toContain('Eaaa│    <x-alert type="warning" :message="$warning" />');
-		expect(result.text).toContain("Faaa│    @livewire('user-table')");
-		expect(result.text).toContain('Gaaa│    <livewire:user-table :users="$users" />');
-		expect(result.text).toContain("Haaa│    @include('partials.footer')");
-		expect(result.text).toContain("Laaa│stack scripts [limit 3]");
-		expect(result.text).toContain("Paaa│php [limit 3]");
-		expect(result.text).toContain("Taaa│component x-slot:header [limit 3]");
-		expect(result.servedHashes).toEqual(["Aaaa", "Caaa", "Eaaa", "Faaa", "Gaaa", "Haaa", "Laaa", "Paaa", "Taaa"]);
+		expect(result.text).toContain("aaaaz│@extends('layouts.app')");
+		expect(result.text).toContain("caaax│section content (4 children) [limit 8]");
+		expect(result.text).toContain('eaaax│    <x-alert type="warning" :message="$warning" />');
+		expect(result.text).toContain("faaax│    @livewire('user-table')");
+		expect(result.text).toContain('gaaax│    <livewire:user-table :users="$users" />');
+		expect(result.text).toContain("haaax│    @include('partials.footer')");
+		expect(result.text).toContain("laaax│stack scripts [limit 3]");
+		expect(result.text).toContain("paaax│php [limit 3]");
+		expect(result.text).toContain("taaax│component x-slot:header [limit 3]");
+		expect(result.servedHashes).toEqual(["aaaaz", "caaax", "eaaax", "faaax", "gaaax", "haaax", "laaax", "paaax", "taaax"]);
 	});
 
 	it("previews a Blade template without structural directives", async () => {
@@ -329,12 +337,12 @@ describe("buildFileOutline", () => {
 			"",
 		].join("\n");
 		const result = await buildFileOutline({ displayPath: "tests/Feature/UserTest.php", content, hashes: anchorsFor(content) });
-		expect(result.text).toContain("Caaa│test users can register (1 children) [limit 4]");
-		expect(result.text).toContain("Eaaa│    test('nested', function () {});");
-		expect(result.text).toContain("Haaa│it lists users [limit 3]");
-		expect(result.text).toContain("Laaa│describe math (1 children) [limit 3]");
-		expect(result.text).toContain("Maaa│    test('adds', function () {});");
-		expect(result.text).toContain("Paaa│test('grouped', function () {})->group('slow');");
-		expect(result.servedHashes).toEqual(["Caaa", "Eaaa", "Haaa", "Laaa", "Maaa", "Paaa"]);
+		expect(result.text).toContain("caaax│test users can register (1 children) [limit 4]");
+		expect(result.text).toContain("eaaax│    test('nested', function () {});");
+		expect(result.text).toContain("haaax│it lists users [limit 3]");
+		expect(result.text).toContain("laaax│describe math (1 children) [limit 3]");
+		expect(result.text).toContain("maaax│    test('adds', function () {});");
+		expect(result.text).toContain("paaax│test('grouped', function () {})->group('slow');");
+		expect(result.servedHashes).toEqual(["caaax", "eaaax", "haaax", "laaax", "maaax", "paaax"]);
 	});
 });

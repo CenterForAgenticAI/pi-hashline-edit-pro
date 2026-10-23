@@ -35,11 +35,11 @@ describe("regReplace", () => {
     regReplace(pi);
     const tool = getTool("replace");
     const result = tool.prepareArguments({
-      replace_from: "ATIm", replace_to: "BeSR",
+      replace_from: "atimx", replace_to: "besrx",
       text: ["new"],
     });
-    expect(result.remove_from).toBe("ATIm");
-    expect(result.remove_to).toBe("BeSR");
+    expect(result.remove_from).toBe("atimx");
+    expect(result.remove_to).toBe("besrx");
     expect(result.replace_from).toBeUndefined();
     expect(result.replace_to).toBeUndefined();
   });
@@ -57,7 +57,7 @@ describe("regReplace", () => {
         "e1",
         {
           remove_from: hashes[1]!, remove_to: hashes[1]!,
-          text: ["BeSR"],
+          text: ["besrx"],
         },
         undefined,
         undefined,
@@ -80,7 +80,7 @@ describe("regReplace", () => {
         "e1",
         {
           replace_from: hashes[1]!, replace_to: hashes[1]!,
-          text: ["BeSR"],
+          text: ["besrx"],
         },
         undefined,
         undefined,
@@ -88,7 +88,24 @@ describe("regReplace", () => {
       );
 
       expect(result.content[0].text).toContain("Successfully replaced in sample.txt");
-      expect(await readFile(path, "utf-8")).toBe("aaa\nBeSR\nccc\n");
+      expect(await readFile(path, "utf-8")).toBe("aaa\nbesrx\nccc\n");
+    });
+  });
+
+  it("accepts an uppercase anchor and warns", async () => {
+    await withTempFile("sample.txt", "aaa\nbbb\nccc\n", async ({ cwd, path }) => {
+      const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
+      const text = getText(await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx));
+      const beta = anchorFor(text, "bbb");
+      const result = await getTool("replace").execute(
+        "e1",
+        { remove_from: beta.toUpperCase(), remove_to: beta.toUpperCase(), text: "BETA" },
+        undefined,
+        undefined,
+        ctx,
+      );
+      expect(getText(result)).toContain("[W_ANCHOR_CASE]");
+      expect(await readFile(path, "utf-8")).toBe("aaa\nBETA\nccc\n");
     });
   });
 
@@ -96,11 +113,11 @@ describe("regReplace", () => {
     await withTempFile("sample.txt", "aaa\nbbb\nccc\n", async ({ cwd }) => {
       const hashes = await lineHashes("aaa\nbbb\nccc\n", join(cwd, "sample.txt"));
       const preview = await compPreview(
-        { replace_from: hashes[1]!, replace_to: hashes[1]!, text: ["BeSR"] },
+        { replace_from: hashes[1]!, replace_to: hashes[1]!, text: ["besrx"] },
         cwd,
       );
       expect(preview).toHaveProperty("diff");
-      expect((preview as { diff: string }).diff).toContain("BeSR");
+      expect((preview as { diff: string }).diff).toContain("besrx");
     });
   });
 
@@ -116,7 +133,7 @@ describe("regReplace", () => {
           "e1",
           {
             from: hashes[1]!, to: hashes[1]!,
-            text: ["BeSR"],
+            text: ["besrx"],
           },
           undefined,
           undefined,
@@ -137,7 +154,7 @@ describe("regReplace", () => {
         "e1",
         {
           remove_from: hashes[1]!, remove_to: hashes[2]!,
-          text: ["BeSR", "DAfo"],
+          text: ["besrx", "dafox"],
         },
         undefined,
         undefined,
@@ -204,7 +221,7 @@ describe("regReplace", () => {
       expect(await toolError(() => tool.execute(
         "e1",
         {
-          remove_from: "PyBY", remove_to: "PyBY",
+          remove_from: "pybyx", remove_to: "pybyx",
           text: ["x"],
         },
         undefined,
@@ -246,7 +263,7 @@ describe("regReplace", () => {
         "e1",
         {
           remove_from: hashes[1]!, remove_to: hashes[1]!,
-          text: ["BeSR"],
+          text: ["besrx"],
           unknown_field: "bad",
         } as any,
         undefined,
@@ -267,7 +284,7 @@ describe("regReplace", () => {
         "e1",
         {
           remove_from: hashes[1]!, remove_to: hashes[1]!,
-          text: ["BeSR"],
+          text: ["besrx"],
         },
         undefined,
         undefined,

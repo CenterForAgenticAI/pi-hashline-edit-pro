@@ -1,7 +1,7 @@
 import { withFileMutationQueue } from "@earendil-works/pi-coding-agent";
 import { resolveInCwd } from "./fs-write";
 import { abortIf, makePrepareArguments } from "./utils";
-import { ownerOf, ownersDifferingOnlyByCase, type OwnedAnchor } from "./anchor-registry";
+import { ownerOf } from "./anchor-registry";
 import { assertRangeServed, lineChecksum, parseHashRef, stripAnchorRow } from "./hashline";
 import { readConfig } from "./config";
 import { makeRenderCall, renderEditResult, type RPreview, type FgT } from "./replace-render";
@@ -206,17 +206,8 @@ export function withTransferPrompts(base: { description: string; snippet: string
   return { description: base.description, snippet: base.snippet, guidelines };
 }
 
-function staleAnchorMessage(ref: string, hash: string, owners: Array<OwnedAnchor | undefined>): string {
-  const knownPaths = new Set<string>();
-  for (const owner of owners) {
-    if (owner) knownPaths.add(owner.path);
-  }
-  const folded = ownersDifferingOnlyByCase(hash, knownPaths);
-  const hint =
-    folded.length > 0
-      ? ` Anchors are case-sensitive; ${folded.map((match) => `"${match.anchor}"`).join(", ")} differs only in case.`
-      : "";
-  return `[E_STALE_ANCHOR] "${ref}" is not owned in this session.${hint} Call read() on the target file first.`;
+function staleAnchorMessage(ref: string): string {
+  return `[E_STALE_ANCHOR] "${ref}" is not owned in this session. Call read() on the target file first.`;
 }
 
 export function resolveEditTarget(removeFrom: string, removeTo?: string): string {
@@ -225,7 +216,7 @@ export function resolveEditTarget(removeFrom: string, removeTo?: string): string
   const owners = hashes.map((hash) => ownerOf(hash));
   const missing = owners.findIndex((owner) => !owner);
   if (missing >= 0) {
-    throw new Error(staleAnchorMessage(refs[missing]!, hashes[missing]!, owners));
+    throw new Error(staleAnchorMessage(refs[missing]!));
   }
   const paths = new Set(owners.map((owner) => owner!.path));
   if (paths.size > 1) {
@@ -294,7 +285,7 @@ export async function resolveEditTargetWithRequirement(input: PathRequirementInp
   return anchorTarget;
 }
 
-const STRICT_INPUT_REJECT_CODES = ["[W_BAD_SHAPE]", "[W_BAD_REF]", "[W_INVALID_PATCH]", "[W_BARE_HASH_PREFIX]"];
+const STRICT_INPUT_REJECT_CODES = ["[W_BAD_SHAPE]", "[W_BAD_REF]", "[W_INVALID_PATCH]", "[W_BARE_HASH_PREFIX]", "[W_ANCHOR_CASE]"];
 export async function throwIfStrictInput(warnings: string[]): Promise<void> {
   const fixes = warnings.filter((warning) => STRICT_INPUT_REJECT_CODES.some((code) => warning.startsWith(code)));
   if (fixes.length === 0) return;

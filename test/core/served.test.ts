@@ -3,12 +3,12 @@ import { servedHashesFromDiff } from "../../src/served";
 
 describe("servedHashesFromDiff", () => {
   it("extracts anchors from context and added rows", () => {
-    const diff = [" aaaa│kept", "-bbbb│removed", "+cccc│added", "not a row", " dddd│kept2"].join("\n");
-    expect(servedHashesFromDiff(diff)).toEqual(["aaaa", "cccc", "dddd"]);
+    const diff = [" aaaaa│kept", "-bbbbb│removed", "+ccccc│added", "not a row", " ddddd│kept2"].join("\n");
+    expect(servedHashesFromDiff(diff)).toEqual(["aaaaa", "ccccc", "ddddd"]);
   });
 
   it("ignores removed rows and non-row lines", () => {
-    expect(servedHashesFromDiff("-bbbb│removed\nplain\n+++header")).toEqual([]);
+    expect(servedHashesFromDiff("-bbbbb│removed\nplain\n+++header")).toEqual([]);
   });
 
   it("returns empty for a diff without rows", () => {

@@ -498,22 +498,22 @@ describe("mapIoError", () => {
 });
 
 describe("string and row helpers", () => {
-  it("isHashRow detects only 4-letter anchors", () => {
-    expect(isHashRow("Hasu│hello")).toBe(true);
+  it("isHashRow detects only 5-letter lowercase anchors", () => {
+    expect(isHashRow("hasux│hello")).toBe(true);
     expect(isHashRow("Ha│hello")).toBe(false);
     expect(isHashRow("HasuX│hello")).toBe(false);
-    expect(isHashRow("Abcd│")).toBe(true);
+    expect(isHashRow("abcde│")).toBe(true);
     expect(isHashRow("AB1c│")).toBe(false);
     expect(isHashRow("")).toBe(false);
-    expect(isHashRow("Hasu|hello")).toBe(false);
+    expect(isHashRow("hasux|hello")).toBe(false);
   });
 
   it("numberedRead numbers only hash rows", () => {
-    expect(numberedRead("Hasu│hello\narvm│world", 1)).toBe("1 │ Hasu│hello\n2 │ arvm│world");
-    expect(numberedRead("plain\nHasu│hello", 5)).toBe("plain\n5 │ Hasu│hello");
+    expect(numberedRead("hasux│hello\narvmx│world", 1)).toBe("1 │ hasux│hello\n2 │ arvmx│world");
+    expect(numberedRead("plain\nhasux│hello", 5)).toBe("plain\n5 │ hasux│hello");
     expect(numberedRead("", 1)).toBe("");
     expect(numberedRead("nohash", 10)).toBe("nohash");
-    expect(numberedRead("Abcd│x\nBcde│y\nCdef│z", 99)).toBe(" 99 │ Abcd│x\n100 │ Bcde│y\n101 │ Cdef│z");
+    expect(numberedRead("abcde│x\nbcdef│y\ncdefg│z", 99)).toBe(" 99 │ abcde│x\n100 │ bcdef│y\n101 │ cdefg│z");
   });
 
   it("withLineNumbers pads rows without a number", () => {

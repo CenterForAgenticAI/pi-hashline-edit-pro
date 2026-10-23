@@ -24,14 +24,14 @@ describe("fmtReadPreview", () => {
     expect(result.text).toContain("│alpha");
     expect(result.text).toContain("│beta");
     const lines = result.text.split("\n");
-    const emptyContentLines = lines.filter((l) => /^[A-Za-z]{4}│$/.test(l));
+    const emptyContentLines = lines.filter((l) => /^[a-z]{5}│$/.test(l));
     expect(emptyContentLines).toHaveLength(0);
   });
 
   it("keeps continuation hints for partial previews", async () => {
     const text = "a\nb\nc\nd\ne\nf\ng\nh\ni\nj\n";
-    const result = await fmtReadPreview(text, { limit: 3 }, ["ATIm", "BeSR", "DAfo", "Emno", "HDtm", "Ifms", "Aaaa", "Bbbb", "Cccc", "Dddd"], home.testPath);
-    expect(result.text).toContain("[Showing lines 1-3 of 10. Use offset=DAfo to continue.]");
+    const result = await fmtReadPreview(text, { limit: 3 }, ["atimx", "besrx", "dafox", "emnox", "hdtmx", "ifmsx", "aaaaz", "bbbbz", "ccccz", "ddddz"], home.testPath);
+    expect(result.text).toContain("[Showing lines 1-3 of 10. Use offset=dafox to continue.]");
   });
 
   it("reports when offset is beyond end of content", async () => {
@@ -128,17 +128,17 @@ describe("read tool - call rendering", () => {
   });
 
   it("falls back to the anchor with a +N suffix when its line is not cached", () => {
-    const text = renderCall({ path: "sample.ts", offset: "RKhl", limit: "520" });
-    expect(text).toContain(":RKhl +520");
+    const text = renderCall({ path: "sample.ts", offset: "rkhlx", limit: "520" });
+    expect(text).toContain(":rkhlx +520");
     expect(text).not.toContain("NaN");
   });
 
   it("renders the resolved anchor line range with the anchor label", () => {
     const absolute = join(process.cwd(), "anchor-line-sample.ts");
-    cacheSnapshot(absolute, "checksum", 3, ["Aaaa", "RKhl", "Bbbb"]);
+    cacheSnapshot(absolute, "checksum", 3, ["aaaaz", "rkhlx", "bbbbz"]);
     try {
-      const text = renderCall({ path: "anchor-line-sample.ts", offset: "RKhl", limit: 520 });
-      expect(text).toContain(":2-521 (RKhl)");
+      const text = renderCall({ path: "anchor-line-sample.ts", offset: "rkhlx", limit: 520 });
+      expect(text).toContain(":2-521 (rkhlx)");
     } finally {
       snapshotCache.delete(absolute);
     }
@@ -146,20 +146,20 @@ describe("read tool - call rendering", () => {
 
   it("renders the resolved anchor line with the anchor label", () => {
     const absolute = join(process.cwd(), "anchor-line-sample.ts");
-    cacheSnapshot(absolute, "checksum", 3, ["Aaaa", "RKhl", "Bbbb"]);
+    cacheSnapshot(absolute, "checksum", 3, ["aaaaz", "rkhlx", "bbbbz"]);
     try {
-      const text = renderCall({ path: "anchor-line-sample.ts", offset: "RKhl" });
-      expect(text).toContain(":2 (RKhl)");
+      const text = renderCall({ path: "anchor-line-sample.ts", offset: "rkhlx" });
+      expect(text).toContain(":2 (rkhlx)");
     } finally {
       snapshotCache.delete(absolute);
     }
   });
 
   it("falls back to the bare anchor when no snapshot is cached", () => {
-    const text = renderCall({ path: "anchor-line-uncached.ts", offset: "RKhl", limit: 520 });
-    expect(text).toContain(":RKhl +520");
+    const text = renderCall({ path: "anchor-line-uncached.ts", offset: "rkhlx", limit: 520 });
+    expect(text).toContain(":rkhlx +520");
     expect(text).not.toMatch(/\(\d+\)/);
-    expect(renderCall({ path: "anchor-line-uncached.ts", offset: "RKhl", limit: 0 })).toContain(":RKhl");
+    expect(renderCall({ path: "anchor-line-uncached.ts", offset: "rkhlx", limit: 0 })).toContain(":rkhlx");
   });
 
   it.skipIf(process.platform === "win32")("resolves the line through a symlinked path", async () => {
@@ -168,10 +168,10 @@ describe("read tool - call rendering", () => {
       await writeFile(real, "alpha\nbeta\n", "utf-8");
       await symlink(real, join(dir, "link.ts"));
       const seeded = await realpath(real);
-      cacheSnapshot(seeded, "checksum", 2, ["Aaaa", "RKhl"]);
+      cacheSnapshot(seeded, "checksum", 2, ["aaaaz", "rkhlx"]);
       try {
-        const text = renderCall({ path: "link.ts", offset: "RKhl", limit: 5 }, dir);
-        expect(text).toContain(":2-6 (RKhl)");
+        const text = renderCall({ path: "link.ts", offset: "rkhlx", limit: 5 }, dir);
+        expect(text).toContain(":2-6 (rkhlx)");
       } finally {
         snapshotCache.delete(seeded);
       }
@@ -179,15 +179,15 @@ describe("read tool - call rendering", () => {
   });
 
   it("leaves an unresolved anchor offset unsuffixed", () => {
-    const text = renderCall({ path: "sample.ts", offset: "RKhl" });
-    expect(text).toContain(":RKhl");
-    expect(text).not.toContain(":RKhl +");
+    const text = renderCall({ path: "sample.ts", offset: "rkhlx" });
+    expect(text).toContain(":rkhlx");
+    expect(text).not.toContain(":rkhlx +");
   });
 
   it("keeps the +N suffix ahead of the compact expand hint", () => {
-    const text = renderCall({ path: "AGENTS.md", offset: "RKhl", limit: 560 });
-    expect(text).toContain(":RKhl +560");
-    expect(text.indexOf(":RKhl +560")).toBeLessThan(text.indexOf("to expand"));
+    const text = renderCall({ path: "AGENTS.md", offset: "rkhlx", limit: 560 });
+    expect(text).toContain(":rkhlx +560");
+    expect(text.indexOf(":rkhlx +560")).toBeLessThan(text.indexOf("to expand"));
   });
 
   it("renders incomplete and malformed args without throwing", () => {
@@ -199,15 +199,15 @@ describe("read tool - call rendering", () => {
 
 describe("read tool - call range insertion", () => {
   it("appends the range when the call has no expand hint", () => {
-    expect(insertBeforeExpandHint("read sample.ts", ":2 (RKhl)")).toBe("read sample.ts:2 (RKhl)");
+    expect(insertBeforeExpandHint("read sample.ts", ":2 (rkhlx)")).toBe("read sample.ts:2 (rkhlx)");
   });
 
   it("inserts the range before a styled compact expand hint", () => {
     const hint = "\x1b[2m (ctrl+o to expand)\x1b[39m";
-    expect(insertBeforeExpandHint(`read resource AGENTS.md${hint}`, ":RKhl +560")).toBe(`read resource AGENTS.md:RKhl +560${hint}`);
+    expect(insertBeforeExpandHint(`read resource AGENTS.md${hint}`, ":rkhlx +560")).toBe(`read resource AGENTS.md:rkhlx +560${hint}`);
   });
 
   it("inserts the range before a plain compact expand hint", () => {
-    expect(insertBeforeExpandHint("read resource AGENTS.md (ctrl+o to expand)", ":RKhl +560")).toBe("read resource AGENTS.md:RKhl +560 (ctrl+o to expand)");
+    expect(insertBeforeExpandHint("read resource AGENTS.md (ctrl+o to expand)", ":rkhlx +560")).toBe("read resource AGENTS.md:rkhlx +560 (ctrl+o to expand)");
   });
 });

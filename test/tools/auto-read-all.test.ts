@@ -63,7 +63,7 @@ describe("auto-read all", () => {
       const content = first!.message!.content as string;
       expect(content).toContain("[hashline auto-read-all]");
       expect(content).toContain("=== sample.txt ===");
-      const anchor = content.match(/([A-Za-z]{4})│alpha/)![1]!;
+      const anchor = content.match(/([a-z]{5})│alpha/)![1]!;
       expect(await handlers.get("before_agent_start")!({}, ctx)).toBeUndefined();
 
       const editResult = await getTool("replace").execute(
@@ -94,7 +94,7 @@ describe("auto-read all", () => {
       expect(content).toContain("outlined below");
       expect(content).toContain("=== app.ts (TypeScript) — 3 lines ===");
       expect(content).not.toContain("return 1");
-      const anchor = content.match(/([A-Za-z]{4})│function run/)![1]!;
+      const anchor = content.match(/([a-z]{5})│function run/)![1]!;
       const editResult = await getTool("replace").execute(
         "e1",
         { remove_from: anchor, remove_to: anchor, text: "export async function run() {" },

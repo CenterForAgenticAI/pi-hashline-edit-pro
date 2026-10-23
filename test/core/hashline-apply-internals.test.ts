@@ -23,7 +23,7 @@ describe("resAnchor (via applyEdit)", () => {
     const hashes = await lineHashes(content, home.testPath);
     expect(() =>
       applyEdit(content, resEdit(
-        { remove_from: "PyBY", remove_to: "PyBY", text: ["X"] },
+        { remove_from: "pybyx", remove_to: "pybyx", text: ["X"] },
       ), undefined, hashes)
     ).toThrow(/E_STALE_ANCHOR/);
   });

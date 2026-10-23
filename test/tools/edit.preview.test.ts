@@ -16,11 +16,11 @@ describe("compPreview", () => {
       const hashes = await lineHashes("aaa\nbbb\nccc\n", join(cwd, "sample.ts"));
 
       const preview = await compPreview(
-        { remove_from: hashes[1]!, remove_to: hashes[1]!, text: ["BeSR"] },
+        { remove_from: hashes[1]!, remove_to: hashes[1]!, text: ["besrx"] },
         cwd,
       );
       expect(preview).toHaveProperty("diff");
-      expect((preview as any).diff).toContain("BeSR");
+      expect((preview as any).diff).toContain("besrx");
     });
   });
 
@@ -42,7 +42,7 @@ describe("compPreview", () => {
       const hashes = await lineHashes("aaa\nbbb\nccc\n", join(cwd, "sample.ts"));
 
       const preview = await compPreview(
-        { remove_from: hashes[1]!, remove_to: hashes[1]!, text: ["BeSR"] },
+        { remove_from: hashes[1]!, remove_to: hashes[1]!, text: ["besrx"] },
         cwd,
       );
       expect(preview).toHaveProperty("diff");
@@ -54,7 +54,7 @@ describe("compPreview", () => {
       const hashes = await lineHashes("aaa\nbbb\nccc\n", join(cwd, "sample.ts"));
 
       const preview = await compPreview(
-        { remove_from: hashes[1]!, remove_to: hashes[1]!, text: ["BeSR"] },
+        { remove_from: hashes[1]!, remove_to: hashes[1]!, text: ["besrx"] },
         cwd,
       );
       expect(preview).toHaveProperty("diff");
@@ -66,7 +66,7 @@ describe("compPreview", () => {
       const hashes = await lineHashes("aaa\nbbb\nccc\n", join(cwd, "sample.ts"));
 
       const preview = await compPreview(
-        { remove_from: hashes[1]!, remove_to: hashes[1]!, text: ["BeSR"] },
+        { remove_from: hashes[1]!, remove_to: hashes[1]!, text: ["besrx"] },
         cwd,
       );
       expect(preview).toHaveProperty("diff");
@@ -77,7 +77,7 @@ describe("compPreview", () => {
     await withTempFile("sample.ts", "aaa\nbbb\nccc\n", async ({ cwd }) => {
       const hashes = await lineHashes("aaa\nbbb\nccc\n", join(cwd, "sample.ts"));
       const preview = await compPreview(
-        { path: "sample.ts", changes: [{ remove_from: hashes[1]!, remove_to: hashes[1]!, text: ["BeSR"] }] },
+        { path: "sample.ts", changes: [{ remove_from: hashes[1]!, remove_to: hashes[1]!, text: ["besrx"] }] },
         cwd,
       );
       expect(preview).toHaveProperty("error");
@@ -89,11 +89,11 @@ describe("compPreview", () => {
     await withTempFile("sample.ts", "aaa\nbbb\nccc\n", async ({ cwd }) => {
       const hashes = await lineHashes("aaa\nbbb\nccc\n", join(cwd, "sample.ts"));
       const preview = await compPreview(
-        { remove_from: hashes[1]!, remove_to: hashes[1]!, text: ["BeSR"] },
+        { remove_from: hashes[1]!, remove_to: hashes[1]!, text: ["besrx"] },
         cwd,
       );
       expect(preview).toHaveProperty("diff");
-      expect((preview as { diff: string }).diff).toContain("BeSR");
+      expect((preview as { diff: string }).diff).toContain("besrx");
     });
   });
 
@@ -122,8 +122,8 @@ describe("compPreview", () => {
         cwd,
       );
       const diff = (preview as { diff: string }).diff;
-      expect(diff).toMatch(/^ [A-Za-z]{4}│payload line 1$/m);
-      expect(diff).not.toMatch(/^[-+][A-Za-z]{4}│payload line 1$/m);
+      expect(diff).toMatch(/^ [a-z]{5}│payload line 1$/m);
+      expect(diff).not.toMatch(/^[-+][a-z]{5}│payload line 1$/m);
     });
   });
 });
@@ -169,14 +169,14 @@ describe("renderCall preview", () => {
 
       const harness = makeHarness(cwd);
       tool.renderCall(
-        { remove_from: hashes[1]!, remove_to: hashes[1]!, text: ["BeSR"] },
+        { remove_from: hashes[1]!, remove_to: hashes[1]!, text: ["besrx"] },
         harness.theme,
         harness.context,
       );
 
       await awaitPreview(harness);
       expect(harness.state.preview).toHaveProperty("diff");
-      expect((harness.state.preview as { diff: string }).diff).toContain("BeSR");
+      expect((harness.state.preview as { diff: string }).diff).toContain("besrx");
     });
   });
 
@@ -189,7 +189,7 @@ describe("renderCall preview", () => {
 
       const harness = makeHarness(cwd);
       tool.renderCall(
-        { path: "sample.ts", changes: [{ remove_from: hashes[1]!, remove_to: hashes[1]!, text: ["BeSR"] }] },
+        { path: "sample.ts", changes: [{ remove_from: hashes[1]!, remove_to: hashes[1]!, text: ["besrx"] }] },
         harness.theme,
         harness.context,
       );
@@ -210,13 +210,13 @@ describe("renderCall preview", () => {
       try {
         const harness = makeHarness(cwd);
         tool.renderCall(
-          { remove_from: hashes[1]!, remove_to: hashes[1]!, text: ["BeSR"] },
+          { remove_from: hashes[1]!, remove_to: hashes[1]!, text: ["besrx"] },
           harness.theme,
           harness.context,
         );
         expect(harness.state.preview).toBeUndefined();
         tool.renderCall(
-          { remove_from: hashes[1]!, remove_to: hashes[1]!, text: ["DAfo"] },
+          { remove_from: hashes[1]!, remove_to: hashes[1]!, text: ["dafox"] },
           harness.theme,
           harness.context,
         );
@@ -226,7 +226,7 @@ describe("renderCall preview", () => {
         await vi.advanceTimersByTimeAsync(1);
         await previewP;
         expect(harness.state.preview).toHaveProperty("diff");
-        expect((harness.state.preview as { diff: string }).diff).toContain("DAfo");
+        expect((harness.state.preview as { diff: string }).diff).toContain("dafox");
       } finally {
         vi.useRealTimers();
       }
@@ -277,7 +277,7 @@ describe("renderCall state transitions", () => {
     state.preview = { diff: "stale diff" };
     state.previewGeneration = 7;
     const component = tool.renderCall!(
-      { remove_from: "ATIm", remove_to: "BeSR", text: ["x"] },
+      { remove_from: "atimx", remove_to: "besrx", text: ["x"] },
       theme as any,
       context as any,
     ) as Text;
@@ -295,7 +295,7 @@ describe("renderCall state transitions", () => {
     state.preview = { diff: "stale diff" };
     state.previewGeneration = 2;
     tool.renderCall!(
-      { remove_from: "ATIm", remove_to: "BeSR", text: ["x"] },
+      { remove_from: "atimx", remove_to: "besrx", text: ["x"] },
       theme as any,
       context as any,
     );
@@ -372,7 +372,7 @@ describe("renderResult", () => {
     const result = {
       content: [{ type: "text", text: "Successfully replaced in sample.ts. Added 1 line(s), removed 1 line(s)." }],
       details: {
-        diff: "+ATIm│BBB\n-ATIm│bbb",
+        diff: "+atimx│BBB\n-atimx│bbb",
         metrics: { classification: "applied", added_lines: 1, removed_lines: 1 },
       },
     };
@@ -383,8 +383,8 @@ describe("renderResult", () => {
       makeContext(),
     ) as Text;
     expect(component).toBeInstanceOf(Text);
-    expect((component as any).text).toContain("+ATIm│BBB");
-    expect((component as any).text).toContain("-ATIm│bbb");
+    expect((component as any).text).toContain("+atimx│BBB");
+    expect((component as any).text).toContain("-atimx│bbb");
   });
 
   it("keeps warnings alongside the applied diff", () => {
@@ -397,7 +397,7 @@ describe("renderResult", () => {
         },
       ],
       details: {
-        diff: "+ATIm│BBB",
+        diff: "+atimx│BBB",
         metrics: { classification: "applied", added_lines: 1, removed_lines: 1 },
       },
     };
@@ -408,7 +408,7 @@ describe("renderResult", () => {
       makeContext(),
     ) as Text;
     const text = (component as any).text as string;
-    expect(text).toContain("+ATIm│BBB");
+    expect(text).toContain("+atimx│BBB");
     expect(text).toContain("[W_BARE_HASH_PREFIX] Stripped \"anchor│\" prefix from text line 1.");
   });
 

@@ -1,5 +1,5 @@
 import { isBlankLine, splitLines } from "./utils";
-import { HASH_SEP, canon } from "./hashline";
+import { HASH_CLASS, HASH_SEP, canon } from "./hashline";
 import type { DiffSpan } from "./replace-diff";
 
 const INVISIBLE_RE = /\p{Default_Ignorable_Code_Point}/u;
@@ -397,8 +397,8 @@ export function annotateLiteralEscapeHints(
 }
 
 const LITERAL_ESCAPE_DETAIL_RE = /^\[H_LITERAL_ESCAPE\] [^:]*: "(.*?)" written as literal text(?: \((.*)\))?\.?$/;
-const LITERAL_ESCAPE_ANCHOR_RE = /([A-Za-z]{4})│/g;
-const UNICODE_LOST_DETAIL_RE = /^\[H_UNICODE_LOST\] ([A-Za-z]{4})│ missing "([^"]*)"/;
+const LITERAL_ESCAPE_ANCHOR_RE = new RegExp(`(${HASH_CLASS})│`, "g");
+const UNICODE_LOST_DETAIL_RE = new RegExp(`^\\[H_UNICODE_LOST\\] (${HASH_CLASS})│ missing "([^"]*)"`);
 
 export function dedupeLiteralEscapeHints(hints: readonly string[]): string[] {
   const suppressed = new Set<string>();

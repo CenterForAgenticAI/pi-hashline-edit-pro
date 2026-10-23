@@ -18,7 +18,7 @@ useTestHome();
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 function undoEntry(content: string): UndoRecord {
-  return { content, bom: "", ending: "\n", hashes: ["ATIm"], resultContent: `${content}!` };
+  return { content, bom: "", ending: "\n", hashes: ["atimx"], resultContent: `${content}!` };
 }
 
 function ageRecords(ages: Array<[path: string, updatedAt: number]>): void {

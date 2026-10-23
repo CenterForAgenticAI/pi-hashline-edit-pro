@@ -7,21 +7,21 @@ import {
 
 describe("resEdit", () => {
 	it("resolves replace with remove_from/remove_to", () => {
-		const edit: HTEdit = { remove_from: "wpDM", remove_to: "ukAB", text: ["a", "b"] };
+		const edit: HTEdit = { remove_from: "wpdmx", remove_to: "ukabx", text: ["a", "b"] };
 		const resolved = resEdit(edit);
 		expect(resolved).toHaveProperty("hash_bounds");
 		expect(resolved).toHaveProperty("content_lines");
 	});
 
 	it("resolves a 1-line replace (same anchor)", () => {
-		const edit: HTEdit = { remove_from: "riBB", remove_to: "riBB", text: ["new"] };
+		const edit: HTEdit = { remove_from: "ribbx", remove_to: "ribbx", text: ["new"] };
 		const resolved = resEdit(edit);
 		const r = resolved as {
 			hash_bounds: [Anchor, Anchor];
       content_lines: string[];
 		};
-		expect(r.hash_bounds[0].hash).toBe("riBB");
-		expect(r.hash_bounds[1].hash).toBe("riBB");
+		expect(r.hash_bounds[0].hash).toBe("ribbx");
+		expect(r.hash_bounds[1].hash).toBe("ribbx");
 	});
 
 	it("throws on replace with no remove_from/remove_to (E_BAD_SHAPE)", () => {
@@ -36,7 +36,7 @@ describe("resEdit", () => {
 
   it("accepts a single string text input", () => {
     const resolved = resEdit({
-      remove_from: "wpDM", remove_to: "wpDM",
+      remove_from: "wpdmx", remove_to: "wpdmx",
       text: "hello",
     });
     expect(resolved.content_lines).toEqual(["hello"]);
@@ -44,7 +44,7 @@ describe("resEdit", () => {
 
   it("passes text through as content lines", () => {
     const edit = {
-      remove_from: "wpDM", remove_to: "wpDM",
+      remove_from: "wpdmx", remove_to: "wpdmx",
       text: ["line1", "line2", ""],
     } as unknown as HTEdit;
     const resolved = resEdit(edit);
@@ -53,7 +53,7 @@ describe("resEdit", () => {
 
   it("splits elements with embedded newlines in text", () => {
     const edit = {
-      remove_from: "wpDM", remove_to: "wpDM",
+      remove_from: "wpdmx", remove_to: "wpdmx",
       text: ["a\r\nb", "c"],
     } as unknown as HTEdit;
     const resolved = resEdit(edit);
@@ -63,7 +63,7 @@ describe("resEdit", () => {
   it("unwraps a stringified text array", () => {
     const warnings: string[] = [];
     const edit = {
-      remove_from: "wpDM", remove_to: "wpDM",
+      remove_from: "wpdmx", remove_to: "wpdmx",
       text: ['["a", "b",]'],
     } as unknown as HTEdit;
     const resolved = resEdit(edit, warnings);
@@ -74,7 +74,7 @@ describe("resEdit", () => {
   it("decodes single-quoted array text", () => {
     const warnings: string[] = [];
     const edit = {
-      remove_from: "wpDM", remove_to: "wpDM",
+      remove_from: "wpdmx", remove_to: "wpdmx",
       text: ["['a', 'b']"],
     } as unknown as HTEdit;
     const resolved = resEdit(edit, warnings);
@@ -85,7 +85,7 @@ describe("resEdit", () => {
   it("warns but keeps unparseable string-array text as one literal line", () => {
     const warnings: string[] = [];
     const edit = {
-      remove_from: "wpDM", remove_to: "wpDM",
+      remove_from: "wpdmx", remove_to: "wpdmx",
       text: ['["a", 7]'],
     } as unknown as HTEdit;
     const resolved = resEdit(edit, warnings);
@@ -95,7 +95,7 @@ describe("resEdit", () => {
 
 	it("rejects null text input", () => {
 		const edit = {
-			remove_from: "wpDM", remove_to: "wpDM",
+			remove_from: "wpdmx", remove_to: "wpdmx",
       text: null,
 		} as unknown as HTEdit;
 		expect(() => resEdit(edit)).toThrow(
@@ -104,25 +104,25 @@ describe("resEdit", () => {
 	});
 
 	it("rejects unknown fields", () => {
-    const edit = { remove_from: "wpDM", remove_to: "wpDM", text: ["x"], extra: true } as any;
+    const edit = { remove_from: "wpdmx", remove_to: "wpdmx", text: ["x"], extra: true } as any;
 		expect(() => resEdit(edit)).toThrow(
 			/unknown or unsupported fields/i,
 		);
 	});
 
 	it("rejects missing text", () => {
-		const edit = { remove_from: "wpDM", remove_to: "wpDM" } as any;
+		const edit = { remove_from: "wpdmx", remove_to: "wpdmx" } as any;
 		expect(() => resEdit(edit)).toThrow(
       /requires a "text" array/i,
 		);
 	});
 
 	it("strips an anchor│content row pasted into remove_from/remove_to with a warning", () => {
-		const edit: HTEdit = { remove_from: "riBB│const x = 1;", remove_to: "riBB│const x = 1;", text: ["new"] };
+		const edit: HTEdit = { remove_from: "ribbx│const x = 1;", remove_to: "ribbx│const x = 1;", text: ["new"] };
 		const warnings: string[] = [];
 		const resolved = resEdit(edit, warnings);
-		expect(resolved.hash_bounds[0].hash).toBe("riBB");
-		expect(resolved.hash_bounds[1].hash).toBe("riBB");
+		expect(resolved.hash_bounds[0].hash).toBe("ribbx");
+		expect(resolved.hash_bounds[1].hash).toBe("ribbx");
 		expect(warnings).toHaveLength(2);
     expect(warnings[0]).toMatch(/^\[W_BAD_REF\]/);
 		expect(warnings[0]).toContain('Stripped "anchor│" prefix');
@@ -130,26 +130,26 @@ describe("resEdit", () => {
 	});
 
 	it("strips diff-preview rows pasted into remove_from/remove_to with a warning", () => {
-		const edit: HTEdit = { remove_from: "+riBB│const x = 1;", remove_to: "-riBB│const x = 1;", text: ["new"] };
+		const edit: HTEdit = { remove_from: "+ribbx│const x = 1;", remove_to: "-ribbx│const x = 1;", text: ["new"] };
 		const warnings: string[] = [];
 		const resolved = resEdit(edit, warnings);
-		expect(resolved.hash_bounds[0].hash).toBe("riBB");
-		expect(resolved.hash_bounds[1].hash).toBe("riBB");
+		expect(resolved.hash_bounds[0].hash).toBe("ribbx");
+		expect(resolved.hash_bounds[1].hash).toBe("ribbx");
 		expect(warnings).toHaveLength(2);
 		expect(warnings[0]).toContain("diff-preview marker");
 		expect(warnings[1]).toContain('leading "-" marker');
 	});
 
 	it("leaves bare anchors untouched and emits no warning", () => {
-		const edit: HTEdit = { remove_from: "riBB", remove_to: "riBB", text: ["new"] };
+		const edit: HTEdit = { remove_from: "ribbx", remove_to: "ribbx", text: ["new"] };
 		const warnings: string[] = [];
 		const resolved = resEdit(edit, warnings);
-		expect(resolved.hash_bounds[0].hash).toBe("riBB");
+		expect(resolved.hash_bounds[0].hash).toBe("ribbx");
 		expect(warnings).toHaveLength(0);
 	});
 
 	it("still rejects rows without a leading hash", () => {
-		const edit: HTEdit = { remove_from: "│const x = 1;", remove_to: "riBB", text: ["new"] };
+		const edit: HTEdit = { remove_from: "│const x = 1;", remove_to: "ribbx", text: ["new"] };
 		expect(() => resEdit(edit)).toThrow(/^\[E_BAD_REF\]/);
 	});
 });

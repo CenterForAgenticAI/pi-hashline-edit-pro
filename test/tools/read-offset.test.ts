@@ -6,8 +6,8 @@ import { anchorFor, getText, setupIntegrationTest, toolError, withTempDir, withT
 function contentRows(text: string): string[] {
   return text
     .split("\n")
-    .filter((line) => /^[A-Za-z]{4}│/.test(line))
-    .map((line) => line.slice(5));
+    .filter((line) => /^[a-z]{5}│/.test(line))
+    .map((line) => line.slice(6));
 }
 
 describe("read tool - offset addressing", () => {
@@ -85,16 +85,14 @@ describe("read tool - offset addressing", () => {
     });
   });
 
-  it("explains a case-only mismatch", async () => {
+  it("accepts a case-only mismatch", async () => {
     await withTempFile("sample.txt", "alpha\n", async ({ cwd }) => {
       const { ctx, readTool } = setupIntegrationTest(cwd);
       const first = getText(await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx));
       const anchor = anchorFor(first, "alpha");
-      const wrong = anchor === anchor.toLowerCase() ? anchor.toUpperCase() : anchor.toLowerCase();
-      const message = await toolError(() => readTool.execute("r2", { path: "sample.txt", offset: wrong }, undefined, undefined, ctx));
-      expect(message).toContain("[E_STALE_ANCHOR]");
-      expect(message).toContain("case-sensitive");
-      expect(message).toContain(anchor);
+      const wrong = anchor.toUpperCase();
+      const result = getText(await readTool.execute("r2", { path: "sample.txt", offset: wrong }, undefined, undefined, ctx));
+      expect(result).toContain("│alpha");
     });
   });
 

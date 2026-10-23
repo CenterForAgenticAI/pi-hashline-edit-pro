@@ -102,7 +102,7 @@ describe("insert tool", () => {
       const insertTool = getTool("insert");
       const readResult = await readTool.execute("r1", { path: "empty.ts" }, undefined, undefined, ctx);
       const emptyHash = getText(readResult).split("\n")[0]!.split("│")[0]!;
-      expect(emptyHash).toMatch(/^[A-Za-z]{4}$/);
+      expect(emptyHash).toMatch(/^[a-z]{5}$/);
 
       await insertTool.execute(
         "i1",
@@ -150,7 +150,7 @@ describe("insert tool", () => {
     await withTempFile("sample.ts", "alpha\nbeta\n", async ({ cwd }) => {
       const { ctx, getTool } = setupIntegrationTest(cwd);
       const insertTool = getTool("insert");
-      expect(await toolError(() => insertTool.execute("i1", { anchor: "PyBY", direction: "after", text: ["x"] }, undefined, undefined, ctx))).toMatch(/E_STALE_ANCHOR/);
+      expect(await toolError(() => insertTool.execute("i1", { anchor: "pybyx", direction: "after", text: ["x"] }, undefined, undefined, ctx))).toMatch(/E_STALE_ANCHOR/);
     });
   });
 
@@ -201,7 +201,7 @@ describe("insert tool", () => {
 
   it("rejects a NUL byte in lines before any file I/O", () => {
     const nul = String.fromCharCode(0);
-    expect(() => assertInsertReq({ anchor: "Hasu", direction: "after", text: nul })).toThrow(/NUL byte/);
+    expect(() => assertInsertReq({ anchor: "hasux", direction: "after", text: nul })).toThrow(/NUL byte/);
   });
 
   it("rejects a NUL byte in inserted lines", async () => {
@@ -401,7 +401,7 @@ describe("insert strip warnings", () => {
       const betaHash = extractHash(text.split("\n").find((line) => line.includes("│beta"))!);
       const result = await getTool("insert").execute(
         "i1",
-        { anchor: betaHash, direction: "after", text: ["abcd│one", `+${betaHash}│two`, "three"] },
+        { anchor: betaHash, direction: "after", text: ["abcde│one", `+${betaHash}│two`, "three"] },
         undefined, undefined, ctx,
       );
       expect(result.content[0].text).toContain('Stripped "anchor│" prefix from text line 1.');
@@ -442,8 +442,8 @@ describe("insert literal escape hints", () => {
       expect(hint).toContain(String.raw`[H_LITERAL_ESCAPE] text: "\u200b" written as literal text`);
       expect(hint).toContain("col 7");
       expect(await readFile(path, "utf-8")).toBe("alpha\nbeta\nstable\\u200bCheckout\n");
-      const writtenAnchor = hint.match(/([A-Za-z]{4})│ col/)?.[1];
-      expect(writtenAnchor).toMatch(/^[A-Za-z]{4}$/);
+      const writtenAnchor = hint.match(/([a-z]{5})│ col/)?.[1];
+      expect(writtenAnchor).toMatch(/^[a-z]{5}$/);
       const within = await getTool("replace_match").execute(
         "i2",
         { replace_from: writtenAnchor!, replace_to: writtenAnchor!, match: String.raw`\u200b`, replacement: "\u200b" },
@@ -472,7 +472,7 @@ describe("insert indentation hints", () => {
       );
       const hint = ((result.details.hints ?? []) as string[]).find((entry) => entry.startsWith("[H_INDENT_MISMATCH]")) ?? "";
       expect(hint).toContain("[H_INDENT_MISMATCH]");
-      expect(hint).toMatch(/new line [A-Za-z]{4}│ has 0 leading whitespace characters; neighboring line [A-Za-z]{4}│ has 2\./);
+      expect(hint).toMatch(/new line [a-z]{5}│ has 0 leading whitespace characters; neighboring line [a-z]{5}│ has 2\./);
       expect(hint).toContain("│ has");
       expect(await readFile(path, "utf-8")).toBe("routes:\n- id: checkout-11\n    feature: stableCheckout\n  - id: checkout-5\n    feature: legacyCheckout\n");
     });
@@ -536,8 +536,8 @@ describe("insert tool rendering", () => {
       const preview = await insertPreview({ anchor: betaHash, direction: "before", text: ["BETA0"] }, cwd);
       const diff = (preview as { diff: string }).diff;
       expect(diff).toContain(` ${betaHash}│beta`);
-      expect(diff).not.toMatch(/^-[A-Za-z]{4}│beta$/m);
-      expect(diff).not.toMatch(/^\+[A-Za-z]{4}│beta$/m);
+      expect(diff).not.toMatch(/^-[a-z]{5}│beta$/m);
+      expect(diff).not.toMatch(/^\+[a-z]{5}│beta$/m);
     });
   });
 
@@ -553,13 +553,13 @@ describe("insert tool rendering", () => {
     const result = {
       content: [{ type: "text", text: "Successfully inserted in sample.ts. Added 1 line(s), removed 0 line(s)." }],
       details: {
-        diff: "+ATIm│BETA1\n-ATIm│beta",
+        diff: "+atimx│BETA1\n-atimx│beta",
         metrics: { classification: "applied", added_lines: 1, removed_lines: 0 },
       },
     };
     const component = tool.renderResult!(result as any, { expanded: false, isPartial: false }, theme, { state: {}, lastComponent: undefined, isError: false } as any) as any;
-    expect(component.text).toContain("+ATIm│BETA1");
-    expect(component.text).toContain("-ATIm│beta");
+    expect(component.text).toContain("+atimx│BETA1");
+    expect(component.text).toContain("-atimx│beta");
   });
 
   it("computes a diff preview in renderCall for insert args", async () => {

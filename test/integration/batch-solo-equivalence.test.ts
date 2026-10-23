@@ -130,7 +130,7 @@ function projectedLineCount(baseCount: number, edits: EditSpec[]): number {
 function anchorsFromRead(text: string): string[] {
   return text
     .split("\n")
-    .filter((line) => /^[A-Za-z]{4}│/.test(line))
+    .filter((line) => /^[a-z]{5}│/.test(line))
     .map((line) => line.slice(0, 4));
 }
 

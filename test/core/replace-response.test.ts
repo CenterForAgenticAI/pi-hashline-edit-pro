@@ -281,8 +281,8 @@ describe("buildChanged", () => {
       result,
       resultHashes,
       warnings: [
-        String.raw`[H_LITERAL_ESCAPE] text: "\u200b" written as literal text (Zbbb│ col 4).`,
-        String.raw`[H_UNICODE_LOST] Zbbb│ missing "\u200b"; Aaaa│ has it at col 7.`,
+        String.raw`[H_LITERAL_ESCAPE] text: "\u200b" written as literal text (zbbbx│ col 4).`,
+        String.raw`[H_UNICODE_LOST] zbbbx│ missing "\u200b"; aaaaz│ has it at col 7.`,
       ],
       snapshotId: "snap1",
       editMeta: { editsAttempted: 1, noopEditsCount: 0, firstChangedLine: 2, lastChangedLine: 2, addedLines: 1, removedLines: 1 },

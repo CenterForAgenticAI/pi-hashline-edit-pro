@@ -291,8 +291,8 @@ describe("replace literal escape hints", () => {
       expect(hint).toContain("col 7");
       expect(result.details.metrics?.warnings).toBe(0);
       expect(await readFile(path, "utf-8")).toBe("aaa\nstable\\u200bCheckout\nccc\n");
-      const writtenAnchor = hint.match(/([A-Za-z]{4})│ col/)?.[1];
-      expect(writtenAnchor).toMatch(/^[A-Za-z]{4}$/);
+      const writtenAnchor = hint.match(/([a-z]{5})│ col/)?.[1];
+      expect(writtenAnchor).toMatch(/^[a-z]{5}$/);
       const within = await getTool("replace_match").execute(
         "e2",
         { replace_from: writtenAnchor!, replace_to: writtenAnchor!, match: String.raw`\u200b`, replacement: "\u200b" },

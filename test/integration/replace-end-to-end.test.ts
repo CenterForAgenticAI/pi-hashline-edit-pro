@@ -141,7 +141,7 @@ describe("replace tool - end-to-end", () => {
 
       const readResult = await readTool.execute("r1", { path: "empty.ts" }, undefined, undefined, ctx);
       const emptyHash = getText(readResult).split("\n")[0]!.split("│")[0]!;
-      expect(emptyHash).toMatch(/^[A-Za-z]{4}$/);
+      expect(emptyHash).toMatch(/^[a-z]{5}$/);
 
       await editTool.execute(
         "e1",
@@ -172,7 +172,7 @@ describe("replace tool - end-to-end", () => {
       const emptiedText = getText(emptied);
       expect(emptiedText).toContain("File is empty. Use replace on ");
       expect(await readFile(path, "utf-8")).toBe("");
-      const emptyAnchor = emptiedText.match(/([A-Za-z]{4})│/)![1]!;
+      const emptyAnchor = emptiedText.match(/([a-z]{5})│/)![1]!;
 
       const seeded = await editTool.execute("e2", { remove_from: emptyAnchor, remove_to: emptyAnchor, text: ["first"] }, undefined, undefined, ctx);
       expect(getText(seeded)).toContain("Successfully replaced");
@@ -362,9 +362,9 @@ describe("replace tool - end-to-end", () => {
       expect(details.diff!).not.toContain("row(s) exceed");
       expect(Buffer.byteLength(details.diff!, "utf-8")).toBeLessThan(5 * 1024);
       const markerRow = details.diff!.split("\n").find((l) => l.includes("│[Row is"))!;
-      expect(markerRow).toMatch(/^ [A-Za-z]{4}│\[Row is/);
+      expect(markerRow).toMatch(/^ [a-z]{5}│\[Row is/);
       const served = ownersForPath(await resolveTarget(toCwd("min.js", cwd)));
-      expect(served?.has(markerRow.match(/^ ([A-Za-z]{4})│/)![1]!)).toBe(true);
+      expect(served?.has(markerRow.match(/^ ([a-z]{5})│/)![1]!)).toBe(true);
       expect(details.patchTruncated).toBe(true);
       expect(details.patch).toBeDefined();
       expect(details.patch!).not.toContain(long);
@@ -379,7 +379,7 @@ describe("replace tool - end-to-end", () => {
       const readResult = await readTool.execute("r1", { path: "min.js" }, undefined, undefined, ctx);
       const text = getText(readResult);
       const markerRow = text.split("\n").find((l) => l.includes("[Line 2 is"))!;
-      expect(markerRow).toMatch(/^[A-Za-z]{4}│\[Line 2 is/);
+      expect(markerRow).toMatch(/^[a-z]{5}│\[Line 2 is/);
       const markerHash = markerRow.split("│")[0]!;
       const editResult = await editTool.execute(
         "e1",

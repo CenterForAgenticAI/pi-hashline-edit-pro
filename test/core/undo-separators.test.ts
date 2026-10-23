@@ -14,7 +14,7 @@ describe("undo separators", () => {
 			bom: "",
 			ending: "\n",
 			separators: ["\r\n"],
-			hashes: ["ATIm", "BeSR"],
+			hashes: ["atimx", "besrx"],
 			resultContent: "a\nc",
 			resultSeparators: ["\r\n"],
 		});
@@ -29,7 +29,7 @@ describe("undo separators", () => {
 			content: "x",
 			bom: "",
 			ending: "\n",
-			hashes: ["ATIm"],
+			hashes: ["atimx"],
 			resultContent: "y",
 		});
 		const entry = getUndoEntry(store, "/plain.ts");
@@ -43,7 +43,7 @@ describe("undo separators", () => {
 			content: "x",
 			bom: "",
 			ending: "\n",
-			hashes: ["ATIm"],
+			hashes: ["atimx"],
 			resultContent: "y",
 		});
 		const db = new DatabaseSync(hashStorePath(), { defensive: false } as never);
@@ -58,7 +58,7 @@ describe("undo separators", () => {
 			content: "x",
 			bom: "",
 			ending: "\n",
-			hashes: ["ATIm"],
+			hashes: ["atimx"],
 			resultContent: "y",
 		});
 		const db = new DatabaseSync(hashStorePath(), { defensive: false } as never);

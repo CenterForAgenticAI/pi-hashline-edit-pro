@@ -5,7 +5,7 @@ import { createHash } from "node:crypto";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { sessionClaimsDir } from "./paths";
 import { contentChecksum } from "./hashline/hasher";
-import { ANCHOR_COUNT, anchorAt } from "./hashline/alphabet";
+import { ANCHOR_COUNT, HASH_RE, anchorAt } from "./hashline/alphabet";
 import { HASH_PROBE_STRIDE, MAX_HASH_LINES } from "./hashline/hash";
 import { assertLineCount, errCode, isRec, splitLines, spliceAll } from "./utils";
 import * as Diff from "diff";
@@ -249,8 +249,12 @@ export function foldRegistryEvents(events: RegistryEvent[], seed?: string): Sess
   return state;
 }
 
-function isStringArray(value: unknown): value is string[] {
-  return Array.isArray(value) && value.every((entry) => typeof entry === "string");
+function isAnchor(value: unknown): value is string {
+  return typeof value === "string" && HASH_RE.test(value);
+}
+
+function isAnchorList(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every(isAnchor);
 }
 
 function isRegistryEvent(value: unknown): value is RegistryEvent {
@@ -260,10 +264,10 @@ function isRegistryEvent(value: unknown): value is RegistryEvent {
   if (value.kind === "allocate") {
     return typeof value.path === "string"
       && Array.isArray(value.rows)
-      && value.rows.every((row) => Array.isArray(row) && row.length === 2 && typeof row[0] === "string" && typeof row[1] === "string");
+      && value.rows.every((row) => Array.isArray(row) && row.length === 2 && isAnchor(row[0]) && typeof row[1] === "string");
   }
-  if (value.kind === "free") return typeof value.path === "string" && (value.anchors === undefined || isStringArray(value.anchors));
-  if (value.kind === "minted") return isStringArray(value.anchors);
+  if (value.kind === "free") return typeof value.path === "string" && (value.anchors === undefined || isAnchorList(value.anchors));
+  if (value.kind === "minted") return isAnchorList(value.anchors);
   return false;
 }
 
@@ -386,7 +390,8 @@ async function loadRegistryState(key: string, sessionFile: string, token: object
   registries.set(key, folded);
   sidecarByKey.set(key, sidecar);
   if (rawLog.length > 0) {
-    await compactSidecarIfNeeded(sidecar, rawLog, sessionFile, folded, firstLineSessionFile(rawLog) !== sessionFile);
+    const loggedEvents = rawLog.split("\n").filter((line) => line.trim().length > 0).length;
+    await compactSidecarIfNeeded(sidecar, rawLog, sessionFile, folded, loggedEvents > events.length || firstLineSessionFile(rawLog) !== sessionFile);
   }
   try {
     await mkdir(sessionClaimsDir(), { recursive: true, mode: 0o700 });
@@ -707,24 +712,6 @@ export function markServed(
 
 export function ownerOf(anchor: string): OwnedAnchor | undefined {
   return current()?.owned.get(anchor);
-}
-
-export interface CaseFoldedOwner {
-  anchor: string;
-  path: string;
-}
-
-export function ownersDifferingOnlyByCase(anchor: string, paths?: ReadonlySet<string>): CaseFoldedOwner[] {
-  const state = current();
-  if (!state) return [];
-  const lower = anchor.toLowerCase();
-  const matches: CaseFoldedOwner[] = [];
-  for (const [owned, entry] of state.owned) {
-    if (owned === anchor || owned.toLowerCase() !== lower) continue;
-    if (paths && paths.size > 0 && !paths.has(entry.path)) continue;
-    matches.push({ anchor: owned, path: entry.path });
-  }
-  return matches;
 }
 
 export function ownersForPath(path: string): Map<string, string> {
@@ -1058,6 +1045,7 @@ export function adoptAnchors(path: string, entries: Map<string, string>): void {
 	}
 	const adopted: Array<[string, string]> = [];
 	for (const [anchor, checksum] of entries) {
+		if (!HASH_RE.test(anchor)) continue;
 		const existing = state.owned.get(anchor);
 		if (existing && existing.path !== path) continue;
 		state.owned.set(anchor, { path, checksum });

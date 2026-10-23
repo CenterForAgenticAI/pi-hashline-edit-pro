@@ -47,21 +47,12 @@ describe("resolveEditTarget cross file", () => {
     const b = allocateAnchor("/same-gap.ts", "ck-2");
     expect(resolveEditTarget(a, b)).toBe("/same-gap.ts");
   });
-  it("explains case sensitivity when a ref differs only in case from an owned anchor", () => {
+  it("resolves a ref that differs only in case from an owned anchor", () => {
     const anchor = allocateAnchor("/case-gap.ts", "ck-case");
-    const wrong = anchor === anchor.toLowerCase() ? anchor.toUpperCase() : anchor.toLowerCase();
-    let message = "";
-    try {
-      resolveEditTarget(wrong);
-    } catch (error) {
-      message = error instanceof Error ? error.message : String(error);
-    }
-    expect(message).toContain("[E_STALE_ANCHOR]");
-    expect(message).toContain("not owned in this session");
-    expect(message).toContain("case-sensitive");
-    expect(message).toContain(anchor);
+    const wrong = anchor.toUpperCase();
+    expect(resolveEditTarget(wrong)).toBe("/case-gap.ts");
   });
-  it("omits the case hint for an anchor that is simply unknown", () => {
+  it("rejects an unknown anchor even when its case differs", () => {
     const anchor = allocateAnchor("/case-none.ts", "ck-none");
     const unknown = (anchor[0].toLowerCase() === "a" ? "B" : "A") + anchor.slice(1);
     let message = "";
@@ -71,34 +62,33 @@ describe("resolveEditTarget cross file", () => {
       message = error instanceof Error ? error.message : String(error);
     }
     expect(message).toContain("[E_STALE_ANCHOR]");
-    expect(message).not.toContain("case-sensitive");
   });
-  it("only reports case matches owned by the file the co-anchor resolved to", () => {
+  it("reports different files when a case variant resolves to another file", () => {
     const valid = allocateAnchor("/fold-target.ts", "ck-target");
     const other = allocateAnchor("/fold-other.ts", "ck-other");
-    const wrongCaseOfOther = other === other.toLowerCase() ? other.toUpperCase() : other.toLowerCase();
+    const wrongCaseOfOther = other.toUpperCase();
     let message = "";
     try {
       resolveEditTarget(valid, wrongCaseOfOther);
     } catch (error) {
       message = error instanceof Error ? error.message : String(error);
     }
-    expect(message).toContain("[E_STALE_ANCHOR]");
-    expect(message).not.toContain("case-sensitive");
+    expect(message).toContain("[E_BAD_SHAPE]");
+    expect(message).toContain("different files");
   });
 });
 
 describe("buildServedMap duplicates", () => {
   it("uses the first occurrence for a duplicated anchor", async () => {
-    const fileHashes = ["AAAA", "BBBB", "AAAA"];
+    const fileHashes = ["aaaax", "bbbbx", "aaaax"];
     const fileLines = ["first", "second", "third"];
-    const entries = buildServedMap(fileHashes, fileLines, ["AAAA"]);
+    const entries = buildServedMap(fileHashes, fileLines, ["aaaax"]);
     expect(entries).toHaveLength(1);
-    expect(entries[0]![0]).toBe("AAAA");
+    expect(entries[0]![0]).toBe("aaaax");
     expect(entries[0]![1]).toBe(contentChecksum(hashSource("first")));
   });
   it("skips wanted anchors absent from the file", () => {
-    const entries = buildServedMap(["AAAA", "BBBB"], ["x", "y"], ["ZZZZ"]);
+    const entries = buildServedMap(["aaaax", "bbbbx"], ["x", "y"], ["zzzzx"]);
     expect(entries).toEqual([]);
   });
 });
@@ -231,29 +221,29 @@ describe("grep regex compatibility", () => {
 describe("buildCompactedLog roundtrip", () => {
   it("preserves owned and minted history through parse and fold", () => {
     const state = foldRegistryEvents([
-      { kind: "allocate", path: "/a.ts", rows: [["AAAA", "ck1"], ["BBBB", "ck2"]] },
-      { kind: "allocate", path: "/b.ts", rows: [["CCCC", "ck3"]] },
-      { kind: "minted", anchors: ["DDDD"] },
+      { kind: "allocate", path: "/a.ts", rows: [["aaaax", "ck1"], ["bbbbx", "ck2"]] },
+      { kind: "allocate", path: "/b.ts", rows: [["ccccx", "ck3"]] },
+      { kind: "minted", anchors: ["ddddx"] },
     ] as never);
     const log = buildCompactedLog("sessfile", state as never);
     expect(log.split("\n")[0]).toContain("sessfile");
     const refolded = foldRegistryEvents(parseRegistryLog(log));
     const owned = (refolded as unknown as { owned: Map<string, { path: string; checksum: string }> }).owned;
-    expect(owned.get("AAAA")).toEqual({ path: "/a.ts", checksum: "ck1" });
-    expect(owned.get("BBBB")).toEqual({ path: "/a.ts", checksum: "ck2" });
-    expect(owned.get("CCCC")).toEqual({ path: "/b.ts", checksum: "ck3" });
+    expect(owned.get("aaaax")).toEqual({ path: "/a.ts", checksum: "ck1" });
+    expect(owned.get("bbbbx")).toEqual({ path: "/a.ts", checksum: "ck2" });
+    expect(owned.get("ccccx")).toEqual({ path: "/b.ts", checksum: "ck3" });
     expect(owned.size).toBe(3);
     const minted = (refolded as unknown as { everMinted: Set<string> }).everMinted;
-    expect(minted.has("AAAA")).toBe(true);
-    expect(minted.has("BBBB")).toBe(true);
-    expect(minted.has("CCCC")).toBe(true);
-    expect(minted.has("DDDD")).toBe(true);
+    expect(minted.has("aaaax")).toBe(true);
+    expect(minted.has("bbbbx")).toBe(true);
+    expect(minted.has("ccccx")).toBe(true);
+    expect(minted.has("ddddx")).toBe(true);
   });
 });
 
 describe("buildCompactedLog byte bounds", () => {
   it("keeps every compacted line within the header read cap", () => {
-    const rows = Array.from({ length: 5000 }, (_, i) => [String(i).padStart(4, "0"), "0123456789abcdef"]);
+    const rows = Array.from({ length: 5000 }, (_, i) => [anchorAt(i), "0123456789abcdef"]);
     const state = foldRegistryEvents([{ kind: "allocate", path: "/big.ts", rows }] as never);
     const log = buildCompactedLog("sessfile", state as never);
     const lines = log.trimEnd().split("\n");

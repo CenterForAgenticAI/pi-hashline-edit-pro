@@ -12,7 +12,7 @@ export const TEXT_ENDING_NOTE =
   "A trailing line break sets the newline of the last line written instead of adding a blank line; a lone newline writes one blank line.";
 
 export const HASH_STORE_BUSY_TIMEOUT = 1000;
-export const HASH_STORE_VERSION = 9;
+export const HASH_STORE_VERSION = 10;
 export const NEW_CONTENT_NOT_ARRAY_MSG =
   `[E_BAD_SHAPE] "text" must be an array of strings, one per line (use [] to delete).`;
 

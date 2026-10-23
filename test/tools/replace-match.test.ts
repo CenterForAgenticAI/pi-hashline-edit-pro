@@ -129,7 +129,7 @@ describe("replace_match", () => {
       const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
       const text = getText(await readTool.execute("r1", { path: "checkout.md" }, undefined, undefined, ctx));
       const fence = anchorFor(text, "```");
-      const trailingEmpty = text.split("\n").filter((row) => /^[A-Za-z]{4}│$/.test(row)).pop()!.split("│")[0]!;
+      const trailingEmpty = text.split("\n").filter((row) => /^[a-z]{5}│$/.test(row)).pop()!.split("│")[0]!;
       const result = await getTool("replace_match").execute(
         "w1",
         { replace_from: fence, replace_to: trailingEmpty, match: "```", replacement: "```done" },
@@ -145,7 +145,7 @@ describe("replace_match", () => {
       const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
       const text = getText(await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx));
       const b = anchorFor(text, "b");
-      const blank = text.split("\n").filter((row) => /^[A-Za-z]{4}│$/.test(row)).pop()!.split("│")[0]!;
+      const blank = text.split("\n").filter((row) => /^[a-z]{5}│$/.test(row)).pop()!.split("│")[0]!;
       const result = await getTool("replace_match").execute(
         "w1",
         { replace_from: b, replace_to: blank, match: "b", replacement: "B" },
@@ -237,7 +237,7 @@ describe("replace_match", () => {
   it("points the old field names at their replacements", async () => {
     await withTempFile("sample.txt", "alpha\nbeta\ngamma\n", async ({ cwd }) => {
       const preview = await replaceMatchPreview(
-        { replace_from: "Hasu", replace_to: "Hasu", old_string: "beta", new_string: "BETA" },
+        { replace_from: "hasux", replace_to: "hasux", old_string: "beta", new_string: "BETA" },
         cwd,
       );
       const message = "error" in preview ? preview.error : "";

@@ -1,17 +1,18 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { HASH_CLASS } from "./hashline/alphabet";
+import { HASH_RUN } from "./hashline/alphabet";
 import { HASH_SEP } from "./hashline/hash";
 import { sessionContextReadable, servedForPath, withAnchorSession, type AnchorSessionContext } from "./anchor-registry";
 import { resolveInCwd } from "./fs-write";
 import { abortIf, splitLines, isRec } from "./utils";
 import type { ModelLike } from "./model-gate";
 
-const HASH_ECHO_RE = new RegExp(`^(?: *[0-9]+(?: │ |[:-]│ ))?[+ -]?(${HASH_CLASS})${HASH_SEP}`);
+const HASH_ECHO_RE = new RegExp(`^(?: *[0-9]+(?: │ |[:-]│ ))?[+ -]?(${HASH_RUN})${HASH_SEP}`);
 
 function searchEcho(lines: string[], served: ReadonlyMap<string, string> | ReadonlySet<string>): { line: number; hash: string } | undefined {
   for (let i = 0; i < lines.length; i++) {
     const match = HASH_ECHO_RE.exec(lines[i]!);
-    if (match && served.has(match[1]! as never)) return { line: i + 1, hash: match[1]! };
+    const hash = match?.[1]?.toLowerCase();
+    if (hash !== undefined && served.has(hash)) return { line: i + 1, hash };
   }
   return undefined;
 }

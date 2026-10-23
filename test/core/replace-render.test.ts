@@ -31,7 +31,7 @@ describe("getPreviewInput", () => {
 	});
 
   it("returns partial input for record without path", () => {
-    expect(getPreviewInput({ remove_from: "ATIm", remove_to: "BeSR", text: "new" })).toEqual({ remove_from: "ATIm", remove_to: "BeSR", text: "new" });
+    expect(getPreviewInput({ remove_from: "atimx", remove_to: "besrx", text: "new" })).toEqual({ remove_from: "atimx", remove_to: "besrx", text: "new" });
   });
 
 	it("returns null for record with non-string path", () => {
@@ -43,16 +43,16 @@ describe("getPreviewInput", () => {
 	});
 
 	it("returns request for valid input", () => {
-		const input = { remove_from: "ATIm", remove_to: "BeSR", text: "new" };
+		const input = { remove_from: "atimx", remove_to: "besrx", text: "new" };
 		const result = getPreviewInput(input);
 		expect(result).toEqual(input);
 	});
 
 	it("leaves file_path untouched", () => {
-		const input = { file_path: "test.txt", remove_from: "ATIm", remove_to: "BeSR", text: "new" };
+		const input = { file_path: "test.txt", remove_from: "atimx", remove_to: "besrx", text: "new" };
 		const result = getPreviewInput(input);
 		expect(result?.path).toBeUndefined();
-		expect(result?.remove_from).toBe("ATIm");
+		expect(result?.remove_from).toBe("atimx");
 	});
 });
 
@@ -128,21 +128,21 @@ describe("highlightBatchRefs", () => {
 
 describe("fmtCall", () => {
 	it("formats call with the anchor range when no path is shown", () => {
-		const args = { remove_from: "ATIm", remove_to: "BeSR", text: ["new"] };
+		const args = { remove_from: "atimx", remove_to: "besrx", text: ["new"] };
 		const state = { preview: undefined };
 		const result = fmtCall(args, state, false, mockTheme);
-		expect(result).toContain("ATIm→BeSR");
+		expect(result).toContain("atimx→besrx");
 	});
 
 	it("formats call with error preview", () => {
-		const args = { remove_from: "ATIm", remove_to: "BeSR", text: ["new"] };
+		const args = { remove_from: "atimx", remove_to: "besrx", text: ["new"] };
 		const state = { preview: { error: "test error" } };
 		const result = fmtCall(args, state, false, mockTheme);
 		expect(result).toContain("test error");
 	});
 
 	it("formats call with diff preview", () => {
-		const args = { remove_from: "ATIm", remove_to: "BeSR", text: ["new"] };
+		const args = { remove_from: "atimx", remove_to: "besrx", text: ["new"] };
 		const state = { preview: { diff: "+added\n-removed" } };
 		const result = fmtCall(args, state, false, mockTheme);
 		expect(result).toContain("+added");

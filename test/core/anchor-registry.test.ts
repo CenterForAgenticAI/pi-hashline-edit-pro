@@ -47,12 +47,12 @@ afterEach(() => {
 });
 
 function oversizedAllocateLine(): string {
-  const row = JSON.stringify(["abcd", "0123456789abcdef"]);
+  const row = JSON.stringify(["abcde", "0123456789abcdef"]);
   const rowCount = Math.ceil((SIDECAR_HEADER_BYTES + 1024) / (Buffer.byteLength(row, "utf-8") + 1));
   return JSON.stringify({
     kind: "allocate",
     path: "/example.txt",
-    rows: Array.from({ length: rowCount }, () => ["abcd", "0123456789abcdef"]),
+    rows: Array.from({ length: rowCount }, () => ["abcde", "0123456789abcdef"]),
   });
 }
 
@@ -62,7 +62,7 @@ describe("anchor registry", () => {
     const second = allocateAnchor("b.ts", "ck1");
     const third = allocateAnchor("c.ts", "ck2");
     expect(new Set([first, second, third]).size).toBe(3);
-    expect(first).toMatch(/^[A-Za-z]{4}$/);
+    expect(first).toMatch(/^[a-z]{5}$/);
   });
 
   it("does not repeat the mint sequence after an ephemeral re-init", async () => {
@@ -112,7 +112,7 @@ describe("anchor registry", () => {
     resetRegistryForTests();
     expect(() => allocateAnchor("a.ts", "ck")).toThrow(/E_REGISTRY/);
     await initRegistry(undefined);
-    expect(allocateAnchor("a.ts", "ck")).toMatch(/^[A-Za-z]{4}$/);
+    expect(allocateAnchor("a.ts", "ck")).toMatch(/^[a-z]{5}$/);
   });
 
   it("never mints an owned anchor", () => {
@@ -195,18 +195,18 @@ describe("anchor registry", () => {
   });
 
   it("merges and scopes the served record", () => {
-    markServed("a.ts", [["AAAA", "ck1"], ["BBBB", "ck2"]]);
-    markServedScoped("a.ts", [["CCCC", "ck3"]], new Set(["AAAA", "CCCC"]));
+    markServed("a.ts", [["aaaax", "ck1"], ["bbbbx", "ck2"]]);
+    markServedScoped("a.ts", [["ccccx", "ck3"]], new Set(["aaaax", "ccccx"]));
     const served = servedForPath("a.ts")!;
-    expect(served.get("AAAA")).toBe("ck1");
-    expect(served.has("BBBB")).toBe(false);
-    expect(served.get("CCCC")).toBe("ck3");
+    expect(served.get("aaaax")).toBe("ck1");
+    expect(served.has("bbbbx")).toBe(false);
+    expect(served.get("ccccx")).toBe("ck3");
   });
 
   it("adopts error feedback anchors as owned and served", () => {
-    adoptAnchors("a.ts", new Map([["AAAA", "ck1"]]));
-    expect(ownerOf("AAAA")).toEqual({ path: "a.ts", checksum: "ck1" });
-    expect(servedForPath("a.ts")!.get("AAAA")).toBe("ck1");
+    adoptAnchors("a.ts", new Map([["aaaax", "ck1"]]));
+    expect(ownerOf("aaaax")).toEqual({ path: "a.ts", checksum: "ck1" });
+    expect(servedForPath("a.ts")!.get("aaaax")).toBe("ck1");
   });
 
   it("clears ownership and served state on /clear-anchors", () => {
@@ -316,45 +316,45 @@ describe("anchor registry", () => {
 
   it("shadows session state without mutating the real registry", () => {
     const real = foldRegistryEvents(parseRegistryLog([
-      '{"kind":"allocate","path":"s.ts","rows":[["AaAa","ckA"]]}',
-      '{"kind":"minted","anchors":["BbBb"]}',
+      '{"kind":"allocate","path":"s.ts","rows":[["aaaay","ckA"]]}',
+      '{"kind":"minted","anchors":["bbbby"]}',
     ].join("\n")));
     const shadow = shadowStateFrom(real);
     expect(shadow.served.size).toBe(0);
-    expect(shadow.owned.get("AaAa")).toEqual({ path: "s.ts", checksum: "ckA" });
-    shadow.owned.set("AaAa", { path: "t.ts", checksum: "ckZ" });
-    expect(shadow.owned.get("AaAa")).toEqual({ path: "t.ts", checksum: "ckZ" });
-    expect(real.owned.get("AaAa")).toEqual({ path: "s.ts", checksum: "ckA" });
-    shadow.owned.set("CcCc", { path: "s.ts", checksum: "ckC" });
-    expect(shadow.owned.delete("AaAa")).toBe(true);
-    expect(shadow.owned.delete("ZzZz")).toBe(false);
-    expect(shadow.owned.has("AaAa")).toBe(false);
-    expect(real.owned.has("AaAa")).toBe(true);
+    expect(shadow.owned.get("aaaay")).toEqual({ path: "s.ts", checksum: "ckA" });
+    shadow.owned.set("aaaay", { path: "t.ts", checksum: "ckZ" });
+    expect(shadow.owned.get("aaaay")).toEqual({ path: "t.ts", checksum: "ckZ" });
+    expect(real.owned.get("aaaay")).toEqual({ path: "s.ts", checksum: "ckA" });
+    shadow.owned.set("ccccy", { path: "s.ts", checksum: "ckC" });
+    expect(shadow.owned.delete("aaaay")).toBe(true);
+    expect(shadow.owned.delete("zzzzy")).toBe(false);
+    expect(shadow.owned.has("aaaay")).toBe(false);
+    expect(real.owned.has("aaaay")).toBe(true);
     expect(shadow.owned.size).toBe(1);
-    expect([...shadow.owned.keys()]).toEqual(["CcCc"]);
+    expect([...shadow.owned.keys()]).toEqual(["ccccy"]);
     expect([...shadow.owned.values()]).toEqual([{ path: "s.ts", checksum: "ckC" }]);
-    expect([...shadow.owned.entries()]).toEqual([["CcCc", { path: "s.ts", checksum: "ckC" }]]);
+    expect([...shadow.owned.entries()]).toEqual([["ccccy", { path: "s.ts", checksum: "ckC" }]]);
     shadow.owned.clear();
     expect(shadow.owned.size).toBe(0);
     expect(real.owned.size).toBe(1);
-    expect(shadow.everMinted.has("BbBb")).toBe(true);
-    shadow.everMinted.add("DdDd");
-    expect(real.everMinted.has("DdDd")).toBe(false);
-    expect([...shadow.everMinted]).toEqual(["AaAa", "BbBb", "DdDd"]);
+    expect(shadow.everMinted.has("bbbby")).toBe(true);
+    shadow.everMinted.add("ddddy");
+    expect(real.everMinted.has("ddddy")).toBe(false);
+    expect([...shadow.everMinted]).toEqual(["aaaay", "bbbby", "ddddy"]);
     expect(shadow.everMinted.size).toBe(3);
-    shadow.everMinted.add("AaAa");
+    shadow.everMinted.add("aaaay");
     expect(shadow.everMinted.size).toBe(3);
-    real.everMinted.add("DdDd");
+    real.everMinted.add("ddddy");
     expect(shadow.everMinted.size).toBe(3);
-    real.everMinted.add("EeEe");
+    real.everMinted.add("eeeex");
     expect(shadow.everMinted.size).toBe(4);
   });
 
   it("parses and folds the ownership log", () => {
     const events = parseRegistryLog([
-      '{"kind":"allocate","path":"a.ts","rows":[["AAAA","ck1"]]}',
+      '{"kind":"allocate","path":"a.ts","rows":[["aaaax","ck1"]]}',
       "not json",
-      '{"kind":"free","path":"a.ts","anchors":["AAAA"]}',
+      '{"kind":"free","path":"a.ts","anchors":["aaaax"]}',
       '{"kind":"clear"}',
     ].join("\n"));
     expect(events).toHaveLength(3);
@@ -367,10 +367,10 @@ describe("anchor registry", () => {
       '{"kind":"allocate","path":"a.ts"}',
       '{"kind":"free","path":"a.ts","anchors":5}',
       '{"kind":"minted"}',
-      '{"kind":"allocate","path":"a.ts","rows":[["AAAA","ck1"]]}',
+      '{"kind":"allocate","path":"a.ts","rows":[["aaaax","ck1"]]}',
     ].join("\n"));
-    expect(events).toEqual([{ kind: "allocate", path: "a.ts", rows: [["AAAA", "ck1"]] }]);
-    expect(foldRegistryEvents(events).owned.get("AAAA")).toEqual({ path: "a.ts", checksum: "ck1" });
+    expect(events).toEqual([{ kind: "allocate", path: "a.ts", rows: [["aaaax", "ck1"]] }]);
+    expect(foldRegistryEvents(events).owned.get("aaaax")).toEqual({ path: "a.ts", checksum: "ck1" });
     expect(() => foldRegistryEvents([{ kind: "allocate", path: "a.ts" } as never])).not.toThrow();
     expect(() => foldRegistryEvents([{ kind: "free", path: "a.ts", anchors: 5 } as never])).not.toThrow();
   });
@@ -494,7 +494,7 @@ describe("anchor registry", () => {
   it("finds a session header on a later line within the header window", async () => {
     await mkdir(sessionClaimsDir(), { recursive: true });
     const sidecar = join(sessionClaimsDir(), "later-session.registry.jsonl");
-    const allocate = JSON.stringify({ kind: "allocate", path: "/a.ts", rows: [["abcd", "ck"]] });
+    const allocate = JSON.stringify({ kind: "allocate", path: "/a.ts", rows: [["abcde", "ck"]] });
     const session = JSON.stringify({ kind: "session", sessionFile: "/later-live.jsonl" });
     await writeFile(sidecar, `${allocate}\n${session}\n`, "utf-8");
     await expect(readSidecarSessionFile(sidecar)).resolves.toBe("/later-live.jsonl");
@@ -525,7 +525,7 @@ describe("anchor registry", () => {
   it("garbage-collects a dead sidecar whose session header is not the first line", async () => {
     await mkdir(sessionClaimsDir(), { recursive: true });
     const sidecar = join(sessionClaimsDir(), "second-line-dead.registry.jsonl");
-    const allocate = JSON.stringify({ kind: "allocate", path: "/a.ts", rows: [["abcd", "ck"]] });
+    const allocate = JSON.stringify({ kind: "allocate", path: "/a.ts", rows: [["abcde", "ck"]] });
     const session = JSON.stringify({ kind: "session", sessionFile: join(sessionClaimsDir(), "second-line-gone.jsonl") });
     await writeFile(sidecar, `${allocate}\n${session}\n`, "utf-8");
     await gcRegistrySidecars();
@@ -537,23 +537,39 @@ describe("anchor registry", () => {
     const liveSession = join(sessionClaimsDir(), "second-line-live.jsonl");
     await writeFile(liveSession, "", "utf-8");
     const sidecar = join(sessionClaimsDir(), "second-line-live.registry.jsonl");
-    const allocate = JSON.stringify({ kind: "allocate", path: "/a.ts", rows: [["abcd", "ck"]] });
+    const allocate = JSON.stringify({ kind: "allocate", path: "/a.ts", rows: [["abcde", "ck"]] });
     const session = JSON.stringify({ kind: "session", sessionFile: liveSession });
     await writeFile(sidecar, `${allocate}\n${session}\n`, "utf-8");
     await gcRegistrySidecars();
     await expect(readFile(sidecar, "utf-8")).resolves.toContain("allocate");
   });
 
+  it("drops anchors from a sidecar written in the old 4-character format", async () => {
+    await mkdir(sessionClaimsDir(), { recursive: true });
+    const sessionFile = join(sessionClaimsDir(), "old-format.jsonl");
+    await writeFile(sessionFile, "", "utf-8");
+    const key = createHash("sha256").update(sessionFile).digest("hex").slice(0, 24);
+    const sidecar = join(sessionClaimsDir(), `${key}.registry.jsonl`);
+    const session = JSON.stringify({ kind: "session", sessionFile });
+    const legacy = JSON.stringify({ kind: "allocate", path: "/legacy.ts", rows: [["Abcd", "ck"]] });
+    await writeFile(sidecar, `${session}\n${legacy}\n`, "utf-8");
+    await initRegistry(sessionFile);
+    expect(ownerOf("Abcd")).toBeUndefined();
+    expect(ownerOf("abcd")).toBeUndefined();
+    const log = await readFile(sidecar, "utf-8");
+    expect(log).not.toContain("Abcd");
+    expect(log.split("\n")[0]).toContain("old-format.jsonl");
+  });
   it("normalizes a legacy sidecar so its session header becomes the first line", async () => {
     await mkdir(sessionClaimsDir(), { recursive: true });
     const sessionFile = join(sessionClaimsDir(), "normalize.jsonl");
     await writeFile(sessionFile, "", "utf-8");
     const key = createHash("sha256").update(sessionFile).digest("hex").slice(0, 24);
     const sidecar = join(sessionClaimsDir(), `${key}.registry.jsonl`);
-    const allocate = JSON.stringify({ kind: "allocate", path: "/legacy.ts", rows: [["abcd", "ck"]] });
+    const allocate = JSON.stringify({ kind: "allocate", path: "/legacy.ts", rows: [["abcde", "ck"]] });
     await writeFile(sidecar, `${allocate}\n`, "utf-8");
     await initRegistry(sessionFile);
-    expect(ownerOf("abcd")).toEqual({ path: "/legacy.ts", checksum: "ck" });
+    expect(ownerOf("abcde")).toEqual({ path: "/legacy.ts", checksum: "ck" });
     const firstLine = (await readFile(sidecar, "utf-8")).split("\n")[0]!;
     const parsed = JSON.parse(firstLine) as { kind?: string; sessionFile?: string };
     expect(parsed.kind).toBe("session");
@@ -566,7 +582,7 @@ describe("anchor registry", () => {
     await writeFile(sessionFile, "", "utf-8");
     const key = createHash("sha256").update(sessionFile).digest("hex").slice(0, 24);
     const sidecar = join(sessionClaimsDir(), `${key}.registry.jsonl`);
-    const allocate = JSON.stringify({ kind: "allocate", path: "/legacy.ts", rows: [["abcd", "ck"]] });
+    const allocate = JSON.stringify({ kind: "allocate", path: "/legacy.ts", rows: [["abcde", "ck"]] });
     await writeFile(sidecar, `${allocate}\n`, "utf-8");
     await initRegistry(sessionFile);
     resetRegistryForTests();
@@ -740,12 +756,12 @@ describe("anchor registry", () => {
   it("frees anchors that cannot be matched when a snapshot has no line checksums", async () => {
     const path = join(sessionClaimsDir(), "no-checksums.txt");
     const store = await loadHashStore();
-    upsertSnapshot(store, path, contentChecksum("a\nb\nc\n"), 3, ["AAAA", "BBBB", "CCCC"]);
-    adoptAnchors(path, new Map([["AAAA", "ck1"], ["BBBB", "ck2"], ["CCCC", "ck3"]]));
+    upsertSnapshot(store, path, contentChecksum("a\nb\nc\n"), 3, ["aaaax", "bbbbx", "ccccx"]);
+    adoptAnchors(path, new Map([["aaaax", "ck1"], ["bbbbx", "ck2"], ["ccccx", "ck3"]]));
     const hashes = await lineHashes("a\nX\nc\n", path);
     expect(hashes).toHaveLength(3);
     expect(new Set(hashes).size).toBe(3);
     expect(ownersForPath(path).size).toBe(3);
-    for (const anchor of ["AAAA", "BBBB", "CCCC"]) expect(ownerOf(anchor)).toBeUndefined();
+    for (const anchor of ["aaaax", "bbbbx", "ccccx"]) expect(ownerOf(anchor)).toBeUndefined();
   });
 });

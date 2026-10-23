@@ -38,18 +38,18 @@ describe("scoped state", () => {
       vi.stubEnv("PI_HASHLINE_DIR", scope);
       const store = await loadHashStore();
       await initRegistry(session);
-      const undo = { content: scope, bom: "", ending: "\n", hashes: ["ATIm"], resultContent: "new" };
+      const undo = { content: scope, bom: "", ending: "\n", hashes: ["atimx"], resultContent: "new" };
       if (!anchors.has(scope)) {
         expect(store.stmts.snapshotPaths()).toEqual([]);
         expect(getUndoEntry(store, target)).toBeUndefined();
         expect(ownersForPath(target).size).toBe(0);
         expect((await readConfig()).autoRead).toBe(true);
         await updateConfig((config) => { config.autoRead = scope !== scopes[0]; });
-        persistSnapshot(store, target, "same content", [scope === scopes[0] ? "ATIm" : "BeSR"]);
+        persistSnapshot(store, target, "same content", [scope === scopes[0] ? "atimx" : "besrx"]);
         upsertUndo(store, target, undo);
         anchors.set(scope, allocateAnchor(target, scope));
       }
-      expect(getSnapshot(store, target, "same content")).toEqual([scope === scopes[0] ? "ATIm" : "BeSR"]);
+      expect(getSnapshot(store, target, "same content")).toEqual([scope === scopes[0] ? "atimx" : "besrx"]);
       expect(getUndoEntry(store, target)).toEqual(undo);
       expect(ownersForPath(target)).toEqual(new Map([[anchors.get(scope), scope]]));
       expect((await readConfig()).autoRead).toBe(scope !== scopes[0]);
@@ -66,7 +66,7 @@ describe("scoped state", () => {
     const shared = configDir();
     const legacyPath = legacyHashStorePath();
     const target = join(home, "legacy.ts");
-    const legacy = JSON.stringify({ snapshots: { [target]: { content: "old", hashes: ["ATIm"] } } });
+    const legacy = JSON.stringify({ snapshots: { [target]: { content: "old", hashes: ["atimx"] } } });
     await mkdir(shared, { recursive: true });
     await writeFile(legacyPath, legacy);
     await writeFile(configPath(), JSON.stringify({ autoRead: false }));
@@ -83,7 +83,7 @@ describe("scoped state", () => {
     shutdownHashStore();
     vi.stubEnv("PI_HASHLINE_DIR", undefined);
     const standalone = await loadHashStore();
-    expect(getSnapshot(standalone, target, "old")).toEqual(["ATIm"]);
+    expect(getSnapshot(standalone, target, "old")).toEqual(["atimx"]);
     expect((await readConfig()).autoRead).toBe(false);
     expect(await readFile(`${legacyPath}.bak`, "utf-8")).toBe(legacy);
     await expect(stat(legacyPath)).rejects.toMatchObject({ code: "ENOENT" });

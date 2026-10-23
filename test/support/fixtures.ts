@@ -242,7 +242,7 @@ export async function toolError(run: () => Promise<{ content: readonly unknown[]
 }
 
 export function extractHash(line: string): string {
-  const m = line.match(/([A-Za-z]{4})│/);
+  const m = line.match(/([a-z]{5})│/);
   return m ? m[1]! : line.split("│")[0]!;
 }
 

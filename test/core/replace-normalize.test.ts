@@ -11,7 +11,7 @@ describe("normReq", () => {
 
 	it("returns object input unchanged when no normalization needed", () => {
 		const input = {
-			remove_from: "ATIm", remove_to: "ATIm",
+			remove_from: "atimx", remove_to: "atimx",
 			text: "new",
 		};
 		const result = normReq(input);
@@ -19,14 +19,14 @@ describe("normReq", () => {
 	});
 
 	it("leaves file_path untouched", () => {
-		const input = { file_path: "test.txt", remove_from: "ATIm", remove_to: "BeSR", text: ["new"] };
+		const input = { file_path: "test.txt", remove_from: "atimx", remove_to: "besrx", text: ["new"] };
 		const result = normReq(input) as Record<string, unknown>;
 		expect(result.path).toBeUndefined();
 		expect(result.file_path).toBe("test.txt");
 	});
 
 	it("does not overwrite existing path with file_path", () => {
-		const input = { path: "original.txt", file_path: "alias.txt", remove_from: "ATIm", remove_to: "BeSR", text: ["new"] };
+		const input = { path: "original.txt", file_path: "alias.txt", remove_from: "atimx", remove_to: "besrx", text: ["new"] };
 		const result = normReq(input) as Record<string, unknown>;
 		expect(result.path).toBe("original.txt");
 	});
@@ -42,7 +42,7 @@ describe("normReq", () => {
 	});
 
 	it("preserves other fields", () => {
-		const input = { remove_from: "ATIm", remove_to: "BeSR", text: ["new"], custom: "value" };
+		const input = { remove_from: "atimx", remove_to: "besrx", text: ["new"], custom: "value" };
 		const result = normReq(input) as Record<string, unknown>;
 		expect(result.custom).toBe("value");
 	});
@@ -50,7 +50,7 @@ describe("normReq", () => {
 	it("does not mutate the original input", () => {
 		const input = {
 			file_path: "src/main.ts",
-			remove_from: "ATIm", remove_to: "BeSR",
+			remove_from: "atimx", remove_to: "besrx",
 			text: ["x"],
 		};
 		const originalFilePath = input.file_path;
@@ -64,43 +64,43 @@ describe("normReq", () => {
 describe("normReq - top-level shape", () => {
 	it("keeps remove_from/remove_to and text at top level", () => {
 		const input = {
-			remove_from: "ATIm", remove_to: "BeSR",
+			remove_from: "atimx", remove_to: "besrx",
 			text: ["new line"],
 		};
 		const result = normReq(input) as Record<string, unknown>;
-		expect(result.remove_from).toEqual("ATIm");
-		expect(result.remove_to).toEqual("BeSR");
+		expect(result.remove_from).toEqual("atimx");
+		expect(result.remove_to).toEqual("besrx");
 		expect(result.text).toEqual("new line");
 	});
 
 	it("leaves file_path untouched in the flat format", () => {
 		const input = {
 			file_path: "src/main.ts",
-			remove_from: "ATIm", remove_to: "BeSR",
+			remove_from: "atimx", remove_to: "besrx",
 			text: ["new"],
 		};
 		const result = normReq(input) as Record<string, unknown>;
 		expect(result.path).toBeUndefined();
 		expect(result.file_path).toBe("src/main.ts");
-		expect(result.remove_from).toEqual("ATIm");
-		expect(result.remove_to).toEqual("BeSR");
+		expect(result.remove_from).toEqual("atimx");
+		expect(result.remove_to).toEqual("besrx");
 	});
 
 	it("leaves replace_from and replace_to untouched", () => {
 		const input = {
-			replace_from: "ATIm", replace_to: "BeSR",
+			replace_from: "atimx", replace_to: "besrx",
 			text: ["new"],
 		};
 		const result = normReq(input) as Record<string, unknown>;
-		expect(result.replace_from).toEqual("ATIm");
-		expect(result.replace_to).toEqual("BeSR");
+		expect(result.replace_from).toEqual("atimx");
+		expect(result.replace_to).toEqual("besrx");
 		expect(result.remove_from).toBeUndefined();
 		expect(result.remove_to).toBeUndefined();
 	});
 
 	it("does not mutate the original flat-format input", () => {
 		const input = {
-			remove_from: "ATIm", remove_to: "BeSR",
+			remove_from: "atimx", remove_to: "besrx",
 			text: ["new"],
 		};
 		const origFrom = input.remove_from;
@@ -114,34 +114,34 @@ describe("normReq - top-level shape", () => {
 
 	it("leaves from and to untouched", () => {
 		const input = {
-			from: "ATIm", to: "BeSR",
+			from: "atimx", to: "besrx",
 			text: ["new"],
 		};
 		const result = normReq(input) as Record<string, unknown>;
-		expect(result.from).toEqual("ATIm");
-		expect(result.to).toEqual("BeSR");
+		expect(result.from).toEqual("atimx");
+		expect(result.to).toEqual("besrx");
 		expect(result.remove_from).toBeUndefined();
 		expect(result.remove_to).toBeUndefined();
 	});
 
 	it("does not overwrite existing anchors with from and to", () => {
 		const input = {
-			remove_from: "ATIm", remove_to: "BeSR",
+			remove_from: "atimx", remove_to: "besrx",
 			from: "Other", to: "Else",
 			text: ["new"],
 		};
 		const result = normReq(input) as Record<string, unknown>;
-		expect(result.remove_from).toEqual("ATIm");
-		expect(result.remove_to).toEqual("BeSR");
+		expect(result.remove_from).toEqual("atimx");
+		expect(result.remove_to).toEqual("besrx");
 		expect(result.from).toEqual("Other");
 		expect(result.to).toEqual("Else");
 	});
 
 	it("does not mutate the original from/to input", () => {
-		const input = { from: "ATIm", to: "BeSR", text: ["new"] };
+		const input = { from: "atimx", to: "besrx", text: ["new"] };
 		normReq(input);
-		expect(input.from).toBe("ATIm");
-		expect(input.to).toBe("BeSR");
+		expect(input.from).toBe("atimx");
+		expect(input.to).toBe("besrx");
 	});
 });
 
@@ -151,85 +151,85 @@ describe("normReq - line fields", () => {
 	const glmMalformedPayload = '["    \\"pi-hashline-edit-pro\\": \\"^4.3.5\\",""]';
 
 	it("keeps a JSON-array-shaped string literal", () => {
-		const result = normReq({ remove_from: "ATIm", remove_to: "ATIm", text: glmMapPayload }) as Record<string, unknown>;
+		const result = normReq({ remove_from: "atimx", remove_to: "atimx", text: glmMapPayload }) as Record<string, unknown>;
 		expect(result.text).toBe(glmMapPayload);
 	});
 
 	it("keeps a multi-line JSON-array-shaped string literal", () => {
-		const result = normReq({ remove_from: "ATIm", remove_to: "ATIm", text: glmSlicePayload }) as Record<string, unknown>;
+		const result = normReq({ remove_from: "atimx", remove_to: "atimx", text: glmSlicePayload }) as Record<string, unknown>;
 		expect(result.text).toBe(glmSlicePayload);
 	});
 
 	it("keeps a malformed JSON-array-shaped string literal", () => {
-		const result = normReq({ remove_from: "ATIm", remove_to: "ATIm", text: glmMalformedPayload }) as Record<string, unknown>;
+		const result = normReq({ remove_from: "atimx", remove_to: "atimx", text: glmMalformedPayload }) as Record<string, unknown>;
 		expect(result.text).toBe(glmMalformedPayload);
 	});
 
 	it("keeps a string payload with its line endings", () => {
-		const result = normReq({ remove_from: "ATIm", remove_to: "ATIm", text: "line1\nline2" }) as Record<string, unknown>;
+		const result = normReq({ remove_from: "atimx", remove_to: "atimx", text: "line1\nline2" }) as Record<string, unknown>;
 		expect(result.text).toBe("line1\nline2");
 	});
 
 	it("keeps a stringified empty array literal", () => {
-		const result = normReq({ remove_from: "ATIm", remove_to: "ATIm", text: "[]" }) as Record<string, unknown>;
+		const result = normReq({ remove_from: "atimx", remove_to: "atimx", text: "[]" }) as Record<string, unknown>;
 		expect(result.text).toBe("[]");
 	});
 
 	it("converts a legacy lines array into the exact text", () => {
-		const result = normReq({ remove_from: "ATIm", remove_to: "ATIm", text: ["a", "b"] }) as Record<string, unknown>;
+		const result = normReq({ remove_from: "atimx", remove_to: "atimx", text: ["a", "b"] }) as Record<string, unknown>;
 		expect(result.text).toBe("a\nb");
 	});
 
 	it("keeps a trailing blank line when converting a legacy array", () => {
-		const result = normReq({ remove_from: "ATIm", remove_to: "ATIm", text: ["a", ""] }) as Record<string, unknown>;
+		const result = normReq({ remove_from: "atimx", remove_to: "atimx", text: ["a", ""] }) as Record<string, unknown>;
 		expect(result.text).toBe("a\n\n");
 	});
 
 	it("converts an empty legacy array into a deletion", () => {
-		const result = normReq({ remove_from: "ATIm", remove_to: "ATIm", text: [] }) as Record<string, unknown>;
+		const result = normReq({ remove_from: "atimx", remove_to: "atimx", text: [] }) as Record<string, unknown>;
 		expect(result.text).toBe("");
 	});
 
 	it("still unwraps a legacy stringified array element", () => {
-		const result = normReq({ remove_from: "ATIm", remove_to: "ATIm", text: [glmMapPayload] }) as Record<string, unknown>;
+		const result = normReq({ remove_from: "atimx", remove_to: "atimx", text: [glmMapPayload] }) as Record<string, unknown>;
 		expect(result.text).toBe('    "pi-hashline-edit-pro": "^4.3.5",');
 	});
 
 	it("normalizes the insert text field the same way", () => {
-		const result = normReq({ anchor: "ATIm", direction: "after", text: ["a", "b"] }) as Record<string, unknown>;
+		const result = normReq({ anchor: "atimx", direction: "after", text: ["a", "b"] }) as Record<string, unknown>;
 		expect(result.text).toBe("a\nb");
 	});
 });
 
 describe("normReq - anchor aliases", () => {
   it("maps replace_from/replace_to onto remove_from/remove_to for the replace shape", () => {
-    const result = normReq({ replace_from: "ATIm", replace_to: "BeSR", text: "new" }, "remove") as Record<string, unknown>;
-    expect(result.remove_from).toBe("ATIm");
-    expect(result.remove_to).toBe("BeSR");
+    const result = normReq({ replace_from: "atimx", replace_to: "besrx", text: "new" }, "remove") as Record<string, unknown>;
+    expect(result.remove_from).toBe("atimx");
+    expect(result.remove_to).toBe("besrx");
     expect(result.replace_from).toBeUndefined();
     expect(result.replace_to).toBeUndefined();
   });
 
   it("maps remove_from/remove_to onto replace_from/replace_to for the replace_match shape", () => {
-    const result = normReq({ remove_from: "ATIm", remove_to: "BeSR", match: "a", replacement: "b" }, "replace") as Record<string, unknown>;
-    expect(result.replace_from).toBe("ATIm");
-    expect(result.replace_to).toBe("BeSR");
+    const result = normReq({ remove_from: "atimx", remove_to: "besrx", match: "a", replacement: "b" }, "replace") as Record<string, unknown>;
+    expect(result.replace_from).toBe("atimx");
+    expect(result.replace_to).toBe("besrx");
     expect(result.remove_from).toBeUndefined();
     expect(result.remove_to).toBeUndefined();
   });
 
   it("keeps the canonical field when both spellings are present", () => {
-    const result = normReq({ remove_from: "ATIm", replace_from: "ZZZZ", remove_to: "BeSR", replace_to: "YYYY", text: "new" }, "remove") as Record<string, unknown>;
-    expect(result.remove_from).toBe("ATIm");
-    expect(result.remove_to).toBe("BeSR");
+    const result = normReq({ remove_from: "atimx", replace_from: "zzzzx", remove_to: "besrx", replace_to: "YYYY", text: "new" }, "remove") as Record<string, unknown>;
+    expect(result.remove_from).toBe("atimx");
+    expect(result.remove_to).toBe("besrx");
     expect(result.replace_from).toBeUndefined();
     expect(result.replace_to).toBeUndefined();
   });
 
   it("leaves both spellings untouched without a pair", () => {
-    const result = normReq({ replace_from: "ATIm", replace_to: "BeSR", text: "new" }) as Record<string, unknown>;
-    expect(result.replace_from).toBe("ATIm");
-    expect(result.replace_to).toBe("BeSR");
+    const result = normReq({ replace_from: "atimx", replace_to: "besrx", text: "new" }) as Record<string, unknown>;
+    expect(result.replace_from).toBe("atimx");
+    expect(result.replace_to).toBe("besrx");
     expect(result.remove_from).toBeUndefined();
     expect(result.remove_to).toBeUndefined();
   });

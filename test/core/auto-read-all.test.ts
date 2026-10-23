@@ -285,7 +285,7 @@ describe("buildAutoReadAllInjection", () => {
       expect(injection!.files).toBe(2);
       expect(injection!.text).toContain("[hashline auto-read-all]");
       expect(injection!.text).toContain("=== sample.txt ===");
-      const anchor = injection!.text.match(/([A-Za-z]{4})│alpha/);
+      const anchor = injection!.text.match(/([a-z]{5})│alpha/);
       expect(anchor).not.toBeNull();
 
       const resolved = await resolveTarget(join(cwd, "sample.txt"));
@@ -347,7 +347,7 @@ describe("buildAutoReadAllInjection", () => {
       const injection = await buildAutoReadAllInjection(cwd, 1_000_000, "outline");
       expect(injection).toBeDefined();
       expect(injection!.text).toContain("=== app.ts (TypeScript) — 3 lines ===");
-      expect(injection!.text).toMatch(/[A-Za-z]{4}│function run/);
+      expect(injection!.text).toMatch(/[a-z]{5}│function run/);
       expect(injection!.text).not.toContain("return 1");
       expect(injection!.text).toContain("=== notes.txt — 2 lines ===");
     } finally {

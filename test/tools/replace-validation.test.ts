@@ -12,24 +12,24 @@ describe("assertReq", () => {
 	});
 
 	it("throws for unknown fields", () => {
-		expect(() => assertReq({ remove_from: "ATIm", remove_to: "BeSR", text: ["new"], unknown: "field" }))
+		expect(() => assertReq({ remove_from: "atimx", remove_to: "besrx", text: ["new"], unknown: "field" }))
 			.toThrow("[E_BAD_SHAPE]");
 	});
 
 	it("points replace_match fields at replace_match", () => {
 		expect(() => assertReq({ match: "a", replacement: "b" }))
 			.toThrow(/call replace_match with "replace_from", "replace_to", "match", and "replacement"/);
-		expect(() => assertReq({ remove_from: "ATIm", remove_to: "BeSR", text: "new", match: "a", replacement: "b" }))
+		expect(() => assertReq({ remove_from: "atimx", remove_to: "besrx", text: "new", match: "a", replacement: "b" }))
 			.toThrow(/call replace_match with "replace_from", "replace_to", "match", and "replacement"/);
 	});
 
   it("allows an optional path hint for require-path mode", () => {
-    expect(() => assertReq({ path: "test.txt", remove_from: "ATIm", remove_to: "BeSR", text: "new" }))
+    expect(() => assertReq({ path: "test.txt", remove_from: "atimx", remove_to: "besrx", text: "new" }))
       .not.toThrow();
   });
 
 	it("throws for a passed file_path", () => {
-		expect(() => assertReq({ file_path: "test.txt", remove_from: "ATIm", remove_to: "BeSR", text: ["new"] }))
+		expect(() => assertReq({ file_path: "test.txt", remove_from: "atimx", remove_to: "besrx", text: ["new"] }))
 			.toThrow("[E_BAD_SHAPE]");
 	});
 
@@ -39,7 +39,7 @@ describe("assertReq", () => {
   });
 
   it("throws when remove_from/remove_to present but no text", () => {
-    expect(() => assertReq({ remove_from: "ATIm", remove_to: "BeSR" }))
+    expect(() => assertReq({ remove_from: "atimx", remove_to: "besrx" }))
       .toThrow(/text/);
   });
 
@@ -50,14 +50,14 @@ describe("assertReq", () => {
 
   it("accepts the top-level edit shape", () => {
     expect(() => assertReq({
-      remove_from: "ATIm", remove_to: "BeSR",
+      remove_from: "atimx", remove_to: "besrx",
       text: "new",
     })).not.toThrow();
   });
 
   it("throws for a NUL byte in text", () => {
     const nul = String.fromCharCode(0);
-    expect(() => assertReq({ remove_from: "ATIm", remove_to: "BeSR", text: `a${nul}b` }))
+    expect(() => assertReq({ remove_from: "atimx", remove_to: "besrx", text: `a${nul}b` }))
       .toThrow(/NUL byte/);
   });
 
@@ -91,14 +91,14 @@ describe("prepareArguments normalization", () => {
 
 	it("points a replace_match-shaped request missing text at replace_match", () => {
 		const tool = buildToolDef();
-		expect(() => tool.prepareArguments!({ remove_from: "ATIm", remove_to: "BeSR", match: "a", replacement: "b" }))
+		expect(() => tool.prepareArguments!({ remove_from: "atimx", remove_to: "besrx", match: "a", replacement: "b" }))
 			.toThrow(/call replace_match with "replace_from", "replace_to", "match", and "replacement"/);
 	});
 
 	it("converts a legacy lines array into the exact text", () => {
 		const tool = buildToolDef();
 		const prepared = tool.prepareArguments!({
-			remove_from: "ATIm", remove_to: "BeSR",
+			remove_from: "atimx", remove_to: "besrx",
 			text: ["line1", "line2"],
 		}) as Record<string, unknown>;
 		expect(prepared.text).toEqual("line1\nline2");

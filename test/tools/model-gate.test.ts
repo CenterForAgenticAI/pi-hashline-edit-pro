@@ -62,7 +62,7 @@ describe("disableOnModels gate", () => {
       const result = await getTool("read").execute("r1", { path: "sample.txt" }, undefined, undefined, ctx);
       const text = result.content[0]!.text as string;
       expect(text).toContain("alpha");
-      expect(text).not.toMatch(/^[A-Za-z]{4}│/m);
+      expect(text).not.toMatch(/^[a-z]{5}│/m);
     });
   });
 
@@ -110,12 +110,12 @@ describe("disableOnModels gate", () => {
       expect(getActive()).toEqual(["read", "grep"]);
       expect(getTool("read").promptSnippet).toBe("Read file contents");
       const vanilla = await getTool("read").execute("r1", { path: "sample.txt" }, undefined, undefined, ctx);
-      expect(vanilla.content[0]!.text as string).not.toMatch(/^[A-Za-z]{4}│/m);
+      expect(vanilla.content[0]!.text as string).not.toMatch(/^[a-z]{5}│/m);
       await handlers.get("model_select")!(modelSelect(ANTHROPIC, OPENAI), ctx);
       expect(getActive()).toEqual([...ANCHOR_TOOLS]);
       expect(getTool("read").promptSnippet).toContain("anchor│content");
       const anchored = await getTool("read").execute("r2", { path: "sample.txt" }, undefined, undefined, ctx);
-      expect(anchored.content[0]!.text as string).toMatch(/^[A-Za-z]{4}│/m);
+      expect(anchored.content[0]!.text as string).toMatch(/^[a-z]{5}│/m);
     });
   });
 
@@ -226,7 +226,7 @@ describe("disableOnModels gate", () => {
       const open = sessionContext(dir, ANTHROPIC);
       await handlers.get("session_start")!({}, open);
       const read = await getTool("read").execute("r1", { path: "echo.txt" }, undefined, undefined, open);
-      const anchor = read.content[0]!.text.match(/([A-Za-z]{4})│hello/)![1]!;
+      const anchor = read.content[0]!.text.match(/([a-z]{5})│hello/)![1]!;
       const gated = sessionContext(dir, OPENAI);
       const gatedResult = await handlers.get("tool_call")!(
         { toolName: "write", input: { path: "echo.txt", content: `${anchor}│copied\n` } },

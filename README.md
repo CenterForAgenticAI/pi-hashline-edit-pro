@@ -4,20 +4,20 @@
 
 [![npm version](https://img.shields.io/npm/v/pi-hashline-edit-pro.svg)](https://www.npmjs.com/package/pi-hashline-edit-pro) [![npm downloads](https://img.shields.io/npm/dm/pi-hashline-edit-pro.svg)](https://www.npmjs.com/package/pi-hashline-edit-pro) [![Explicit Edit Benchmark](https://img.shields.io/endpoint?url=https://huggingface.co/datasets/alexshpunt/explicit-edit-benchmark/resolve/main/badges/pi-hashline-edit-pro.json&style=flat-square)](https://huggingface.co/spaces/alexshpunt/benchmark-explorer?card=harness%3Api-hashline-edit-pro%40latest)
 
-pi-hashline-edit-pro is an extension for [pi-coding-agent](https://github.com/earendil-works/pi) that edits files by anchor. Every line a tool serves gets a unique 4-character anchor, and you edit by anchor. Edits are never addressed by line number and nothing is fuzzy-matched, so an edit lands on the line you meant.
+pi-hashline-edit-pro is an extension for [pi-coding-agent](https://github.com/earendil-works/pi) that edits files by anchor. Every line a tool serves gets a unique 5-character anchor, and you edit by anchor. Edits are never addressed by line number and nothing is fuzzy-matched, so an edit lands on the line you meant.
 
-It is a fork of [pi-hashline-edit](https://github.com/RimuruW/pi-hashline-edit) by RimuruW, extended with 4-character tokenizer-friendly anchors and allocation-based anchor identity.
+It is a fork of [pi-hashline-edit](https://github.com/RimuruW/pi-hashline-edit) by RimuruW, extended with 5-character tokenizer-friendly anchors and allocation-based anchor identity.
 
 ```text
 read a file; every line comes back as anchor│content:
 
-Dafo│function hello() {
-Emno│  console.log("world");
-HDtm│}
+dafox│function hello() {
+emnox│  console.log("world");
+hdtmx│}
 
 replace one line by its anchor:
 
-{ "remove_from": "Emno", "remove_to": "Emno", "text": "  console.log('hi');" }
+{ "remove_from": "emnox", "remove_to": "emnox", "text": "  console.log('hi');" }
 
 the result is the post-edit diff with fresh anchors, so the next edit needs no re-read.
 ```
@@ -57,12 +57,12 @@ Line numbers shift when anything above them changes; fuzzy matching can silently
 
 | Dimension | Line numbers or fuzzy matching | Anchors (this extension) |
 | --- | --- | --- |
-| Address | a line number | a 4-character anchor minted for one line |
+| Address | a line number | a 5-character anchor minted for one line |
 | After an edit | downstream numbers shift, so stale numbers can hit the wrong line | untouched lines keep their anchors; only changed lines get new ones |
 | Wrong target | a fuzzy match may land on a similar line | an anchor resolves to exactly one file and line, or the edit is refused |
 | Stale request | can apply silently | refused with `[E_STALE_ANCHOR]` or `[E_RANGE_STALE]`, with fresh anchors returned for the retry |
 
-What "pro" adds over upstream `pi-hashline-edit`: the anchor table is built from pieces that each tokenize as one token (so an anchored row and an edit call stay cheap in tokens), and anchors are allocated per line and never derived from content, so byte-identical lines never share an anchor and an edit cannot re-target a different line.
+What "pro" adds over upstream `pi-hashline-edit`: the anchor table is a curated set of 5-letter lowercase anchors whose `anchor│` unit stays within three tokens (so an anchored row and an edit call stay cheap in tokens), and anchors are allocated per line and never derived from content, so byte-identical lines never share an anchor and an edit cannot re-target a different line.
 
 ## Install
 
@@ -101,12 +101,12 @@ If anything of yours expects line-numbered `read` output (prompts, skills, hooks
 After install, `read` any file and confirm the rows look like this:
 
 ```text
-Dafo│function hello() {
-Emno│  console.log("world");
-HDtm│}
+dafox│function hello() {
+emnox│  console.log("world");
+hdtmx│}
 ```
 
-Then replace `Emno` and confirm the result is a post-edit diff with fresh anchors.
+Then replace `emnox` and confirm the result is a post-edit diff with fresh anchors.
 
 ### Uninstall
 
@@ -119,17 +119,17 @@ pi uninstall npm:pi-hashline-edit-pro
 1. Read a file. Every line comes back as `anchor│content`:
 
    ```text
-   Dafo│function hello() {
-   Emno│  console.log("world");
-   HDtm│}
+   dafox│function hello() {
+   emnox│  console.log("world");
+   hdtmx│}
    ```
 
 2. Replace a line by its anchor. One edit per call, fields at the top level:
 
    ```json
    {
-     "remove_from": "Emno",
-     "remove_to": "Emno",
+     "remove_from": "emnox",
+     "remove_to": "emnox",
      "text": "  console.log('hi');"
    }
    ```
@@ -138,8 +138,8 @@ pi uninstall npm:pi-hashline-edit-pro
 
    ```text
    ...
-   -Emno│  console.log("world");
-   +Qwer│  console.log('hi');
+   -emnox│  console.log("world");
+   +qwerx│  console.log('hi');
    ...
    ```
 
@@ -167,7 +167,7 @@ The extension registers eight tools: `read`, `replace`, `replace_match`, `insert
 | `offset` | Line number (1-indexed) or a served anchor to start reading from. |
 | `limit` | Maximum number of lines to return from `offset`. |
 
-Output is capped at 2000 lines and 50KB. Paged output ends with a continuation hint, for example `[Showing lines 1-50 of 120. Use offset=Emno to continue.]`.
+Output is capped at 2000 lines and 50KB. Paged output ends with a continuation hint, for example `[Showing lines 1-50 of 120. Use offset=emnox to continue.]`.
 
 A line whose `anchor│content` row exceeds 50KB is replaced by a marker that keeps the line's anchor: `anchor│[Line N is 2.2MB, exceeds 50.0KB; content not shown. Use bash: sed -n 'Np' <path> | head -c 51200]`. The marker is served like a normal row, so the whole line can still be replaced through it.
 
@@ -186,16 +186,16 @@ Edge cases:
 
 | Field | Description |
 | --- | --- |
-| `remove_from` | 4-char anchor marking the FIRST line to remove (inclusive). |
-| `remove_to` | 4-char anchor marking the LAST line to remove (inclusive). |
+| `remove_from` | 5-char anchor marking the FIRST line to remove (inclusive). |
+| `remove_to` | 5-char anchor marking the LAST line to remove (inclusive). |
 | `text` | The exact text to write in place of the removed range, as one string: `""` deletes the range. A trailing line break sets the newline of the last line written instead of adding a blank line; a lone newline writes one blank line. Embedded `\r\n`/`\r`/`\n` are preserved; escapes in the tool call are decoded once when the call is parsed, and the tool then writes the string it receives as-is, never decoding again — `\uXXXX` is the character, `\\uXXXX` the literal text. Legacy arrays are converted to text (elements joined with LF); prefer the string form. |
 
-Example: read showed `Hasu│old` and `arvm│old2`; to replace both:
+Example: read showed `hasux│old` and `arvmx│old2`; to replace both:
 
 ```json
 {
-  "remove_from": "Hasu",
-  "remove_to": "arvm",
+  "remove_from": "hasux",
+  "remove_to": "arvmx",
   "text": "new line 1\nnew line 2"
 }
 ```
@@ -205,7 +205,7 @@ A deletion keeps blank lines at the edges of the removed range, so the separator
 
 The extension checks the request before any file I/O, so a bad request never touches the file.
 
-Auto-fixable slips fall into two groups. Fixed silently: embedded newlines and a legacy array payload (a single-element array that holds stringified array text, even with a trailing JS method call, for example `[…].map(s => s)`, is unwrapped). Fixed with a warning or a hint: a reversed `remove_from`/`remove_to` range is applied in document order with an `[H_RANGE_REVERSED]` hint; a leftover `anchor│` prefix in `text` or a pasted served row in the anchor fields (a bare `abde│` prefix, a line-numbered row such as `12:│ abde│content`, or an `abde (line 12)` suffix) and diff-preview rows pasted into the replacement are stripped with a warning.
+Auto-fixable slips fall into two groups. Fixed silently: embedded newlines and a legacy array payload (a single-element array that holds stringified array text, even with a trailing JS method call, for example `[…].map(s => s)`, is unwrapped). Fixed with a warning or a hint: a reversed `remove_from`/`remove_to` range is applied in document order with an `[H_RANGE_REVERSED]` hint; a leftover `anchor│` prefix in `text` or a pasted served row in the anchor fields (a bare `abdef│` prefix, a line-numbered row such as `12:│ abdef│content`, or an `abdef (line 12)` suffix) and diff-preview rows pasted into the replacement are stripped with a warning.
 
 Content containing a NUL byte (`U+0000`) is rejected with `[E_BAD_SHAPE]` before any file I/O: writing it would make the file binary, so use an empty replacement to delete. This applies to the `text` field of both `replace` and `insert`.
 
@@ -229,16 +229,16 @@ In a same-message batch it joins the other calls on its file: the batch validate
 
 | Field | Description |
 | --- | --- |
-| `anchor` | 4-char anchor marking the line next to which the lines go. The anchor line is preserved. A pasted `+Hasu│x` diff row or `anchor│` prefix is stripped automatically with a warning. |
+| `anchor` | 5-char anchor marking the line next to which the lines go. The anchor line is preserved. A pasted `+hasux│x` diff row or `anchor│` prefix is stripped automatically with a warning. |
 | `direction` | `"after"` inserts below the anchor line, `"before"` above it. |
 | `text` | The exact text to insert, as one string: `""` inserts one blank line (the same as a lone newline). A trailing line break sets the newline of the last line written instead of adding a blank line. Never include the anchor line. Embedded `\r\n`/`\r`/`\n` are preserved; escapes in the tool call are decoded once when the call is parsed, and the tool then writes the string it receives as-is, never decoding again — `\uXXXX` is the character, `\\uXXXX` the literal text. Legacy arrays are converted to text (elements joined with LF); prefer the string form. |
 
 Nothing is removed and the inserted lines are written exactly as given; the anchor line and every other line stay in place. An empty `text` payload inserts one blank line. To seed an empty file, read it and insert after the `anchor│` empty-line row.
 
-Example: add a line after `Emno│`:
+Example: add a line after `emnox│`:
 
 ```json
-{ "anchor": "Emno", "direction": "after", "text": "  // log the greeting" }
+{ "anchor": "emnox", "direction": "after", "text": "  // log the greeting" }
 ```
 
 The same safety machinery as `replace` applies: undo is saved before the write (a failed write restores the previous undo record), and line endings and BOMs survive.
@@ -249,15 +249,15 @@ The same safety machinery as `replace` applies: undo is saved before the write (
 
 | Field | Description |
 | --- | --- |
-| `source_from` | 4-char anchor marking the FIRST source line to copy (inclusive). |
-| `source_to` | 4-char anchor marking the LAST source line to copy (inclusive). |
-| `anchor` | 4-char anchor of the destination line the block goes before or after, resolved in the destination file. |
+| `source_from` | 5-char anchor marking the FIRST source line to copy (inclusive). |
+| `source_to` | 5-char anchor marking the LAST source line to copy (inclusive). |
+| `anchor` | 5-char anchor of the destination line the block goes before or after, resolved in the destination file. |
 | `direction` | `"after"` places the block below the anchor line, `"before"` above it. Within one file the insertion point must fall before the source range's first line or after its last. |
 
-Example: read served `Hasu│old` in `a.ts` and `Qwer│top` in `b.ts`; to copy `old` into `b.ts` below `top`:
+Example: read served `hasux│old` in `a.ts` and `qwerx│top` in `b.ts`; to copy `old` into `b.ts` below `top`:
 
 ```json
-{ "source_from": "Hasu", "source_to": "Hasu", "anchor": "Qwer", "direction": "after" }
+{ "source_from": "hasux", "source_to": "hasux", "anchor": "qwerx", "direction": "after" }
 ```
 
 The source lines stay in place and keep their anchors; the copied lines are minted fresh anchors in the destination's post-edit diff and keep their source line endings. A cross-file copy writes only the destination, so one `undo_last_change` on it reverts the copy. In a same-message batch, a same-file copy and a cross-file copy join the destination file's batch; the copy still duplicates the content its source anchors were served from, not the result of a sibling edit. Anchoring the block's last line with `direction: "after"` (or its first line with `direction: "before"`) duplicates the block right beside itself.
@@ -381,7 +381,7 @@ Settings live in `~/.config/pi-hashline-edit-pro/config.json`, created when a se
 | `copyMoveEnabled` | Copy/move | `true` | Offer the `copy` and `move` tools; when off, both are removed from the active tools. |
 | `replaceMatchEnabled` | Replace match | `true` | Offer the `replace_match` tool; when off, it is removed from the active tools. |
 | `requirePath` | Require path | `false` | `replace`, `replace_match`, `insert`, `copy`, and `move` require a `path` argument that must match anchor ownership. |
-| `strictInput` | Strict input | `false` | Reject auto-fixable slips (`[W_BAD_SHAPE]`, `[W_BAD_REF]`, `[W_INVALID_PATCH]`, `[W_BARE_HASH_PREFIX]`) with `[E_BAD_SHAPE]` instead of applying them with a warning. |
+| `strictInput` | Strict input | `false` | Reject auto-fixable slips (`[W_BAD_SHAPE]`, `[W_BAD_REF]`, `[W_INVALID_PATCH]`, `[W_BARE_HASH_PREFIX]`, `[W_ANCHOR_CASE]`) with `[E_BAD_SHAPE]` instead of applying them with a warning. |
 | `diffContextLines` | Diff context | `1` | Surrounding lines in post-edit diffs, 0-10 (needs Auto-read). |
 | `disableOnModels` | Disable on models | `[]` | Model globs matched case-insensitively against `provider/id`, the bare `id`, and `api`, with `*` and `?` wildcards. A matching model gets no anchored edit tools, no auto-read, and no write-echo refusal; `read` stays available as pi's ordinary read unless Read on disabled models is `remove`. |
 | `readOnDisabledModels` | Read on disabled models | `"vanilla"` | `read` for a model matched by `disableOnModels`: `"vanilla"` keeps pi's ordinary `read` active while the anchored edit tools stay off; `"remove"` disables `read` with the rest of the anchored tools. |
@@ -455,20 +455,21 @@ Full reference:
 | `[E_CONFIG]` | `PI_HASHLINE_DIR` is nonempty but not an absolute path. |
 | `[E_BAD_SHAPE]` | Request envelope or edit item has unknown, missing, or wrongly-typed fields (for example `text` must be a string holding the exact text), content contains a NUL byte (`U+0000`), which would make the file binary, a grep `glob` has invalid bracket or brace syntax, or a `replace_match` `match` spans lines: `match` contains a line break after the optional trailing one. |
 | `[W_BAD_SHAPE]` | Auto-corrected request slip reported as a warning (for example legacy array text that could not be parsed and was kept as one literal line). |
-| `[E_BAD_REF]` | An anchor field does not yield a 4-character anchor. Anchors come from read or grep output and are exactly 4 letters; a pasted served row in an anchor field is reduced to its anchor first. |
+| `[E_BAD_REF]` | An anchor field does not yield a 5-character anchor. Anchors come from read or grep output and are exactly 5 lowercase letters; a pasted served row in an anchor field is reduced to its anchor first. |
 | `[E_SUBSTRING_NOT_FOUND]` | `replace_match` did not find `match` in the selected range. The current `anchor│content` rows are returned, and when `match` looks like a retyped copy of a single-line range the message names the first mismatching column; copy only the fragment that changes from the served row and retry, or use `replace` for a whole-line rewrite. |
 | `[W_BAD_REF]` | A pasted served row (bare `anchor│content`, a line-numbered grep row, or an `anchor (line N)` suffix) or diff-preview marker was stripped from an anchor field with a warning. |
+| `[W_ANCHOR_CASE]` | An edit anchor field used uppercase or mixed case; it was lowercased to the lowercase anchor with a warning (strict input rejects it). `read`'s `offset` lowercases a case-only mismatch silently. |
 | `[E_STALE_ANCHOR]` | An anchor is not owned in this session (it was never shown to you, or its line was edited or the file was rewritten); call `read` for fresh anchors. |
 | `[W_INVALID_PATCH]` | A `text` line is a diff-preview row (`+anchor│`, `-anchor│`, `-    │`). The marker is stripped automatically with a warning. |
 | `[W_BARE_HASH_PREFIX]` | A `text` line starts with an `anchor│` prefix. The prefix is stripped automatically with a warning. |
 | `[W_ANCHOR_RECLAIMED]` | The session's anchor quota was exhausted, so all anchors of the listed files (the least recently read or edited) were freed to make room. Read those files again before editing them. |
-| `[H_LITERAL_ESCAPE]` | A payload field contains literal escaped text such as `\uXXXX`, `\n`, `\t`, `\r`, or `\"` (one hint per distinct escape, up to three). The file receives those backslash characters as written, because escapes in the tool call are decoded once when the call is parsed (`\uXXXX` → the character), so a doubled escape (`\\uXXXX`) lands literally. The hint is one line: `text: "\u200b" written as literal text (Kq3f│ col 31).` names the field, the escape, and up to three affected anchors with their columns; when more than three rows carry it, it gives `on 10 rows; undo_last_change if unintended.` instead of the anchor list. |
-| `[H_UNICODE_LOST]` | The new text is missing an invisible or look-alike character (for example `U+200B`, `U+2060`, `U+00A0`, or a smart quote) that a replaced row has, or that a context row sharing a long run with an inserted line has. The edit applied as sent; the one-line hint names the live anchor of the offending result row, when one can be identified, and the character as its JSON escape, for example `[H_UNICODE_LOST] Zbbb│ missing "\u2060"; Kq3f│ has it at col 31.` The column is attributed to the row that had the character: `; Kq3f│ has it at col N` while that row's anchor is still valid, otherwise `; the replaced row had it at col N`, and a dead anchor is never named. When another look-alike character (including `U+FFFD`) takes its place, the hint reports the substitute with `[H_UNICODE_SWAPPED]` wording. |
-| `[H_UNICODE_SWAPPED]` | The new text uses a different invisible or look-alike character than the line it matches (for example `U+200D` where that line has `U+200B`, or an ASCII stand-in such as `.` for `。` or a space for `U+00A0`). The edit applied as sent; the one-line hint names the live anchor of the offending result row with both characters as JSON escapes, for example `[H_UNICODE_SWAPPED] Zbbb│ has "\u200d" at col 21; expected "\u200b".` A surviving reference row appears as `; Kq3f│ has "\u200b"`; a replaced row's dead anchor is never named. The substitute may also be `U+FFFD`, for example where a row has `U+00A0`. |
-| `[H_TRAILING_WHITESPACE]` | The new text differs from the replaced line only in trailing whitespace. Anchor checksums trim trailing whitespace, so the change does not invalidate the anchor; the one-line hint names the old and new trailing-whitespace counts and the column, for example `[H_TRAILING_WHITESPACE] 1 trailing whitespace character at col 7; Kq3f│ had 0.` |
-| `[H_INDENT_MISMATCH]` | The new line has fewer leading whitespace characters than a structurally similar row (a reference row near the anchor line for an insert, or the replaced line). The edit applied as sent; the one-line hint names both counts and the reference anchor, for example `[H_INDENT_MISMATCH] new line has 0 leading whitespace characters; Kq3f│ has 2.` Copied or moved blocks are not checked, because their indentation comes from the source lines. |
-| `[H_SEPARATOR_MOVED]` | An insert landed its text directly against the anchor line, and the blank line that separated the anchor from its neighbor was displaced to the other side of the inserted text. The edit applied as sent; the one-line hint names the anchor and which side lost the blank line, for example `[H_SEPARATOR_MOVED] blank separator above Kq3f│ was displaced; add a blank line before Kq3f│ if unintended.` |
-| `[H_SEPARATOR_LOST]` | A pure deletion removed a run of blank lines that sat between two content lines. The edit applied as sent; the one-line hint names the two surviving anchors and the removed count, for example `[H_SEPARATOR_LOST] deletion removed 2 blank lines between Aaaa│ and Dddd│.` |
+| `[H_LITERAL_ESCAPE]` | A payload field contains literal escaped text such as `\uXXXX`, `\n`, `\t`, `\r`, or `\"` (one hint per distinct escape, up to three). The file receives those backslash characters as written, because escapes in the tool call are decoded once when the call is parsed (`\uXXXX` → the character), so a doubled escape (`\\uXXXX`) lands literally. The hint is one line: `text: "\u200b" written as literal text (kqafq│ col 31).` names the field, the escape, and up to three affected anchors with their columns; when more than three rows carry it, it gives `on 10 rows; undo_last_change if unintended.` instead of the anchor list. |
+| `[H_UNICODE_LOST]` | The new text is missing an invisible or look-alike character (for example `U+200B`, `U+2060`, `U+00A0`, or a smart quote) that a replaced row has, or that a context row sharing a long run with an inserted line has. The edit applied as sent; the one-line hint names the live anchor of the offending result row, when one can be identified, and the character as its JSON escape, for example `[H_UNICODE_LOST] zbbbx│ missing "\u2060"; kqafq│ has it at col 31.` The column is attributed to the row that had the character: `; kqafq│ has it at col N` while that row's anchor is still valid, otherwise `; the replaced row had it at col N`, and a dead anchor is never named. When another look-alike character (including `U+FFFD`) takes its place, the hint reports the substitute with `[H_UNICODE_SWAPPED]` wording. |
+| `[H_UNICODE_SWAPPED]` | The new text uses a different invisible or look-alike character than the line it matches (for example `U+200D` where that line has `U+200B`, or an ASCII stand-in such as `.` for `。` or a space for `U+00A0`). The edit applied as sent; the one-line hint names the live anchor of the offending result row with both characters as JSON escapes, for example `[H_UNICODE_SWAPPED] zbbbx│ has "\u200d" at col 21; expected "\u200b".` A surviving reference row appears as `; kqafq│ has "\u200b"`; a replaced row's dead anchor is never named. The substitute may also be `U+FFFD`, for example where a row has `U+00A0`. |
+| `[H_TRAILING_WHITESPACE]` | The new text differs from the replaced line only in trailing whitespace. Anchor checksums trim trailing whitespace, so the change does not invalidate the anchor; the one-line hint names the old and new trailing-whitespace counts and the column, for example `[H_TRAILING_WHITESPACE] 1 trailing whitespace character at col 7; kqafq│ had 0.` |
+| `[H_INDENT_MISMATCH]` | The new line has fewer leading whitespace characters than a structurally similar row (a reference row near the anchor line for an insert, or the replaced line). The edit applied as sent; the one-line hint names both counts and the reference anchor, for example `[H_INDENT_MISMATCH] new line has 0 leading whitespace characters; kqafq│ has 2.` Copied or moved blocks are not checked, because their indentation comes from the source lines. |
+| `[H_SEPARATOR_MOVED]` | An insert landed its text directly against the anchor line, and the blank line that separated the anchor from its neighbor was displaced to the other side of the inserted text. The edit applied as sent; the one-line hint names the anchor and which side lost the blank line, for example `[H_SEPARATOR_MOVED] blank separator above kqafq│ was displaced; add a blank line before kqafq│ if unintended.` |
+| `[H_SEPARATOR_LOST]` | A pure deletion removed a run of blank lines that sat between two content lines. The edit applied as sent; the one-line hint names the two surviving anchors and the removed count, for example `[H_SEPARATOR_LOST] deletion removed 2 blank lines between aaaaz│ and ddddz│.` |
 | `[H_RANGE_REVERSED]` | The `remove_from` anchor resolved to a line after `remove_to`. The call applied the range in document order; the one-line hint names the line range used. |
 | `[E_NOT_FOUND]` | The path does not exist. |
 | `[E_ACCESS]` | The file is not readable or writable. |
@@ -540,7 +541,7 @@ edit call ──► resolve anchors ──► apply ──► commit ──► p
 
 ### Allocation
 
-Anchors are allocated, never derived. Every line that is served to you, by `read`, `grep`, the auto-read block after `write`, or a post-edit diff, gets the next free anchor from the session's pool, claimed by walking the table with a stride of 836,286 entries (coprime to the 1,353,139-entry table), so consecutively minted anchors land in unrelated regions of the table instead of sharing leading characters. Each session seeds its walk from its own offset (derived from the session key and the process id), so concurrent sessions mint different sequences instead of identical ones: an anchor minted in one session is unknown in another and is rejected with `[E_STALE_ANCHOR]` rather than resolving to a different file. Ownership is exclusive: an anchor is owned by one file's line until it is freed (the line was edited, the file was written or deleted, you ran `/clear-anchors`, or the session's quota ran out and the file was the least recently read or edited, which frees all of its anchors and reports it in `[W_ANCHOR_RECLAIMED]`). Minting prefers anchors the session has never used; when a bounded fresh-anchor probe finds nothing, freed anchors are recycled after their stale served records are purged, so an anchor is never shared by two live lines. Because ownership is exclusive, an anchor resolves to exactly one file. Two byte-identical lines never share an anchor, and that guarantee sets the file size cap: the pool is the shipped table's 1,353,139 entries (not all 52⁴ letter combinations), so a file can hold at most 1,353,139 lines, beyond which `read`, `replace`, `replace_match`, `insert`, `copy`, and `move` reject with `[E_FILE_TOO_LARGE]` (use `write` for very large files).
+Anchors are allocated, never derived. Every line that is served to you, by `read`, `grep`, the auto-read block after `write`, or a post-edit diff, gets the next free anchor from the session's pool, claimed by walking the table with a stride of 836,286 entries (coprime to the 1,353,139-entry table), so consecutively minted anchors land in unrelated regions of the table instead of sharing leading characters. Each session seeds its walk from its own offset (derived from the session key and the process id), so concurrent sessions mint different sequences instead of identical ones: an anchor minted in one session is unknown in another and is rejected with `[E_STALE_ANCHOR]` rather than resolving to a different file. Ownership is exclusive: an anchor is owned by one file's line until it is freed (the line was edited, the file was written or deleted, you ran `/clear-anchors`, or the session's quota ran out and the file was the least recently read or edited, which frees all of its anchors and reports it in `[W_ANCHOR_RECLAIMED]`). Minting prefers anchors the session has never used; when a bounded fresh-anchor probe finds nothing, freed anchors are recycled after their stale served records are purged, so an anchor is never shared by two live lines. Because ownership is exclusive, an anchor resolves to exactly one file. Two byte-identical lines never share an anchor, and that guarantee sets the file size cap: the pool is the shipped table's 1,353,139 entries (not all 26⁵ letter combinations), so a file can hold at most 1,353,139 lines, beyond which `read`, `replace`, `replace_match`, `insert`, `copy`, and `move` reject with `[E_FILE_TOO_LARGE]` (use `write` for very large files).
 
 ### Ownership and mapping across edits
 
@@ -555,7 +556,7 @@ A no-op replace never changes the file, so anchors remain valid. On first run af
 
 ### The anchor table is built for tokenizers
 
-Every anchor is the concatenation of two 2-character pieces that each encode as a single token, and beside the `│` separator the whole 5-character `anchor│` unit is verified to tokenize as exactly three tokens in each of eight modern open-weights tokenizers (Qwen 3.5, DeepSeek V4, Gemma 4, GLM 5.3 Flash, Tencent Hy4-preview, MiniMax M3, MiMo V2.5, Kimi K3). The shipped table is the intersection that satisfies the criterion on all of them; Nemotron 3 Ultra is the one modern tokenizer excluded. Model names are as published for the 4.4.x table build. An anchor therefore costs 2 tokens on a read row and 2 in an edit call, with the `│` separator as the third. Anchors are letters only. The table is shipped as `src/hashline/anchor-table.json`.
+Every anchor is a 5-letter lowercase string selected so that the anchor alone tokenizes as at most two tokens and the whole `anchor│` unit as at most three tokens in each of nine modern open-weights tokenizers (DeepSeek V4 and V4.1, Qwen 3.5, Gemma 4, GLM 5.3 Flash, Tencent Hy4-preview, MiniMax M3, MiMo V2.5, Kimi K3). The shipped table is the intersection that satisfies the criterion on all of them; it also has one anchor per case-fold class, so no two anchors differ only by case. Nemotron 3 Ultra is the one modern tokenizer excluded. An anchor therefore costs at most 2 tokens, and `anchor│` at most 3, in both read rows and edit calls. Anchors are lowercase letters only. The table is generated offline and its 1,353,139-entry count is frozen so the per-file line cap stays stable; it is shipped as `src/hashline/anchor-table.json`.
 
 ### Line checksums
 
@@ -564,6 +565,8 @@ Each line also carries a content checksum. The line is canonicalized (carriage r
 ### Persistent state
 
 Allocated anchors live in a persistent per-file snapshot (`~/.config/pi-hashline-edit-pro/hash-store.sqlite`) keyed by content checksum, so resume-after-restart and cross-session edits reuse ownership instead of minting duplicates. Each session also appends an ownership log (`allocate`/`free`/`clear` events) to a sidecar file under `~/.config/pi-hashline-edit-pro/sessions/`; that log is the session's record, sidecars whose session file is gone are garbage-collected at startup (never the sidecar of a session that is currently loaded in this process), and the in-memory ownership of a session is released when that session shuts down and rebuilt from its sidecar on next use.
+
+Upgrading from a 6.x release invalidates the old 4-character anchors: the hash store version changes, so snapshots and undo history are cleared, old sidecar anchors are ignored, and anchors are re-minted on the next read.
 
 ## Benchmark
 

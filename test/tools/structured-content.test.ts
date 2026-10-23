@@ -66,7 +66,7 @@ describe("structuredContent for read and replace", () => {
 			expect(sc.lines!.map((line) => line.text)).toEqual(["alpha", "beta", "gamma"]);
 			expect(sc.lines!.map((line) => line.line)).toEqual([1, 2, 3]);
 			for (const line of sc.lines!) {
-				expect(line.anchor).toMatch(/^[A-Za-z]{4}$/);
+				expect(line.anchor).toMatch(/^[a-z]{5}$/);
 				expect(line.rendered).toBe(`${line.anchor}│${line.text}`);
 				expect(getText(result)).toContain(line.rendered);
 			}
@@ -113,7 +113,7 @@ describe("structuredContent for read and replace", () => {
 			const marker = sc.lines!.find((line) => line.line === 2)!;
 			expect(marker.text).toContain("content not shown");
 			expect(marker.text).not.toContain(long);
-			expect(marker.anchor).toMatch(/^[A-Za-z]{4}$/);
+			expect(marker.anchor).toMatch(/^[a-z]{5}$/);
 			expect(getText(result)).toContain(marker.rendered);
 		});
 	});
@@ -213,7 +213,7 @@ describe("read codemode contract", () => {
 	it("replace returns a structured stale-anchor error", async () => {
 		await withTempFile("sample.ts", "alpha\nbeta\n", async ({ cwd }) => {
 			const { editTool, ctx } = setupIntegrationTest(cwd);
-			const result = await editTool.execute("e1", { remove_from: "ZZZZ", remove_to: "ZZZZ", text: ["x"] }, undefined, undefined, ctx);
+			const result = await editTool.execute("e1", { remove_from: "zzzzx", remove_to: "zzzzx", text: ["x"] }, undefined, undefined, ctx);
 			const sc = structured(result);
 			expect(result.isError).toBe(true);
 			expect(sc.ok).toBe(false);
@@ -392,7 +392,7 @@ describe("read codemode contract", () => {
 				["copy", { source_from: beta, source_to: beta, anchor: gamma, direction: "after" }, "s-copy"],
 				["move", { source_from: beta, source_to: beta, anchor: gamma, direction: "after" }, "s-move"],
 				["replace", { remove_from: alpha, remove_to: alpha, text: "ALPHA" }, "s-replace"],
-				["replace", { remove_from: "ZZZZ", remove_to: "ZZZZ", text: "x" }, "s-replace-error"],
+				["replace", { remove_from: "zzzzx", remove_to: "zzzzx", text: "x" }, "s-replace-error"],
 				["grep", { pattern: "ALPHA", path: "sample.ts" }, "s-grep"],
 				["grep", { pattern: "(\\w)\\1", path: "sample.ts" }, "s-grep-error"],
 				["undo_last_change", { path: "sample.ts" }, "s-undo"],

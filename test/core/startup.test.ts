@@ -69,7 +69,7 @@ describe("hash-store incremental vacuum", () => {
       try {
         const { loadHashStore, shutdownHashStore } = await import("../../src/hash-store");
         const store = await loadHashStore();
-        const hashes = ["ATIm", "BeSR", "DAfo", "Emno", "HDtm", "Ifms", "MEyo", "ORcy"];
+        const hashes = ["atimx", "besrx", "dafox", "emnox", "hdtmx", "ifmsx", "meyox", "orcyx"];
         for (let i = 0; i < 100; i++) {
           store.stmts.upsert(`p${i}`, "chk", 1, JSON.stringify([hashes[i % hashes.length]]), "", Date.now());
         }
@@ -78,7 +78,7 @@ describe("hash-store incremental vacuum", () => {
         }
         shutdownHashStore();
         const store2 = await loadHashStore();
-        expect(isValidHashList(["ATIm"])).toBe(true);
+        expect(isValidHashList(["atimx"])).toBe(true);
         shutdownHashStore();
         void store2;
       } finally {

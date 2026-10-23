@@ -31,7 +31,7 @@ describe("strict hashline contract", () => {
 		const content = ["a", "INSERTED", "b", "target", "c"].join("\n");
 		const hashes = await lineHashes(content, home.testPath);
 		const stale = {
-      hash_bounds: [{ hash: "ZZZZ" }, { hash: "ZZZZ" }], content_lines: ["updated"],
+      hash_bounds: [{ hash: "zzzzx" }, { hash: "zzzzx" }], content_lines: ["updated"],
     } as any;
 		expect(() => applyEdit(content, stale, undefined, hashes)).toThrow(/stale anchor/);
 	});
@@ -41,9 +41,9 @@ describe("perfect hashing", () => {
 	it("returns one hash per line, indexed 0-based by line number", async () => {
 		const hashes = await lineHashes("alpha\nbeta\ngamma", home.testPath);
 		expect(hashes).toHaveLength(3);
-		expect(hashes[0]).toMatch(/^[A-Za-z]{4}$/);
-		expect(hashes[1]).toMatch(/^[A-Za-z]{4}$/);
-		expect(hashes[2]).toMatch(/^[A-Za-z]{4}$/);
+		expect(hashes[0]).toMatch(/^[a-z]{5}$/);
+		expect(hashes[1]).toMatch(/^[a-z]{5}$/);
+		expect(hashes[2]).toMatch(/^[a-z]{5}$/);
 	});
 
 	it("assigns different hashes to identical content at different positions", async () => {
@@ -84,7 +84,7 @@ describe("perfect hashing", () => {
 
 	it("stale-anchor error shows the file's current state for context", async () => {
 		const file = ["const x = 1;", "const y = 2;", "const x = 1;"].join("\n");
-		const staleHash = "ZZZZ";
+		const staleHash = "zzzzx";
 		const hashes = await lineHashes(file, home.testPath);
 		let caught: Error | undefined;
 		try {
@@ -96,7 +96,7 @@ describe("perfect hashing", () => {
 		expect(caught!.message).toMatch(/E_STALE_ANCHOR/);
 		expect(caught!.message).toContain("Call read()");
 		expect(caught!.message).toContain("1 stale anchor");
-		expect(caught!.message).not.toContain('"ZZZZ", "ZZZZ"');
+		expect(caught!.message).not.toContain('"zzzzx", "zzzzx"');
 	});
 
 	it("all hashes are unique for any file shape", async () => {

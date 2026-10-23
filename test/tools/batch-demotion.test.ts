@@ -15,7 +15,7 @@ describe("batch demotion", () => {
       const beta = anchorFor(text, "beta");
       const delta = anchorFor(text, "delta");
       const firstArgs = { remove_from: alpha, remove_to: alpha, text: ["ALPHA"] };
-      const badArgs = { remove_from: beta, remove_to: "ZZZZ", text: ["NOPE"] };
+      const badArgs = { remove_from: beta, remove_to: "zzzzx", text: ["NOPE"] };
       const lastArgs = { remove_from: delta, remove_to: delta, text: ["DELTA"] };
       const message = assistantMessage([
         toolCall("a1", "replace", firstArgs),
@@ -46,8 +46,8 @@ describe("batch demotion", () => {
       const text = getText(await read.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx));
       const alpha = anchorFor(text, "alpha");
       const beta = anchorFor(text, "beta");
-      const badOne = { remove_from: alpha, remove_to: "ZZZZ", text: ["A"] };
-      const badTwo = { remove_from: beta, remove_to: "ZZZZ", text: ["B"] };
+      const badOne = { remove_from: alpha, remove_to: "zzzzx", text: ["A"] };
+      const badTwo = { remove_from: beta, remove_to: "zzzzx", text: ["B"] };
       const message = assistantMessage([
         toolCall("b1", "replace", badOne),
         toolCall("b2", "replace", badTwo),

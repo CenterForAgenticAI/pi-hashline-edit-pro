@@ -21,29 +21,29 @@ describe("edit input validation", () => {
 	});
 
 		it("accepts a single string text before patch-prefix validation", () => {
-		const toolEdit = { remove_from: "PyBY",
-		remove_to: "PyBY", text: "+PyBY:foo" };
+		const toolEdit = { remove_from: "pybyx",
+		remove_to: "pybyx", text: "+pybyx:foo" };
 		const resolved = resEdit(toolEdit);
-		expect(resolved.content_lines).toEqual(["+PyBY:foo"]);
+		expect(resolved.content_lines).toEqual(["+pybyx:foo"]);
 		});
 
 	it("passes through numbered deletion rows as literal content", () => {
-		const toolEdit: HTEdit = { remove_from: "PyBY",
-		remove_to: "PyBY", text: ["-1    foo"] };
+		const toolEdit: HTEdit = { remove_from: "pybyx",
+		remove_to: "pybyx", text: ["-1    foo"] };
     const resolved = resEdit(toolEdit);
 		expect(resolved.content_lines).toEqual(["-1    foo"]);
 	});
 
 	it("accepts plain literal content unchanged", () => {
-		const toolEdit: HTEdit = { remove_from: "PyBY",
-		remove_to: "PyBY", text: ["bar"] };
+		const toolEdit: HTEdit = { remove_from: "pybyx",
+		remove_to: "pybyx", text: ["bar"] };
     const resolved = resEdit(toolEdit);
 		expect(resolved.content_lines).toEqual(["bar"]);
 	});
 
 	it("preserves '#' comment lines that do not match the strict prefix", () => {
-		const toolEdit: HTEdit = { remove_from: "PyBY",
-		remove_to: "PyBY", text: ["# keep me"] };
+		const toolEdit: HTEdit = { remove_from: "pybyx",
+		remove_to: "pybyx", text: ["# keep me"] };
     const resolved = resEdit(toolEdit);
     expect(resolved.content_lines).toEqual(["# keep me"]);
 	});
@@ -167,12 +167,12 @@ describe("diff preview rows copied into content", () => {
 		expect(result.warnings?.[0]).toMatch(/text line 1/);
 	});
 
-	it("strips -HASH│ and -    │ deletion rows with warning", async () => {
+	it("strips -HASH│ and -     │ deletion rows with warning", async () => {
 		const hashes = await lineHashes(file, home.testPath);
 		const anchor = hashes[0]!;
 		const result = applyTool(
       { remove_from: anchor,
-      remove_to: anchor, text: [`-${hashes[1]!}│one`, `-    │two`] },
+      remove_to: anchor, text: [`-${hashes[1]!}│one`, `-     │two`] },
     hashes);
 		expect(result.content).toBe("one\ntwo\nbeta\ngamma\ndelta");
 		expect(result.warnings?.[0]).toMatch(/text line 1, text line 2/);
@@ -252,12 +252,12 @@ describe("diff-prefix false-positive guards (tightened shapes)", () => {
 		expect(result.warnings?.[0]).toMatch(/Stripped diff-preview marker/);
 	});
 
-	it("still strips exact -HASH│ and -    │ rows", async () => {
+	it("still strips exact -HASH│ and -     │ rows", async () => {
 		const hashes = await lineHashes(file, home.testPath);
 		const anchor = hashes[0]!;
 		const result = applyTool(
       { remove_from: anchor,
-      remove_to: anchor, text: [`-${hashes[1]!}│one`, `-    │two`] },
+      remove_to: anchor, text: [`-${hashes[1]!}│one`, `-     │two`] },
     hashes);
 		expect(result.content).toBe("one\ntwo\nbeta\ngamma\ndelta");
 		expect(result.warnings?.[0]).toMatch(/Stripped diff-preview marker/);
@@ -297,18 +297,18 @@ describe("short and long runs before the separator (issue #27)", () => {
     const anchor = hashes[0]!;
     const result = applyTool(
       { remove_from: anchor,
-      remove_to: anchor, text: ["+abcd│one", "-abcd│two"] },
+      remove_to: anchor, text: ["+abcde│one", "-abcde│two"] },
     hashes);
     expect(result.content).toBe("one\ntwo\nbeta\ngamma\ndelta");
     expect(result.warnings?.[0]).toMatch(/Stripped diff-preview marker/);
   });
 
-	it("strips a 4-char prefix pasted from read output", async () => {
+	it("strips a 5-char prefix pasted from read output", async () => {
 		const hashes = await lineHashes(file, home.testPath);
 		const anchor = hashes[0]!;
 		const result = applyTool(
 			{ remove_from: anchor,
-			remove_to: anchor, text: ["abcd│literal"] },
+			remove_to: anchor, text: ["abcde│literal"] },
 			hashes);
 		expect(result.content).toBe("literal\nbeta\ngamma\ndelta");
 		expect(result.warnings?.[0]).toMatch(/Stripped "anchor│" prefix/);
@@ -336,11 +336,11 @@ describe("short and long runs before the separator (issue #27)", () => {
 		expect(result.warnings ?? []).toEqual([]);
 	});
 
-  it("strips a 5-char row prefix pasted into remove_from/remove_to", () => {
+  it("strips a 6-char row prefix pasted into remove_from/remove_to", () => {
     const warnings: string[] = [];
     expect(() =>
       resEdit(
-        { remove_from: "abcde│   }", remove_to: "abcde│   }", text: ["x"] },
+        { remove_from: "abcdef│   }", remove_to: "abcdef│   }", text: ["x"] },
         warnings,
       ),
     ).toThrow(/E_BAD_REF/);
@@ -372,21 +372,21 @@ describe("served rows pasted into anchor fields (issue #69)", () => {
 		expect(warnings[0]).toMatch(/^\[W_BAD_REF\] Stripped/);
 	});
 
-	it("rejects a bare line number with guidance about 4-letter anchors", () => {
+	it("rejects a bare line number with guidance about 5-letter anchors", () => {
 		expect(() => resEdit({ remove_from: "2", remove_to: "2", text: "x" }))
-			.toThrow(/read or grep row and are exactly 4 letters/);
+			.toThrow(/read or grep row and are exactly 5 lowercase letters/);
 	});
 
-	it("rejects a non-anchor value with guidance about 4-letter anchors", () => {
+	it("rejects a non-anchor value with guidance about 5-letter anchors", () => {
 		expect(() => resEdit({ remove_from: "CONTRACT_STATUSES", remove_to: "CONTRACT_STATUSES", text: "x" }))
-			.toThrow(/exactly 4 letters/);
+			.toThrow(/5-character anchor/);
 	});
 
-	it("still rejects a 5-letter run extracted from a numbered row", () => {
+	it("still rejects a 6-letter run extracted from a numbered row", () => {
 		const warnings: string[] = [];
 		expect(() =>
 			resEdit(
-				{ remove_from: "2:│ abcde│beta", remove_to: "2:│ abcde│beta", text: "x" },
+				{ remove_from: "2:│ abcdef│beta", remove_to: "2:│ abcdef│beta", text: "x" },
 				warnings,
 			),
 		).toThrow(/E_BAD_REF/);

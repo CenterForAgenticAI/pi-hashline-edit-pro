@@ -20,7 +20,7 @@ export { assertInsertReq, type InsertReq };
 
 const insertAnchorSchema = Type.String({
   description:
-    "4-char anchor of the line to insert next to.",
+    "5-char anchor of the line to insert next to.",
 });
 
 const insertDirectionSchema = Type.Union(
@@ -58,7 +58,7 @@ export function parseInsertAnchor(raw: string): { ref: Anchor; warnings: string[
   const trimmedAnchor = raw.trim();
   const warnings: string[] = [];
   const anchorText = stripAnchorRow(trimmedAnchor, "anchor entry", warnings);
-  return { ref: parseHashRef(anchorText), warnings };
+  return { ref: parseHashRef(anchorText, warnings, "anchor"), warnings };
 }
 
 export function buildInsertEdit(

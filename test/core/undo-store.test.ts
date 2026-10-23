@@ -14,7 +14,7 @@ describe("undo-store", () => {
       content: "hello\nworld",
       bom: "",
       originalEnding: "\n",
-      hashes: ["ATIm", "BeSR"],
+      hashes: ["atimx", "besrx"],
       resultContent: "hello\nworld!",
     });
     const entry = await getUndo(home.testPath);
@@ -22,7 +22,7 @@ describe("undo-store", () => {
     expect(entry!.content).toBe("hello\nworld");
     expect(entry!.bom).toBe("");
     expect(entry!.originalEnding).toBe("\n");
-    expect(entry!.hashes).toEqual(["ATIm", "BeSR"]);
+    expect(entry!.hashes).toEqual(["atimx", "besrx"]);
     expect(entry!.resultContent).toBe("hello\nworld!");
   });
 
@@ -35,21 +35,21 @@ describe("undo-store", () => {
       content: "first",
       bom: "",
       originalEnding: "\n",
-      hashes: ["ATIm"],
+      hashes: ["atimx"],
       resultContent: "first!",
     });
     await saveUndo(home.testPath, {
       content: "second",
       bom: "\uFEFF",
       originalEnding: "\r\n",
-      hashes: ["DAfo"],
+      hashes: ["dafox"],
       resultContent: "second!",
     });
     const entry = await getUndo(home.testPath);
     expect(entry!.content).toBe("second");
     expect(entry!.bom).toBe("\uFEFF");
     expect(entry!.originalEnding).toBe("\r\n");
-    expect(entry!.hashes).toEqual(["DAfo"]);
+    expect(entry!.hashes).toEqual(["dafox"]);
   });
 
   it("clearUndo removes the entry", async () => {
@@ -57,7 +57,7 @@ describe("undo-store", () => {
       content: "data",
       bom: "",
       originalEnding: "\n",
-      hashes: ["DAfo"],
+      hashes: ["dafox"],
       resultContent: "data!",
     });
     expect(await getUndo(home.testPath)).toBeDefined();
@@ -70,14 +70,14 @@ describe("undo-store", () => {
       content: "aaa",
       bom: "",
       originalEnding: "\n",
-      hashes: ["HDtm"],
+      hashes: ["hdtmx"],
       resultContent: "aaa!",
     });
     await saveUndo("/b.ts", {
       content: "bbb",
       bom: "",
       originalEnding: "\n",
-      hashes: ["Ifms"],
+      hashes: ["ifmsx"],
       resultContent: "bbb!",
     });
     expect((await getUndo(home.testPath))!.content).toBe("aaa");
@@ -92,7 +92,7 @@ describe("undo-store", () => {
       content: "old",
       bom: "\uFEFF",
       originalEnding: "\r",
-      hashes: ["ATIm"],
+      hashes: ["atimx"],
       resultContent: "new",
     });
     shutdownHashStore();
@@ -101,7 +101,7 @@ describe("undo-store", () => {
     expect(entry!.content).toBe("old");
     expect(entry!.bom).toBe("\uFEFF");
     expect(entry!.originalEnding).toBe("\r");
-    expect(entry!.hashes).toEqual(["ATIm"]);
+    expect(entry!.hashes).toEqual(["atimx"]);
     expect(entry!.resultContent).toBe("new");
   });
 
@@ -114,7 +114,7 @@ describe("undo-store", () => {
         content: "old",
         bom: "",
         originalEnding: "\n",
-        hashes: ["ATIm"],
+        hashes: ["atimx"],
         resultContent: "new",
       });
       expect(ok.persisted).toBe(false);
@@ -128,7 +128,7 @@ describe("undo-store", () => {
       content: "old",
       bom: "",
       originalEnding: "\r\n",
-      hashes: ["ATIm"],
+      hashes: ["atimx"],
       resultContent: "new",
     });
     const db = new DatabaseSync(hashStorePath(), { defensive: false } as any);
@@ -146,11 +146,11 @@ describe("undo-store", () => {
       content: "one\ntwo",
       bom: "",
       originalEnding: "\n",
-      hashes: ["ATIm", "BeSR"],
+      hashes: ["atimx", "besrx"],
       resultContent: "new",
     });
     const db = new DatabaseSync(hashStorePath(), { defensive: false } as any);
-    db.prepare("UPDATE undo SET hashes = ? WHERE path = ?").run(JSON.stringify(["ATIm"]), home.testPath);
+    db.prepare("UPDATE undo SET hashes = ? WHERE path = ?").run(JSON.stringify(["atimx"]), home.testPath);
     db.close();
     expect(await getUndo(home.testPath)).toBeUndefined();
     const check = new DatabaseSync(hashStorePath(), { defensive: false } as any);

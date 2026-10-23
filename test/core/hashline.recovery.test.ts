@@ -33,7 +33,7 @@ describe("applyEdit - recovery scenarios", () => {
   it("shows current context around the resolved anchor when only one anchor of a range is stale", async () => {
     const content = "a\nb\nc\nd\ne";
     const hashes = await lineHashes(content, home.testPath);
-    const staleStart = "PyBY";
+    const staleStart = "pybyx";
     let caught: Error | undefined;
     try {
       applyEdit(content, resEdit(
@@ -52,7 +52,7 @@ describe("applyEdit - recovery scenarios", () => {
   it("shows context anchored on the start when only the end is stale", async () => {
     const content = "a\nb\nc\nd\ne";
     const hashes = await lineHashes(content, home.testPath);
-    const staleEnd = "PyBY";
+    const staleEnd = "pybyx";
     let caught: Error | undefined;
     try {
       applyEdit(content, resEdit(
@@ -73,7 +73,7 @@ describe("applyEdit - recovery scenarios", () => {
     let caught: Error | undefined;
     try {
       applyEdit(content, resEdit(
-        { remove_from: "PyBY",
+        { remove_from: "pybyx",
         remove_to: "YYY", text: ["X"] },
       ), undefined, hashes);
     } catch (error) {
@@ -84,31 +84,31 @@ describe("applyEdit - recovery scenarios", () => {
   });
 
   it("rejects unknown fields in edit items", () => {
-    const edit = { remove_from: "PyBY", remove_to: "PyBY", text: ["x"], extra: true } as any;
+    const edit = { remove_from: "pybyx", remove_to: "pybyx", text: ["x"], extra: true } as any;
     expect(() => resEdit(edit)).toThrow(/unknown or unsupported fields/);
   });
 
   it("rejects missing text", () => {
-    const edit = { remove_from: "PyBY",
-    remove_to: "PyBY" } as any;
+    const edit = { remove_from: "pybyx",
+    remove_to: "pybyx" } as any;
     expect(() => resEdit(edit)).toThrow(/requires a "text" array/);
   });
 
   it("rejects null text", () => {
-    const edit = { remove_from: "PyBY",
-    remove_to: "PyBY", text: null } as any;
+    const edit = { remove_from: "pybyx",
+    remove_to: "pybyx", text: null } as any;
     expect(() => resEdit(edit)).toThrow(/must be an array of strings/);
   });
 
   it("accepts a single string text", () => {
-    const edit = { remove_from: "PyBY",
-    remove_to: "PyBY", text: "hello" } as const;
+    const edit = { remove_from: "pybyx",
+    remove_to: "pybyx", text: "hello" } as const;
     expect(resEdit(edit).content_lines).toEqual(["hello"]);
   });
 
   it("accepts array text", () => {
-    const edit = { remove_from: "PyBY",
-    remove_to: "PyBY", text: ["hello", "world", ""] } as any;
+    const edit = { remove_from: "pybyx",
+    remove_to: "pybyx", text: ["hello", "world", ""] } as any;
     const resolved = resEdit(edit);
     expect(resolved.content_lines).toEqual(["hello", "world", ""]);
   });

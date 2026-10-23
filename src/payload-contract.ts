@@ -10,12 +10,12 @@ const textSchema = Type.String({
 
 const removeFromSchema = Type.String({
   description:
-    "4-char anchor of the FIRST line to remove.",
+    "5-char anchor of the FIRST line to remove.",
 });
 
 const removeToSchema = Type.String({
   description:
-    "4-char anchor of the LAST line to remove.",
+    "5-char anchor of the LAST line to remove.",
 });
 export const pathRequiredSchema = Type.String({
   description:
@@ -132,7 +132,7 @@ export function assertInsertReq(request: unknown): asserts request is InsertReq 
     throw new Error('[E_BAD_SHAPE] Insert request field "path" must be a string when provided.');
   }
   if (typeof request.anchor !== "string" || request.anchor.length === 0) {
-    throw new Error('[E_BAD_SHAPE] Insert request requires an "anchor" string (4-char anchor from read output).');
+    throw new Error('[E_BAD_SHAPE] Insert request requires an "anchor" string (5-char anchor from read output).');
   }
   if (request.direction !== "before" && request.direction !== "after") {
     throw new Error('[E_BAD_SHAPE] Insert request "direction" must be "before" or "after".');
@@ -162,13 +162,13 @@ export function assertTransferReq(request: unknown): asserts request is Transfer
     throw new Error('[E_BAD_SHAPE] Copy/move request field "path" must be a string when provided.');
   }
   if (typeof request.source_from !== "string" || request.source_from.length === 0) {
-    throw new Error('[E_BAD_SHAPE] Copy/move request requires a "source_from" string (4-char anchor from read output).');
+    throw new Error('[E_BAD_SHAPE] Copy/move request requires a "source_from" string (5-char anchor from read output).');
   }
   if (typeof request.source_to !== "string" || request.source_to.length === 0) {
-    throw new Error('[E_BAD_SHAPE] Copy/move request requires a "source_to" string (4-char anchor from read output).');
+    throw new Error('[E_BAD_SHAPE] Copy/move request requires a "source_to" string (5-char anchor from read output).');
   }
   if (typeof request.anchor !== "string" || request.anchor.length === 0) {
-    throw new Error('[E_BAD_SHAPE] Copy/move request requires an "anchor" string (4-char anchor from read output).');
+    throw new Error('[E_BAD_SHAPE] Copy/move request requires an "anchor" string (5-char anchor from read output).');
   }
   if (request.direction !== "before" && request.direction !== "after") {
     throw new Error('[E_BAD_SHAPE] Copy/move request "direction" must be "before" or "after" (the anchor is the destination line).');
@@ -257,11 +257,11 @@ export function getReplaceMatchInput(args: unknown): { path?: string; replace_fr
 
 const replaceMatchFromSchema = Type.String({
   description:
-    "4-char anchor of the FIRST line of the range searched.",
+    "5-char anchor of the FIRST line of the range searched.",
 });
 const replaceMatchToSchema = Type.String({
   description:
-    "4-char anchor of the LAST line of the range searched; same as `replace_from` for a single line.",
+    "5-char anchor of the LAST line of the range searched; same as `replace_from` for a single line.",
 });
 const replaceMatchMatchSchema = Type.String({
   description:

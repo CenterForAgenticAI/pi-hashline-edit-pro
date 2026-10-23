@@ -124,7 +124,7 @@ export function parseMatchAnchors(req: ReplaceMatchReq): { refs: MatchRefs; warn
   const warnings: string[] = [];
   const from = stripAnchorRow(req.replace_from.trim(), "replace_from entry", warnings);
   const to = stripAnchorRow(req.replace_to.trim(), "replace_to entry", warnings);
-  return { refs: { from: parseHashRef(from), to: parseHashRef(to) }, warnings };
+  return { refs: { from: parseHashRef(from, warnings, "replace_from"), to: parseHashRef(to, warnings, "replace_to") }, warnings };
 }
 
 function replacementLinesFor(raw: string): string[] {

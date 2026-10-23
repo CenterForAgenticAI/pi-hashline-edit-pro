@@ -19,7 +19,7 @@ import { abortIf, isRec, makePrepareArguments, numberedRead, visLines, splitLine
 import { loadP, loadGuidelines, type Guideline } from "./prompts";
 import { withReadPrompts, DEFAULT_EDIT_FLAGS, type EditToolFlags } from "./edit-common";
 import { valAccess } from "./validation";
-import { withAnchorSession, adoptAnchors, ownerOf, ownersDifferingOnlyByCase, formatAnchorReclaimNotice, takeReclaimedPaths } from "./anchor-registry";
+import { withAnchorSession, adoptAnchors, ownerOf, formatAnchorReclaimNotice, takeReclaimedPaths } from "./anchor-registry";
 import { serveRows } from "./served";
 import { snapshotCache } from "./hash-store/cache";
 import { Text } from "@earendil-works/pi-tui";
@@ -208,9 +208,7 @@ export function resolveReadOffset(
 	const ref = parseHashRef(offset);
 	const owner = ownerOf(ref.hash);
 	if (owner === undefined) {
-		const folded = ownersDifferingOnlyByCase(ref.hash);
-		const hint = folded.length > 0 ? ` Anchors are case-sensitive; ${folded.map((match) => `"${match.anchor}"`).join(", ")} differs only in case.` : "";
-		throw new Error(`[E_STALE_ANCHOR] "${ref.hash}" is not owned in this session.${hint} Use a line number, or read again for fresh anchors.`);
+		throw new Error(`[E_STALE_ANCHOR] "${ref.hash}" is not owned in this session. Use a line number, or read again for fresh anchors.`);
 	}
 	if (owner.path !== resolvedPath) {
 		throw new Error(`[E_STALE_ANCHOR] "${ref.hash}" is owned by ${owner.path}. Use a line number, or read ${owner.path} to use that anchor.`);

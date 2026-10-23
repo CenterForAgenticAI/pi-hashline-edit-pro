@@ -3,41 +3,47 @@ import { parseText, parseTextWithSeparators, parseHashRef } from "../../src/hash
 
 describe("parseHashRef", () => {
 	it("parses a hash anchor without # prefix", () => {
-		const ref = parseHashRef("ATIm");
-		expect(ref).toEqual({ hash: "ATIm" });
+		const ref = parseHashRef("atimx");
+		expect(ref).toEqual({ hash: "atimx" });
 	});
 
 	it("rejects trailing content after the anchor", () => {
-		expect(() => parseHashRef("ATIm:const x = 1;")).toThrow(
-			/Expected a 4-character anchor/,
+		expect(() => parseHashRef("atimx:const x = 1;")).toThrow(
+			/Expected a 5-character anchor/,
 		);
 	});
 
 	it("rejects a full anchor│content line copied into remove_from/remove_to", () => {
-		expect(() => parseHashRef("ATIm│const x = 1;")).toThrow(
-			/use only the 4-character anchor, drop everything from "│" onward/,
+		expect(() => parseHashRef("atimx│const x = 1;")).toThrow(
+			/use only the 5-character anchor, drop everything from "│" onward/,
 		);
 	});
+
+	it("lowercases a case variant and warns", () => {
+		const warnings: string[] = [];
+		expect(parseHashRef("ATIMX", warnings, "anchor")).toEqual({ hash: "atimx" });
+		expect(warnings[0]).toContain("[W_ANCHOR_CASE]");
+	});
 	it("rejects leading >>> markers (strict mode: no marker stripping)", () => {
-		expect(() => parseHashRef(">>> ATIm")).toThrow(/E_BAD_REF/);
+		expect(() => parseHashRef(">>> atimx")).toThrow(/E_BAD_REF/);
 	});
 
 	it("rejects + and - diff markers (strict mode: anchor only)", () => {
-		expect(() => parseHashRef("+ATIm")).toThrow(/E_BAD_REF/);
-		expect(() => parseHashRef("-ATIm")).toThrow(/E_BAD_REF/);
-		expect(() => parseHashRef("-#ATIm")).toThrow(/E_BAD_REF/);
+		expect(() => parseHashRef("+atimx")).toThrow(/E_BAD_REF/);
+		expect(() => parseHashRef("-atimx")).toThrow(/E_BAD_REF/);
+		expect(() => parseHashRef("-#atimx")).toThrow(/E_BAD_REF/);
 	});
 
 	it("rejects - and _ anywhere in the anchor (not in the alphabet)", () => {
-		expect(() => parseHashRef("-qka")).toThrow(/E_BAD_REF/);
-		expect(() => parseHashRef("-_-_")).toThrow(/E_BAD_REF/);
-		expect(() => parseHashRef("----")).toThrow(/E_BAD_REF/);
-		expect(() => parseHashRef("Has_")).toThrow(/E_BAD_REF/);
-		expect(() => parseHashRef("Has-")).toThrow(/E_BAD_REF/);
+		expect(() => parseHashRef("-qkaa")).toThrow(/E_BAD_REF/);
+		expect(() => parseHashRef("-_-_x")).toThrow(/E_BAD_REF/);
+		expect(() => parseHashRef("----x")).toThrow(/E_BAD_REF/);
+		expect(() => parseHashRef("Has_u")).toThrow(/E_BAD_REF/);
+		expect(() => parseHashRef("Has-x")).toThrow(/E_BAD_REF/);
 	});
 
 	it("rejects + as a hash body character (not in alphabet)", () => {
-		expect(() => parseHashRef("+qka")).toThrow(/E_BAD_REF/);
+		expect(() => parseHashRef("+qkaa")).toThrow(/E_BAD_REF/);
 		expect(() => parseHashRef("#+qka")).toThrow(/E_BAD_REF/);
 	});
 
@@ -45,23 +51,23 @@ describe("parseHashRef", () => {
 		expect(() => parseHashRef("invalid")).toThrow(/^\[E_BAD_REF\]/);
 	});
 	it("rejects anchors containing digits because anchors are letters only", () => {
-		expect(() => parseHashRef("A1bc")).toThrow(/^\[E_BAD_REF\]/);
+		expect(() => parseHashRef("A1bcd")).toThrow(/^\[E_BAD_REF\]/);
 	});
 
 	it("rejects legacy LINE#HASH format", () => {
-		expect(() => parseHashRef("5Hasu")).toThrow(
+		expect(() => parseHashRef("5hasux")).toThrow(
 			/Use the anchor alone/,
 		);
 	});
 
 	it("rejects wrong-length anchors", () => {
 		expect(() => parseHashRef("Ha")).toThrow(/E_BAD_REF/);
-		expect(() => parseHashRef("HasuX")).toThrow(/E_BAD_REF/);
+		expect(() => parseHashRef("HasuXY")).toThrow(/E_BAD_REF/);
 		expect(() => parseHashRef("#HasuX")).toThrow(/E_BAD_REF/);
 	});
 
 	it("rejects anchors with invalid alphabet", () => {
-		expect(() => parseHashRef("!@#")).toThrow(/^\[E_BAD_REF\]/);
+		expect(() => parseHashRef("!@#$%")).toThrow(/^\[E_BAD_REF\]/);
 	});
 });
 
@@ -113,10 +119,10 @@ describe("parseText", () => {
 	});
 
 	it("passes through diff-preview rows verbatim (marker stripping happens in applyEdit)", () => {
-		expect(parseText(["+ATIm│foo", "+xYp│bar"])).toEqual(["+ATIm│foo", "+xYp│bar"]);
-		expect(parseText([" ATIm│keep", "-10    old", " xYp│after"])).toEqual([" ATIm│keep", "-10    old", " xYp│after"]);
-		expect(parseText([" ATIm│keep", "-   │old", " xYp│after"])).toEqual([" ATIm│keep", "-   │old", " xYp│after"]);
-		expect(parseText(["-ATIm│old", "- ATIm│old"])).toEqual(["-ATIm│old", "- ATIm│old"]);
+		expect(parseText(["+atimx│foo", "+xYp│bar"])).toEqual(["+atimx│foo", "+xYp│bar"]);
+		expect(parseText([" atimx│keep", "-10    old", " xYp│after"])).toEqual([" atimx│keep", "-10    old", " xYp│after"]);
+		expect(parseText([" atimx│keep", "-   │old", " xYp│after"])).toEqual([" atimx│keep", "-   │old", " xYp│after"]);
+		expect(parseText(["-atimx│old", "- atimx│old"])).toEqual(["-atimx│old", "- atimx│old"]);
 	});
 
 	it("passes through numbered deletion rows as literal content", () => {
