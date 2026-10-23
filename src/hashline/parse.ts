@@ -42,19 +42,22 @@ function diagRef(ref: string): string {
 
 export function parseHashRef(ref: string, warnings?: string[], label = "anchor"): Anchor {
 	const trimmed = ref.trim();
+	const unquoted = trimmed.length >= 2 && (trimmed[0] === '"' || trimmed[0] === "'") && trimmed[trimmed.length - 1] === trimmed[0]
+		? trimmed.slice(1, -1).trim()
+		: trimmed;
 
 	if (
-		trimmed.length === ANCHOR_LEN &&
-		ALPH_RE.test(trimmed)
+		unquoted.length === ANCHOR_LEN &&
+		ALPH_RE.test(unquoted)
 	) {
-		const hash = trimmed.toLowerCase();
-		if (hash !== trimmed) {
-			warnings?.push(`[W_ANCHOR_CASE] ${label} "${trimmed}" was lowercased to "${hash}".`);
+		const hash = unquoted.toLowerCase();
+		if (hash !== unquoted) {
+			warnings?.push(`[W_ANCHOR_CASE] ${label} "${unquoted}" was lowercased to "${hash}".`);
 		}
 		return { hash };
 	}
 
-	throw new Error(diagRef(ref));
+	throw new Error(diagRef(unquoted));
 }
 
 const JSON_ENVELOPE_RE = /^\s*\["(.*)"\]\.\s*$/;

@@ -485,7 +485,7 @@ Full reference:
 | `[E_PATH_CHANGED]` | A write target changed identity after it was read; the write was refused to avoid following a swapped symlink or overwriting a replacement file. |
 | `[E_BATCH_OVERLAP]` | Batched edit calls target overlapping ranges; the whole batch was refused. One `before` plus one `after` insert on the same anchor line is not an overlap. Retry with disjoint ranges. |
 | `[E_OP_ABORTED]` | The edit was aborted before writing: the file changed or was deleted after it was read (a single edit or a cross-file move reports the file; a batch reports the batch and the failing call), the base read failed, a cross-file member could not be prepared, or the composed result exceeded a limit. Nothing was written; a call whose own request is invalid is left out of the batch instead. Fix the cause and retry, otherwise call `read` for fresh anchors and retry. The batch abort names the failing call and its error code when one is known. |
-| `[E_GREP_FAILED]` | `grep` could not start ripgrep or ripgrep exited with an error (for example a pattern with backreferences or look-around, which ripgrep's regex engine does not support); the message carries ripgrep's output. Retry with `literal: true` or simplify the pattern. |
+| `[E_GREP_FAILED]` | `grep` could not start ripgrep or ripgrep exited with an error (for example a pattern with backreferences, look-around, or invalid regex syntax, which ripgrep's regex engine does not support); the message carries ripgrep's output. Retry with `literal: true` or simplify the pattern. |
 | `[E_GREP_TIMEOUT]` | `grep` timed out after 10 seconds; narrow `path` or simplify `pattern` and retry. |
 
 ## Troubleshooting

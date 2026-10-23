@@ -143,12 +143,12 @@ describe("grep glob question mark", () => {
 });
 
 describe("grep regex compatibility", () => {
-  it("rejects an invalid k-angle backreference before scanning", async () => {
+  it("rejects an invalid k-angle backreference with ripgrep's error", async () => {
     await withTempDir("grep-kref-", async (dir) => {
       await writeFile(join(dir, "s.txt"), "hello\n", "utf-8");
       const { ctx, getTool } = setupIntegrationTest(dir);
       const grepTool = getTool("grep");
-      expect(await toolError(() => grepTool.execute("g1", { pattern: "\\k<foo>", path: "s.txt" }, undefined, undefined, ctx))).toContain("[E_BAD_SHAPE]");
+      expect(await toolError(() => grepTool.execute("g1", { pattern: "\\k<foo>", path: "s.txt" }, undefined, undefined, ctx))).toContain("[E_GREP_FAILED]");
     });
   });
   it("accepts quantified alternation", async () => {

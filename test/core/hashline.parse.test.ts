@@ -7,6 +7,11 @@ describe("parseHashRef", () => {
 		expect(ref).toEqual({ hash: "atimx" });
 	});
 
+	it("strips surrounding quotes from an anchor", () => {
+		expect(parseHashRef('"atimx"')).toEqual({ hash: "atimx" });
+		expect(parseHashRef("'atimx'")).toEqual({ hash: "atimx" });
+	});
+
 	it("rejects trailing content after the anchor", () => {
 		expect(() => parseHashRef("atimx:const x = 1;")).toThrow(
 			/Expected a 5-character anchor/,

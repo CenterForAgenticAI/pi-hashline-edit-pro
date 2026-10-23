@@ -449,17 +449,17 @@ export function assertRangeServed(
     rows.push(fmtRow(hash, clipLine(content)));
   }
   const location = filePath ? ` in ${filePath}` : "";
+  const rangeDescription = `the replaced range (lines ${startLine}-${endLine})${location}`;
   const first = mismatchLines[0]!;
-  const mismatchText =
-    mismatchLines.length === 1
-      ? `Line ${first} of the replaced range (lines ${startLine}-${endLine})${location} does not match`
-      : `${mismatchLines.length} of ${rangeLength} line(s) in the replaced range (lines ${startLine}-${endLine})${location} do not match`;
+  const mismatchText = mismatchLines.length === 1
+    ? `Line ${first} of ${rangeDescription} was never shown or changed on disk`
+    : `${mismatchLines.length} of ${rangeLength} line(s) in ${rangeDescription} were never shown or changed on disk`;
   const capHint =
     rangeLength > shownLength
       ? `\n\n[The range has ${rangeLength} lines; showing the first ${shownLength}. Call read()${filePath ? ` on ${filePath}` : ""} with offset=${startLine + shownLength} to see the rest.]`
       : "\n\nRetry with the fresh anchors above without a read.";
   const message =
-    `[E_RANGE_STALE] ${mismatchText} what was shown. Current range with fresh anchors:\n\n${rows.join("\n")}${capHint}`;
+    `[E_RANGE_STALE] ${mismatchText}. Current range with fresh anchors:\n\n${rows.join("\n")}${capHint}`;
   throw new RangeStaleError(message, shownHashes, shownMap);
 }
 

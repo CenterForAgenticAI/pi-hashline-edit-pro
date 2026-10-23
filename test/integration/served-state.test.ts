@@ -43,6 +43,7 @@ describe("served-state range verification", () => {
         ctx,
       ));
       expect(message).toMatch(/E_RANGE_STALE/);
+      expect(message).toContain("never shown or changed on disk");
       expect(message).toContain("Current range with fresh anchors");
       expect(await readFile(path, "utf-8")).toBe("a\nB\nc\nd\n");
       const rows = feedbackRows(message);
@@ -191,6 +192,7 @@ describe("served-state range verification", () => {
         ctx,
       ));
       expect(message).toMatch(/E_RANGE_STALE/);
+      expect(message).toContain("never shown");
       expect(await readFile(path, "utf-8")).toBe("a\nb\nc\nd\ne\nf\n");
       const rows = feedbackRows(message);
       expect(rows).toHaveLength(6);

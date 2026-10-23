@@ -559,11 +559,20 @@ async function withSystemTempDir(prefix: string, run: (dir: string) => Promise<v
     });
   });
 
+  it("accepts Rust hex escapes for invisible characters", async () => {
+    await withTempFile("sample.ts", "legacy\u200bCheckout\n", async ({ cwd }) => {
+      const { ctx, getTool } = setupIntegrationTest(cwd);
+      const grepTool = getTool("grep");
+      const result = await grepTool.execute("g1", { pattern: String.raw`legacy\x{200b}Checkout`, path: "sample.ts" }, undefined, undefined, ctx);
+      expect(getText(result)).toContain("legacy\u200bCheckout");
+    });
+  });
+
   it("rejects an invalid pattern", async () => {
     await withTempFile("sample.ts", "alpha\n", async ({ cwd }) => {
       const { ctx, getTool } = setupIntegrationTest(cwd);
       const grepTool = getTool("grep");
-      expect(await toolError(() => grepTool.execute("g1", { pattern: "(", path: "sample.ts" }, undefined, undefined, ctx))).toMatch(/E_BAD_SHAPE/);
+      expect(await toolError(() => grepTool.execute("g1", { pattern: "(", path: "sample.ts" }, undefined, undefined, ctx))).toMatch(/E_GREP_FAILED/);
     });
   });
 

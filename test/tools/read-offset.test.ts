@@ -96,6 +96,16 @@ describe("read tool - offset addressing", () => {
     });
   });
 
+  it("accepts a quoted anchor", async () => {
+    await withTempFile("sample.txt", "alpha\n", async ({ cwd }) => {
+      const { ctx, readTool } = setupIntegrationTest(cwd);
+      const first = getText(await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx));
+      const anchor = anchorFor(first, "alpha");
+      const result = getText(await readTool.execute("r2", { path: "sample.txt", offset: `"${anchor}"` }, undefined, undefined, ctx));
+      expect(result).toContain("│alpha");
+    });
+  });
+
   it("rejects a malformed anchor", async () => {
     await withTempFile("sample.txt", "l1\n", async ({ cwd }) => {
       const { ctx, readTool } = setupIntegrationTest(cwd);

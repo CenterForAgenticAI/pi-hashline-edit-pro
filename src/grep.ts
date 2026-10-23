@@ -70,14 +70,6 @@ function regexSource(pattern: string, literal: boolean): string {
   return literal ? pattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") : pattern;
 }
 
-function assertPattern(pattern: string, literal: boolean, ignoreCase: boolean): void {
-  try {
-    new RegExp(regexSource(pattern, literal), ignoreCase ? "ui" : "u");
-  } catch {
-    throw new Error(`[E_BAD_SHAPE] Invalid pattern: ${pattern}`);
-  }
-}
-
 interface RgMatchLine {
   line: number;
   start: number;
@@ -524,7 +516,6 @@ export function regGrep(pi: ExtensionAPI, flags: EditToolFlags = DEFAULT_EDIT_FL
           const globPath = toDisplayPath(globRoot, absPath);
           return globRegex.test(globPath) || globRegex.test(displayPath);
         };
-        assertPattern(req.pattern, req.literal === true, req.ignoreCase === true);
         const rgPath = await resolveRgPath();
         const hits: FileHit[] = [];
         let matches = 0;
