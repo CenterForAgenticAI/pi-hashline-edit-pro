@@ -46,6 +46,31 @@ describe("batched replace_match", () => {
     });
   });
 
+  it("batches a replace_match whose replacement spans lines", async () => {
+    await withTempFile("sample.txt", "alpha\nbeta\ngamma\n", async ({ cwd, path }) => {
+      const { handlers, getTool, ctx } = setupIntegrationTest(cwd);
+      const read = getTool("read");
+      const replace = getTool("replace");
+      const match = getTool("replace_match");
+
+      const text = getText(await read.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx));
+      const beta = anchorFor(text, "beta");
+      const gamma = anchorFor(text, "gamma");
+      const replaceArgs = { remove_from: beta, remove_to: beta, text: ["BETA"] };
+      const matchArgs = { replace_from: gamma, replace_to: gamma, match: "gamma", replacement: "GAMMA\nDELTA" };
+      const message = assistantMessage([toolCall("m1", "replace", replaceArgs), toolCall("m2", "replace_match", matchArgs)]);
+      await handlers.get("message_end")!({ type: "message_end", message }, ctx);
+
+      const first = await replace.execute("m1", replaceArgs, undefined, undefined, ctx);
+      expect(getText(first)).toBe("In batch 1 (queued)");
+
+      const last = await match.execute("m2", matchArgs, undefined, undefined, ctx);
+      expect(getText(last)).toContain("Batch 1: 2 edits applied as one commit");
+      expect(last.details.metrics.classification).toBe("applied");
+      expect(await readFile(path, "utf-8")).toBe("alpha\nBETA\nGAMMA\nDELTA\n");
+    });
+  });
+
   it("demotes a missing replace_match substring and applies the valid sibling", async () => {
     await withTempFile("sample.txt", "alpha\nbeta\ngamma\n", async ({ cwd, path }) => {
       const { handlers, getTool, ctx } = setupIntegrationTest(cwd);

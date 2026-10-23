@@ -12,7 +12,8 @@ import {
   buildReplaceMatchToolSchema,
   getReplaceMatchInput,
   normReq,
-  singleLineFragment,
+  replacementFragment,
+  singleLineMatch,
   type ReplaceMatchReq,
 } from "./payload-contract";
 import { literalEscapeHints, makePrepareArguments, splitLines } from "./utils";
@@ -44,26 +45,6 @@ export interface MatchPlan {
   editParams: { remove_from: string; remove_to: string; text: string };
   contentSeparators: (LineEnding | undefined)[];
   servedOverride?: ReadonlyMap<string, string>;
-}
-
-function replaceAllOccurrences(
-  line: string,
-  matchText: string,
-  replacementText: string,
-): { text: string; count: number } {
-  const parts: string[] = [];
-  let cursor = 0;
-  let count = 0;
-  for (;;) {
-    const found = line.indexOf(matchText, cursor);
-    if (found < 0) break;
-    parts.push(line.slice(cursor, found), replacementText);
-    cursor = found + matchText.length;
-    count += 1;
-  }
-  if (count === 0) return { text: line, count: 0 };
-  parts.push(line.slice(cursor));
-  return { text: parts.join(""), count };
 }
 
 function linesToPayloadText(lines: string[]): string {
@@ -146,6 +127,32 @@ export function parseMatchAnchors(req: ReplaceMatchReq): { refs: MatchRefs; warn
   return { refs: { from: parseHashRef(from), to: parseHashRef(to) }, warnings };
 }
 
+function replacementLinesFor(raw: string): string[] {
+  const fragment = replacementFragment(raw);
+  return fragment.length === 0 ? [""] : fragment.split("\n");
+}
+
+function replaceInLine(
+  line: string,
+  matchText: string,
+  replacementLines: readonly string[],
+): { lines: string[]; count: number } {
+  const lines: string[] = [""];
+  let cursor = 0;
+  let count = 0;
+  for (;;) {
+    const found = line.indexOf(matchText, cursor);
+    if (found < 0) break;
+    lines[lines.length - 1] += line.slice(cursor, found) + replacementLines[0]!;
+    for (let index = 1; index < replacementLines.length; index++) lines.push(replacementLines[index]!);
+    cursor = found + matchText.length;
+    count += 1;
+  }
+  if (count === 0) return { lines: [line], count: 0 };
+  lines[lines.length - 1] += line.slice(cursor);
+  return { lines, count };
+}
+
 export function buildReplaceMatchEdit(
   req: ReplaceMatchReq,
   refs: MatchRefs,
@@ -153,8 +160,8 @@ export function buildReplaceMatchEdit(
   displayPath: string,
   served?: ReadonlyMap<string, string>,
 ): MatchPlan {
-  const matchText = singleLineFragment("match", req.match);
-  const replacementText = singleLineFragment("replacement", req.replacement);
+  const matchText = singleLineMatch(req.match);
+  const fragmentLines = replacementLinesFor(req.replacement);
   const fileLines = splitLines(preload.normalized);
   const fromLine = resolveAnchorLine(refs.from, fileLines, preload.fileHashes, displayPath);
   const toLine = resolveAnchorLine(refs.to, fileLines, preload.fileHashes, displayPath);
@@ -163,11 +170,12 @@ export function buildReplaceMatchEdit(
   assertBoundaryLinesServed(fileLines, preload.fileHashes, served, start, end, displayPath);
   const rangeLines = fileLines.slice(start - 1, end);
   let count = 0;
-  const replacementLines = rangeLines.map((line) => {
-    const result = replaceAllOccurrences(line, matchText, replacementText);
+  const replacementLines: string[] = [];
+  for (const line of rangeLines) {
+    const result = replaceInLine(line, matchText, fragmentLines);
     count += result.count;
-    return result.text;
-  });
+    replacementLines.push(...result.lines);
+  }
   if (count === 0) {
     throw new Error(notFoundMessage(displayPath, start, end, preload.fileHashes, fileLines, linesToPayloadText(rangeLines), matchText));
   }

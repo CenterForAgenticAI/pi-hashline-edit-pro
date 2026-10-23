@@ -185,20 +185,25 @@ export interface ReplaceMatchReq {
   replacement: string;
 }
 
-export function singleLineFragment(field: "match" | "replacement", raw: string): string {
+export function singleLineMatch(raw: string): string {
   const text = toLF(raw);
   const fragment = text.endsWith("\n") ? text.slice(0, -1) : text;
   const lineBreak = fragment.indexOf("\n");
   if (lineBreak >= 0) {
     const column = [...fragment.slice(0, lineBreak)].length + 1;
     throw new Error(
-      `[E_BAD_SHAPE] ${field} must stay within one line, but the value contains a line break at column ${column}. A trailing line break is accepted as the line's own terminator; text on another line belongs to replace.`,
+      `[E_BAD_SHAPE] match must stay within one line, but the value contains a line break at column ${column}. A trailing line break is accepted as the line's own terminator; a match that spans lines belongs to replace.`,
     );
   }
-  if (field === "match" && fragment.length === 0) {
+  if (fragment.length === 0) {
     throw new Error('[E_BAD_SHAPE] Replace-match request field "match" must be a non-empty string holding the exact text to find.');
   }
   return fragment;
+}
+
+export function replacementFragment(raw: string): string {
+  const text = toLF(raw);
+  return text.endsWith("\n") ? text.slice(0, -1) : text;
 }
 
 export function assertReplaceMatchReq(request: unknown): asserts request is ReplaceMatchReq {
@@ -221,8 +226,7 @@ export function assertReplaceMatchReq(request: unknown): asserts request is Repl
   if (within.replace_from.length === 0 || within.replace_to.length === 0) {
     throw new Error('[E_BAD_SHAPE] Replace-match request requires non-empty "replace_from" and "replace_to" anchors.');
   }
-  singleLineFragment("match", within.match);
-  singleLineFragment("replacement", within.replacement);
+  singleLineMatch(within.match);
   assertNoNul([within.replacement]);
 }
 
@@ -265,7 +269,7 @@ const replaceMatchMatchSchema = Type.String({
 });
 const replaceMatchReplacementSchema = Type.String({
   description:
-    `The exact replacement for every matched occurrence within the range. "" deletes the matches. It must stay within one line: a single trailing line break is accepted and dropped (a value that is only a line break counts as ""), and a line break anywhere else is refused. The rest of each line is kept byte-for-byte.`,
+    `The exact replacement for every matched occurrence within the range. "" deletes the matches. A single trailing line break is accepted and dropped (a value that is only a line break counts as ""); an interior or leading line break splits the replacement into lines, and new lines inherit the file's line endings. The text around each match is kept byte-for-byte.`,
 });
 
 export const replaceMatchToolSchema = Type.Object(

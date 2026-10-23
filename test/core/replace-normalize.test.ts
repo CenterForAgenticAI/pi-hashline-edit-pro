@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normReq, singleLineFragment } from "../../src/payload-contract";
+import { normReq, replacementFragment, singleLineMatch } from "../../src/payload-contract";
 
 describe("normReq", () => {
 	it("returns non-record input as-is", () => {
@@ -235,15 +235,23 @@ describe("normReq - anchor aliases", () => {
   });
 });
 
-describe("singleLineFragment", () => {
-	it("drops one trailing break and refuses a lone break as match", () => {
-		expect(singleLineFragment("match", "beta\n")).toBe("beta");
-		expect(singleLineFragment("replacement", "\n")).toBe("");
-		expect(() => singleLineFragment("match", "\n")).toThrow("must be a non-empty string");
+describe("singleLineMatch", () => {
+	it("drops one trailing break and refuses a lone break", () => {
+		expect(singleLineMatch("beta\n")).toBe("beta");
+		expect(() => singleLineMatch("\n")).toThrow("must be a non-empty string");
 	});
 
 	it("counts the line-break column in code points", () => {
-		expect(() => singleLineFragment("match", "ab\nc")).toThrow("line break at column 3");
-		expect(() => singleLineFragment("match", "a😀b\nc")).toThrow("line break at column 4");
+		expect(() => singleLineMatch("ab\nc")).toThrow("line break at column 3");
+		expect(() => singleLineMatch("a😀b\nc")).toThrow("line break at column 4");
+	});
+});
+
+describe("replacementFragment", () => {
+	it("drops one trailing break and keeps interior breaks", () => {
+		expect(replacementFragment("beta\n")).toBe("beta");
+		expect(replacementFragment("\n")).toBe("");
+		expect(replacementFragment("a\nb")).toBe("a\nb");
+		expect(replacementFragment("a\r\nb")).toBe("a\nb");
 	});
 });

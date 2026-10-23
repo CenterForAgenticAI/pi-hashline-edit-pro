@@ -317,9 +317,10 @@ describe("edit prompt flag variants", () => {
     expect(loadGuide("../tool-prompts/replace-match-guidelines.md").some((g) => g.includes("only the fragment that changes"))).toBe(true);
   });
 
-  it("keeps the replace_match range and single-line guidelines", () => {
+  it("keeps the replace_match range and line-break guidelines", () => {
     expect(loadGuide("../tool-prompts/replace-match-guidelines.md").some((g) => g.includes("the anchors bound the range searched"))).toBe(true);
-    expect(loadGuide("../tool-prompts/replace-match-guidelines.md").some((g) => g.includes("must each stay within one line"))).toBe(true);
+    expect(loadGuide("../tool-prompts/replace-match-guidelines.md").some((g) => g.includes("`match` must stay within one line"))).toBe(true);
+    expect(loadGuide("../tool-prompts/replace-match-guidelines.md").some((g) => g.includes("`replacement` may span lines"))).toBe(true);
     expect(loadGuide("../tool-prompts/replace-match-guidelines.md").some((g) => g.includes("use `replace` with the same anchor"))).toBe(true);
   });
 

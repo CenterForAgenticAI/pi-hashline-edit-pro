@@ -247,25 +247,96 @@ describe("replace_match", () => {
     });
   });
 
-  it("refuses a string that spans lines", async () => {
+  it("refuses a match that spans lines", async () => {
     await withTempFile("sample.txt", "alpha\nbeta\ngamma\n", async ({ cwd, path }) => {
       const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
       const text = getText(await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx));
       const beta = anchorFor(text, "beta");
-      const matchMessage = await toolError(() => getTool("replace_match").execute(
+      const message = await toolError(() => getTool("replace_match").execute(
         "w1",
         { replace_from: beta, replace_to: beta, match: "beta\ngamma", replacement: "x" },
         undefined, undefined, ctx,
       ));
-      expect(matchMessage).toContain("[E_BAD_SHAPE]");
-      expect(matchMessage).toContain("match must stay within one line");
-      const replacementMessage = await toolError(() => getTool("replace_match").execute(
-        "w2",
-        { replace_from: beta, replace_to: beta, match: "beta", replacement: "x\ny" },
+      expect(message).toContain("[E_BAD_SHAPE]");
+      expect(message).toContain("match must stay within one line");
+      expect(await readFile(path, "utf-8")).toBe("alpha\nbeta\ngamma\n");
+    });
+  });
+
+  it("applies a replacement that spans lines", async () => {
+    await withTempFile("sample.txt", "alpha\nbeta\ngamma\n", async ({ cwd, path }) => {
+      const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
+      const text = getText(await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx));
+      const beta = anchorFor(text, "beta");
+      const result = await getTool("replace_match").execute(
+        "w1",
+        { replace_from: beta, replace_to: beta, match: "beta", replacement: "BETA\nEXTRA" },
         undefined, undefined, ctx,
-      ));
-      expect(replacementMessage).toContain("[E_BAD_SHAPE]");
-      expect(replacementMessage).toContain("replacement must stay within one line");
+      );
+      expect(getText(result)).toContain("Successfully replaced");
+      expect(result.details.metrics.added_lines).toBe(2);
+      expect(result.details.metrics.removed_lines).toBe(1);
+      expect(await readFile(path, "utf-8")).toBe("alpha\nBETA\nEXTRA\ngamma\n");
+
+      await getTool("undo_last_change").execute("u1", { path: "sample.txt" }, undefined, undefined, ctx);
+      expect(await readFile(path, "utf-8")).toBe("alpha\nbeta\ngamma\n");
+    });
+  });
+
+  it("keeps the text before and after a multi-line replacement", async () => {
+    await withTempFile("sample.txt", "alpha\nfoo(x)\ngamma\n", async ({ cwd, path }) => {
+      const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
+      const text = getText(await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx));
+      const target = anchorFor(text, "foo(x)");
+      await getTool("replace_match").execute(
+        "w1",
+        { replace_from: target, replace_to: target, match: "foo(", replacement: "foo(\n  bar()," },
+        undefined, undefined, ctx,
+      );
+      expect(await readFile(path, "utf-8")).toBe("alpha\nfoo(\n  bar(),x)\ngamma\n");
+    });
+  });
+
+  it("expands every occurrence of a multi-line replacement", async () => {
+    await withTempFile("sample.txt", "one two one\n", async ({ cwd, path }) => {
+      const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
+      const text = getText(await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx));
+      const target = anchorFor(text, "one two one");
+      await getTool("replace_match").execute(
+        "w1",
+        { replace_from: target, replace_to: target, match: "one", replacement: "1\n2" },
+        undefined, undefined, ctx,
+      );
+      expect(await readFile(path, "utf-8")).toBe("1\n2 two 1\n2\n");
+    });
+  });
+
+  it("applies a multi-line replacement across a range", async () => {
+    await withTempFile("sample.txt", "top\nfoo(1)\nkeep\nfoo(2)\nend\n", async ({ cwd, path }) => {
+      const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
+      const text = getText(await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx));
+      const first = anchorFor(text, "foo(1)");
+      const last = anchorFor(text, "foo(2)");
+      await getTool("replace_match").execute(
+        "w1",
+        { replace_from: first, replace_to: last, match: "foo(", replacement: "foo(\n  " },
+        undefined, undefined, ctx,
+      );
+      expect(await readFile(path, "utf-8")).toBe("top\nfoo(\n  1)\nkeep\nfoo(\n  2)\nend\n");
+    });
+  });
+
+  it("previews a multi-line replacement without writing", async () => {
+    await withTempFile("sample.txt", "alpha\nbeta\ngamma\n", async ({ cwd, path }) => {
+      const { ctx, readTool } = setupIntegrationTest(cwd);
+      const text = getText(await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx));
+      const beta = anchorFor(text, "beta");
+      const preview = await replaceMatchPreview(
+        { replace_from: beta, replace_to: beta, match: "beta", replacement: "BETA\nEXTRA" },
+        cwd,
+      );
+      expect(preview).toHaveProperty("diff");
+      expect((preview as { diff: string }).diff).toContain("BETA");
       expect(await readFile(path, "utf-8")).toBe("alpha\nbeta\ngamma\n");
     });
   });

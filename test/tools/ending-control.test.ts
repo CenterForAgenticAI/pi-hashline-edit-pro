@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { readFile } from "fs/promises";
-import { anchorFor, assistantMessage, getText, setupIntegrationTest, toolCall, toolError, withTempFile } from "../support/fixtures";
+import { anchorFor, assistantMessage, getText, setupIntegrationTest, toolCall, withTempFile } from "../support/fixtures";
 
 describe("line endings via embedded breaks", () => {
   it("adds a missing final newline when the last line is replaced with a trailing break", async () => {
@@ -214,19 +214,20 @@ describe("line endings preserved by replace_match", () => {
     });
   });
 
-  it("refuses a replacement that spans lines", async () => {
+  it("keeps CRLF endings for a replacement that spans lines", async () => {
     await withTempFile("sample.txt", "alpha\r\nbeta\r\ngamma\r\n", async ({ cwd, path }) => {
       const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
       const text = getText(await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx));
       const beta = anchorFor(text, "beta");
-      expect(await toolError(() => getTool("replace_match").execute(
+      const result = await getTool("replace_match").execute(
         "m1",
         { replace_from: beta, replace_to: beta, match: "beta", replacement: "BETA\r\nEXTRA" },
         undefined,
         undefined,
         ctx,
-      ))).toContain("[E_BAD_SHAPE]");
-      expect(await readFile(path, "utf-8")).toBe("alpha\r\nbeta\r\ngamma\r\n");
+      );
+      expect(getText(result)).toContain("Successfully replaced");
+      expect(await readFile(path, "utf-8")).toBe("alpha\r\nBETA\r\nEXTRA\r\ngamma\r\n");
     });
   });
 

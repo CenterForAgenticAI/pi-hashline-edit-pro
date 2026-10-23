@@ -1,3 +1,3 @@
 - `replace_match`: `match` is only the fragment that changes — never text that `replacement` leaves unchanged; every occurrence inside the range is replaced, so narrow the anchors when only some lines should change.
-- `replace_match`: the anchors bound the range searched, and `match`/`replacement` must each stay within one line — a trailing line break is the line's terminator, an interior one belongs to `replace`, and a lone break cannot be a `match`.
+- `replace_match`: the anchors bound the range searched; `match` must stay within one line, while `replacement` may span lines — a trailing line break is the line's terminator, interior breaks split the replacement into lines, and a lone break counts as empty.
 - `replace_match`: when the change covers the whole line, use `replace` with the same anchor and the exact text.
