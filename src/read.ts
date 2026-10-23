@@ -17,7 +17,7 @@ import { lineHashes, fmtRegion, fmtRow, HASH_SEP, MAX_HASH_LINES, parseHashRef, 
 import { toCwd } from "./paths";
 import { abortIf, isRec, makePrepareArguments, numberedRead, visLines, splitLines } from "./utils";
 import { loadP, loadGuidelines, type Guideline } from "./prompts";
-import { withReadPrompts, DEFAULT_EDIT_FLAGS, type EditToolFlags } from "./edit-common";
+import { withReadPrompts, DEFAULT_EDIT_FLAGS, staleAnchorMessage, type EditToolFlags } from "./edit-common";
 import { valAccess } from "./validation";
 import { withAnchorSession, adoptAnchors, ownerOf, formatAnchorReclaimNotice, takeReclaimedPaths } from "./anchor-registry";
 import { serveRows } from "./served";
@@ -208,7 +208,7 @@ export function resolveReadOffset(
 	const ref = parseHashRef(offset);
 	const owner = ownerOf(ref.hash);
 	if (owner === undefined) {
-		throw new Error(`[E_STALE_ANCHOR] "${ref.hash}" is not owned in this session. Use a line number, or read again for fresh anchors.`);
+		throw new Error(staleAnchorMessage(ref.hash, "Use a line number, or read again for fresh anchors."));
 	}
 	if (owner.path !== resolvedPath) {
 		throw new Error(`[E_STALE_ANCHOR] "${ref.hash}" is owned by ${owner.path}. Use a line number, or read ${owner.path} to use that anchor.`);

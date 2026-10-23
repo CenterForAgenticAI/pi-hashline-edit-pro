@@ -31,7 +31,7 @@ describe("strict hashline tool loop", () => {
         undefined,
         undefined,
         ctx,
-      ))).toMatch(/E_STALE_ANCHOR.*not owned in this session/);
+      ))).toMatch(/E_STALE_ANCHOR.*is stale: it was valid earlier in this session/);
 
       const secondRead = await readTool.execute("r2", { path: "sample.ts" }, undefined, undefined, ctx);
       const secondText = secondRead.content[0].text as string;

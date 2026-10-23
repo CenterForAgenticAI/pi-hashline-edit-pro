@@ -714,6 +714,11 @@ export function ownerOf(anchor: string): OwnedAnchor | undefined {
   return current()?.owned.get(anchor);
 }
 
+export function anchorWasMinted(anchor: string): boolean {
+  const state = current();
+  return state !== undefined && state.everMinted.has(anchor);
+}
+
 export function ownersForPath(path: string): Map<string, string> {
   const claims = new Map<string, string>();
   const state = current();

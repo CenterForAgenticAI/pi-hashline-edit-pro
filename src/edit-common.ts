@@ -1,7 +1,7 @@
 import { withFileMutationQueue } from "@earendil-works/pi-coding-agent";
 import { resolveInCwd } from "./fs-write";
 import { abortIf, makePrepareArguments } from "./utils";
-import { ownerOf } from "./anchor-registry";
+import { anchorWasMinted, ownerOf } from "./anchor-registry";
 import { assertRangeServed, lineChecksum, parseHashRef, stripAnchorRow } from "./hashline";
 import { readConfig } from "./config";
 import { makeRenderCall, renderEditResult, type RPreview, type FgT } from "./replace-render";
@@ -206,8 +206,11 @@ export function withTransferPrompts(base: { description: string; snippet: string
   return { description: base.description, snippet: base.snippet, guidelines };
 }
 
-function staleAnchorMessage(ref: string): string {
-  return `[E_STALE_ANCHOR] "${ref}" is not owned in this session. Call read() on the target file first.`;
+export function staleAnchorMessage(hash: string, next = "Call read() on the target file for fresh anchors."): string {
+  const state = anchorWasMinted(hash)
+    ? "is stale: it was valid earlier in this session, but its line was edited or its anchors were freed since."
+    : "was never served in this session, so it addresses no line here.";
+  return `[E_STALE_ANCHOR] "${hash}" ${state} ${next}`;
 }
 
 export function resolveEditTarget(removeFrom: string, removeTo?: string): string {
@@ -216,7 +219,7 @@ export function resolveEditTarget(removeFrom: string, removeTo?: string): string
   const owners = hashes.map((hash) => ownerOf(hash));
   const missing = owners.findIndex((owner) => !owner);
   if (missing >= 0) {
-    throw new Error(staleAnchorMessage(refs[missing]!));
+    throw new Error(staleAnchorMessage(hashes[missing]!));
   }
   const paths = new Set(owners.map((owner) => owner!.path));
   if (paths.size > 1) {

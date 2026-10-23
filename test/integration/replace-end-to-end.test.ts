@@ -131,7 +131,7 @@ describe("replace tool - end-to-end", () => {
         undefined,
         undefined,
         ctx,
-      ))).toMatch(/E_STALE_ANCHOR.*not owned in this session/);
+      ))).toMatch(/E_STALE_ANCHOR.*is stale: it was valid earlier in this session/);
     });
   });
 

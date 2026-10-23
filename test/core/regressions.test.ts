@@ -6,8 +6,9 @@ import { contentChecksum } from "../../src/hashline/hasher";
 import { hashSource } from "../../src/hashline";
 import { ANCHOR_COUNT, anchorAt } from "../../src/hashline/alphabet";
 import { HASH_PROBE_STRIDE } from "../../src/hashline/hash";
-import { initRegistry, resetRegistryForTests, allocateAnchor, mintAnchor, alignOwnership, foldRegistryEvents, parseRegistryLog, buildCompactedLog, shouldCompactSidecar, ownerOf, SIDECAR_COMPACT_LINE_BYTES, SIDECAR_HEADER_BYTES, MINT_PROBE_LIMIT } from "../../src/anchor-registry";
+import { initRegistry, resetRegistryForTests, allocateAnchor, freeAnchors, mintAnchor, alignOwnership, foldRegistryEvents, parseRegistryLog, buildCompactedLog, shouldCompactSidecar, ownerOf, SIDECAR_COMPACT_LINE_BYTES, SIDECAR_HEADER_BYTES, MINT_PROBE_LIMIT } from "../../src/anchor-registry";
 import { resolveEditTarget } from "../../src/edit-common";
+import { resolveReadOffset } from "../../src/read";
 import { buildServedMap } from "../../src/served";
 import { tryReadNormFile } from "../../src/file-reader";
 import { ensureBatchBase, resetBatchStateForTests } from "../../src/batch";
@@ -75,6 +76,46 @@ describe("resolveEditTarget cross file", () => {
     }
     expect(message).toContain("[E_BAD_SHAPE]");
     expect(message).toContain("different files");
+  });
+});
+
+describe("stale anchor messages", () => {
+  it("reports a freed anchor as stale rather than not owned", () => {
+    const anchor = allocateAnchor("/freed.ts", "ck-freed");
+    freeAnchors("/freed.ts");
+    let message = "";
+    try {
+      resolveEditTarget(anchor);
+    } catch (error) {
+      message = error instanceof Error ? error.message : String(error);
+    }
+    expect(message).toContain("[E_STALE_ANCHOR]");
+    expect(message).toContain("is stale: it was valid earlier in this session");
+    expect(message).not.toContain("not owned in this session");
+  });
+
+  it("reports a never-served anchor as never served", () => {
+    let message = "";
+    try {
+      resolveEditTarget("zzzzx");
+    } catch (error) {
+      message = error instanceof Error ? error.message : String(error);
+    }
+    expect(message).toContain("[E_STALE_ANCHOR]");
+    expect(message).toContain("was never served in this session");
+  });
+
+  it("reports a freed read offset anchor as stale", () => {
+    const anchor = allocateAnchor("/offset.ts", "ck-offset");
+    freeAnchors("/offset.ts");
+    let message = "";
+    try {
+      resolveReadOffset(anchor, ["a"], ["aaaaz"], "/offset.ts");
+    } catch (error) {
+      message = error instanceof Error ? error.message : String(error);
+    }
+    expect(message).toContain("[E_STALE_ANCHOR]");
+    expect(message).toContain("is stale: it was valid earlier in this session");
   });
 });
 
