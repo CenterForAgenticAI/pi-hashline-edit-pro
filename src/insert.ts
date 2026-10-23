@@ -23,10 +23,11 @@ const insertAnchorSchema = Type.String({
     "5-char anchor of the line to insert next to.",
 });
 
-const insertDirectionSchema = Type.Union(
-  [Type.Literal("after"), Type.Literal("before")],
-  { description: '"after" or "before"' },
-);
+const insertDirectionSchema = Type.Unsafe<"after" | "before">({
+  type: "string",
+  enum: ["after", "before"],
+  description: '"after" or "before"',
+});
 const insertTextSchema = Type.String({
   description:
     `The exact text to insert; an empty string inserts one blank line. ${TEXT_ENDING_NOTE} Never include the anchor line.`,

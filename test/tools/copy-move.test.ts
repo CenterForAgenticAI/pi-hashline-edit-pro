@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { Compile } from "typebox/compile";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import register from "../../index";
@@ -54,6 +55,23 @@ describe("copy and move registration", () => {
     expect(schema.properties?.anchor).toBeDefined();
     expect(schema.properties?.direction).toBeDefined();
     expect(schema.additionalProperties).toBe(true);
+  });
+
+  it("declares direction as a flat string enum", () => {
+    const { pi, getTool } = makeFakePiRegistry();
+    register(pi);
+    for (const name of ["copy", "move"]) {
+      const schema = getTool(name).parameters as { properties: Record<string, unknown> };
+      expect(schema.properties.direction).toEqual({
+        type: "string",
+        enum: ["after", "before"],
+        description: '"after" places the block below the anchor line, "before" above it',
+      });
+      const validator = Compile(schema.properties.direction as never);
+      expect(validator.Check("after")).toBe(true);
+      expect(validator.Check("before")).toBe(true);
+      expect(validator.Check("below")).toBe(false);
+    }
   });
 
   it("adds path to the schema when require-path mode is on", () => {

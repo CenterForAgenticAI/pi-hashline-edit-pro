@@ -900,10 +900,11 @@ const transferAnchorSchema = Type.String({
   description:
     "5-char anchor of the destination line; the block lands before or after it and it may live in another file.",
 });
-const transferDirectionSchema = Type.Union(
-  [Type.Literal("after"), Type.Literal("before")],
-  { description: '"after" places the block below the anchor line, "before" above it' },
-);
+const transferDirectionSchema = Type.Unsafe<"after" | "before">({
+  type: "string",
+  enum: ["after", "before"],
+  description: '"after" places the block below the anchor line, "before" above it',
+});
 const transferPathRequiredSchema = Type.String({
   description:
     "Path to the source or destination file the anchors were served for; required and must match anchor ownership.",

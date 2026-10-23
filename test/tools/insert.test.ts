@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { Compile } from "typebox/compile";
 import { readFile } from "fs/promises";
 import { lineHashes } from "../../src/hashline";
 import { withTempFile, makeFakePiRegistry, setupIntegrationTest, getText, extractHash, toolError } from "../support/fixtures";
@@ -28,6 +29,17 @@ describe("insert tool", () => {
     expect(schema.properties.text).toBeDefined();
     expect(schema.properties.lines).toBeUndefined();
     expect(schema.additionalProperties).toBe(true);
+  });
+
+  it("declares direction as a flat string enum", () => {
+    const { pi, getTool } = makeFakePiRegistry();
+    register(pi);
+    const schema = getTool("insert").parameters as { properties: Record<string, unknown> };
+    expect(schema.properties.direction).toEqual({ type: "string", enum: ["after", "before"], description: '"after" or "before"' });
+    const validator = Compile(schema.properties.direction as never);
+    expect(validator.Check("after")).toBe(true);
+    expect(validator.Check("before")).toBe(true);
+    expect(validator.Check("below")).toBe(false);
   });
 
   it("inserts lines after the anchor line", async () => {
