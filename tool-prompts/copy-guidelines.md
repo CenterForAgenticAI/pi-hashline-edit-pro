@@ -1,1 +1,1 @@
-- `copy`: the same anchor in `source_from` and `source_to` copies one line; copied lines get fresh anchors in the post-edit diff and the source rows keep theirs.
+- `copy`: the same anchor in `source_from` and `source_to` copies one line.

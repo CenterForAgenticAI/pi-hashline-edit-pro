@@ -1,2 +1,1 @@
-- `grep`: set `literal: true` when the pattern contains regex metacharacters.
-- `grep`: `N:│` rows are matches and `N-│` rows are context;
+- `grep`: set `literal: true` to match the text exactly, when characters such as `(`, `[`, `.`, or `*` in it must not act as regex.

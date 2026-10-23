@@ -14,7 +14,7 @@ const GUIDELINE_IDS_BY_NAME: Record<string, readonly string[]> = {
   "copy-guidelines.md": ["copy-single-anchor"],
   "move-guidelines.md": ["move-same-place"],
   "transfer-guidelines.md": ["transfer-boundary-serving", "transfer-same-file", "transfer-cross-file", "transfer-batch-move"],
-  "grep-guidelines.md": ["grep-literal", "grep-row-markers"],
+  "grep-guidelines.md": ["grep-literal"],
   "undo-last-change-guidelines.md": ["undo-single-level", "undo-write-clears", "undo-cross-file-move"],
 };
 

@@ -332,10 +332,11 @@ describe("edit prompt flag variants", () => {
     expect(off.description).toBe(grepBase.description);
   });
 
-  it("withGrepPrompts keeps the literal-matching and row-marker guidelines", () => {
+  it("withGrepPrompts keeps the literal-matching guideline and leaves row markers to the description", () => {
     const result = withGrepPrompts(grepBase, DEFAULT_EDIT_FLAGS);
     expect(result.guidelines.some((guideline) => guideline.includes("set `literal: true`"))).toBe(true);
-    expect(result.guidelines.some((guideline) => guideline.includes("`N:│` rows are matches"))).toBe(true);
+    expect(result.guidelines.some((guideline) => guideline.includes("`N:│`"))).toBe(false);
+    expect(result.description).toContain("`lineNumber:│ anchor│content`");
   });
 
   it("withReadPrompts lists only the enabled edit tools in its first guideline", () => {
