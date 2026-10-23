@@ -15,11 +15,11 @@ function diagRef(ref: string): string {
 	const trimmed = ref.trim();
 
 	if (!trimmed.length) {
-		return `[E_BAD_REF] Invalid anchor. Expected a 4-character anchor (letters only, e.g. "Hasu").`;
+		return `[E_BAD_REF] Invalid anchor. Expected a 4-character anchor (letters only, e.g. "Hasu") from read or grep output; anchors are exactly 4 letters.`;
 	}
 
 	if (/^\d+/.test(trimmed)) {
-		return `[E_BAD_REF] Invalid anchor. Use the anchor alone (e.g. "Hasu"): no line numbers or trailing content.`;
+		return `[E_BAD_REF] Invalid anchor. Use the anchor alone (e.g. "Hasu") with no line numbers or trailing content; anchors come from a read or grep row and are exactly 4 letters.`;
 	}
 	if (trimmed.includes("│") && trimmed.includes("\n")) {
 		const lines = trimmed.split(/\r?\n/);
@@ -34,10 +34,10 @@ function diagRef(ref: string): string {
 		return `[E_BAD_REF] Invalid anchor — remove_from and remove_to must each be a single bare 4-character anchor (letters only, e.g. "Hasu"), not a block with HASH│content. Received ${lines.length} lines starting "${preview}…" — use only the first hash "${firstHash}" as remove_from and "${lastHash}" as remove_to, and put the new content (without HASH│) in text.`;
 	}
 	if (trimmed.includes("│")) {
-		return `[E_BAD_REF] Invalid anchor "${trimmed}": use only the 4-character anchor, drop everything from "│" onward.`;
+		return `[E_BAD_REF] Invalid anchor "${trimmed.slice(0, 60)}": use only the 4-character anchor, drop everything from "│" onward (any line number, gutter, and content).`;
 	}
 
-	return `[E_BAD_REF] Invalid anchor "${trimmed}". Expected a 4-character anchor (letters only, e.g. "Hasu").`;
+	return `[E_BAD_REF] Invalid anchor "${trimmed.slice(0, 60)}". Expected a 4-character anchor (letters only, e.g. "Hasu") from read or grep output; anchors are exactly 4 letters.`;
 }
 
 export function parseHashRef(ref: string): Anchor {

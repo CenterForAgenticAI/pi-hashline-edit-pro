@@ -409,6 +409,21 @@ describe("insert strip warnings", () => {
       expect(await readFile(path, "utf-8")).toBe("alpha\nbeta\none\ntwo\nthree\ngamma\n");
     });
   });
+
+  it("accepts a line-numbered served row as the anchor", async () => {
+    await withTempFile("sample.ts", "alpha\nbeta\ngamma\n", async ({ cwd, path }) => {
+      const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
+      const text = getText(await readTool.execute("r1", { path: "sample.ts" }, undefined, undefined, ctx));
+      const betaHash = extractHash(text.split("\n").find((line) => line.includes("│beta"))!);
+      const result = await getTool("insert").execute(
+        "i1",
+        { anchor: `2:│ ${betaHash}│beta`, direction: "after", text: "beta1" },
+        undefined, undefined, ctx,
+      );
+      expect(result.content[0].text).toContain("Stripped line-numbered row from anchor entry");
+      expect(await readFile(path, "utf-8")).toBe("alpha\nbeta\nbeta1\ngamma\n");
+    });
+  });
 });
 
 describe("insert literal escape hints", () => {

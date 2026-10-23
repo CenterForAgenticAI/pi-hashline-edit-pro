@@ -205,7 +205,7 @@ A deletion keeps blank lines at the edges of the removed range, so the separator
 
 The extension checks the request before any file I/O, so a bad request never touches the file.
 
-Auto-fixable slips fall into two groups. Fixed silently: embedded newlines and a legacy array payload (a single-element array that holds stringified array text, even with a trailing JS method call, for example `[…].map(s => s)`, is unwrapped). Fixed with a warning or a hint: a reversed `remove_from`/`remove_to` range is applied in document order with an `[H_RANGE_REVERSED]` hint; a leftover `anchor│` prefix in `text` or the anchor fields (a prefix of 4 to 5 letters before `│`, for example `abde│`) and diff-preview rows pasted into the replacement are stripped with a warning.
+Auto-fixable slips fall into two groups. Fixed silently: embedded newlines and a legacy array payload (a single-element array that holds stringified array text, even with a trailing JS method call, for example `[…].map(s => s)`, is unwrapped). Fixed with a warning or a hint: a reversed `remove_from`/`remove_to` range is applied in document order with an `[H_RANGE_REVERSED]` hint; a leftover `anchor│` prefix in `text` or a pasted served row in the anchor fields (a bare `abde│` prefix, a line-numbered row such as `12:│ abde│content`, or an `abde (line 12)` suffix) and diff-preview rows pasted into the replacement are stripped with a warning.
 
 Content containing a NUL byte (`U+0000`) is rejected with `[E_BAD_SHAPE]` before any file I/O: writing it would make the file binary, so use an empty replacement to delete. This applies to the `text` field of both `replace` and `insert`.
 
@@ -455,9 +455,9 @@ Full reference:
 | `[E_CONFIG]` | `PI_HASHLINE_DIR` is nonempty but not an absolute path. |
 | `[E_BAD_SHAPE]` | Request envelope or edit item has unknown, missing, or wrongly-typed fields (for example `text` must be a string holding the exact text), content contains a NUL byte (`U+0000`), which would make the file binary, a grep `glob` has invalid bracket or brace syntax, or a `replace_match` string spans lines: `match`/`replacement` contains a line break after the optional trailing one. |
 | `[W_BAD_SHAPE]` | Auto-corrected request slip reported as a warning (for example legacy array text that could not be parsed and was kept as one literal line). |
-| `[E_BAD_REF]` | An anchor in `remove_from`/`remove_to` is not a bare 4-character anchor (the anchor table is letters only). |
+| `[E_BAD_REF]` | An anchor field does not yield a 4-character anchor. Anchors come from read or grep output and are exactly 4 letters; a pasted served row in an anchor field is reduced to its anchor first. |
 | `[E_SUBSTRING_NOT_FOUND]` | `replace_match` did not find `match` in the selected range. The current `anchor│content` rows are returned, and when `match` looks like a retyped copy of a single-line range the message names the first mismatching column; copy only the fragment that changes from the served row and retry, or use `replace` for a whole-line rewrite. |
-| `[W_BAD_REF]` | A pasted `anchor│` or diff-preview marker was stripped from an anchor field with a warning. |
+| `[W_BAD_REF]` | A pasted served row (bare `anchor│content`, a line-numbered grep row, or an `anchor (line N)` suffix) or diff-preview marker was stripped from an anchor field with a warning. |
 | `[E_STALE_ANCHOR]` | An anchor is not owned in this session (it was never shown to you, or its line was edited or the file was rewritten); call `read` for fresh anchors. |
 | `[W_INVALID_PATCH]` | A `text` line is a diff-preview row (`+anchor│`, `-anchor│`, `-    │`). The marker is stripped automatically with a warning. |
 | `[W_BARE_HASH_PREFIX]` | A `text` line starts with an `anchor│` prefix. The prefix is stripped automatically with a warning. |

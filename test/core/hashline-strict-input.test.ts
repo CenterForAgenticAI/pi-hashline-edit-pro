@@ -347,3 +347,49 @@ describe("short and long runs before the separator (issue #27)", () => {
     expect(warnings[0]).toMatch(/Stripped "anchor│" prefix/);
   });
 });
+
+describe("served rows pasted into anchor fields (issue #69)", () => {
+	const file = "alpha\nbeta\ngamma\ndelta";
+
+	const rowShapes: Array<[string, (hash: string) => string]> = [
+		["bare read row", (hash) => `${hash}│beta`],
+		["numbered grep hit row", (hash) => `2:│ ${hash}│beta`],
+		["numbered grep context row", (hash) => `2-│ ${hash}│beta`],
+		["numbered read row", (hash) => `2 │ ${hash}│beta`],
+		["line suffix", (hash) => `${hash} (line 2)`],
+		["lines suffix", (hash) => `${hash} (lines 2-3)`],
+	];
+
+	it.each(rowShapes)("strips a %s from an anchor field with a warning", async (_label, shape) => {
+		const hashes = await lineHashes(file, home.testPath);
+		const warnings: string[] = [];
+		const edit = resEdit(
+			{ remove_from: shape(hashes[1]!), remove_to: shape(hashes[1]!), text: "BETA" },
+			warnings,
+		);
+		const result = applyEdit(file, edit, undefined, hashes);
+		expect(result.content).toBe("alpha\nBETA\ngamma\ndelta");
+		expect(warnings[0]).toMatch(/^\[W_BAD_REF\] Stripped/);
+	});
+
+	it("rejects a bare line number with guidance about 4-letter anchors", () => {
+		expect(() => resEdit({ remove_from: "2", remove_to: "2", text: "x" }))
+			.toThrow(/read or grep row and are exactly 4 letters/);
+	});
+
+	it("rejects a non-anchor value with guidance about 4-letter anchors", () => {
+		expect(() => resEdit({ remove_from: "CONTRACT_STATUSES", remove_to: "CONTRACT_STATUSES", text: "x" }))
+			.toThrow(/exactly 4 letters/);
+	});
+
+	it("still rejects a 5-letter run extracted from a numbered row", () => {
+		const warnings: string[] = [];
+		expect(() =>
+			resEdit(
+				{ remove_from: "2:│ abcde│beta", remove_to: "2:│ abcde│beta", text: "x" },
+				warnings,
+			),
+		).toThrow(/E_BAD_REF/);
+		expect(warnings[0]).toMatch(/Stripped line-numbered row/);
+	});
+});

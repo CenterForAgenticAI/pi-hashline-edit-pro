@@ -10,7 +10,7 @@ import {
 } from "./replace-diff";
 import { readNormFile, type NormFile } from "./file-reader";
 import { editToolSchema, buildEditToolSchema, type ReqParams, type RawReqParams, assertReq, normReq } from "./payload-contract";
-import { literalEscapeHints, makePrepareArguments, splitLines } from "./utils";
+import { isRec, literalEscapeHints, makePrepareArguments, splitLines } from "./utils";
 import { editResultSchema, withStructuredErrors } from "./structured";
 import { loadP, loadGuidelines } from "./prompts";
 import { type FileIdentity } from "./fs-write";
@@ -293,6 +293,16 @@ type ToolDef = ToolDefinition<
   RRState
 > & { renderShell?: "default" | "self" };
 
+const prepareRemoveArguments = makePrepareArguments("remove");
+
+function prepareReplaceArguments(args: unknown): unknown {
+  const prepared = prepareRemoveArguments(args);
+  if (isRec(prepared) && typeof prepared.text !== "string" && ("match" in prepared || "replacement" in prepared)) {
+    throw new Error('[E_BAD_SHAPE] Replace request received "match"/"replacement" instead of "remove_from"/"remove_to"/"text". To change part of a line, call replace_match with "replace_from", "replace_to", "match", and "replacement".');
+  }
+  return prepared;
+}
+
 export function buildToolDef(flags: EditToolFlags = DEFAULT_EDIT_FLAGS): ToolDef {
   const prompted = withReplacePrompts({
     description: loadP("../tool-prompts/replace.md"),
@@ -309,7 +319,7 @@ export function buildToolDef(flags: EditToolFlags = DEFAULT_EDIT_FLAGS): ToolDef
     promptSnippet: prompted.snippet,
     promptGuidelines: prompted.guidelines,
     ...editToolBase,
-    prepareArguments: makePrepareArguments("remove"),
+    prepareArguments: prepareReplaceArguments,
     renderCall: editRenderCallWrapper(compPreview),
     renderResult: editRenderResultWrapper,
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {

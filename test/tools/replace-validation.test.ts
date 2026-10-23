@@ -16,6 +16,13 @@ describe("assertReq", () => {
 			.toThrow("[E_BAD_SHAPE]");
 	});
 
+	it("points replace_match fields at replace_match", () => {
+		expect(() => assertReq({ match: "a", replacement: "b" }))
+			.toThrow(/call replace_match with "replace_from", "replace_to", "match", and "replacement"/);
+		expect(() => assertReq({ remove_from: "ATIm", remove_to: "BeSR", text: "new", match: "a", replacement: "b" }))
+			.toThrow(/call replace_match with "replace_from", "replace_to", "match", and "replacement"/);
+	});
+
   it("allows an optional path hint for require-path mode", () => {
     expect(() => assertReq({ path: "test.txt", remove_from: "ATIm", remove_to: "BeSR", text: "new" }))
       .not.toThrow();
@@ -80,6 +87,12 @@ describe("prepareArguments normalization", () => {
 		const tool = buildToolDef();
 		expect(tool.prepareArguments!(null)).toBe(null);
 		expect(tool.prepareArguments!("raw")).toBe("raw");
+	});
+
+	it("points a replace_match-shaped request missing text at replace_match", () => {
+		const tool = buildToolDef();
+		expect(() => tool.prepareArguments!({ remove_from: "ATIm", remove_to: "BeSR", match: "a", replacement: "b" }))
+			.toThrow(/call replace_match with "replace_from", "replace_to", "match", and "replacement"/);
 	});
 
 	it("converts a legacy lines array into the exact text", () => {

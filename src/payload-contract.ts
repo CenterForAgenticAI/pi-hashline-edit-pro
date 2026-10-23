@@ -59,11 +59,19 @@ export type RawReqParams = {
 };
 
 const ROOT_KS = new Set(["path", "remove_from", "remove_to", "text"]);
+
+const REPLACE_MATCH_SHAPE_KEYS = ["match", "replacement", "old_string", "new_string"];
+
+function replaceMatchFieldHint(request: Record<string, unknown>): string | undefined {
+  if (!REPLACE_MATCH_SHAPE_KEYS.some((key) => key in request)) return undefined;
+  return 'This looks like a replace_match request: to change part of a line, call replace_match with "replace_from", "replace_to", "match", and "replacement"; replace takes "remove_from", "remove_to", and "text".';
+}
+
 export function assertReq(request: unknown): asserts request is ReqParams {
   if (!isRec(request)) {
     throw new Error("[E_BAD_SHAPE] Edit request must be an object.");
   }
-  rejectUnknownFields(request, ROOT_KS, "Edit request");
+  rejectUnknownFields(request, ROOT_KS, "Edit request", replaceMatchFieldHint(request));
   if (request.path !== undefined && typeof request.path !== "string") {
     throw new Error('[E_BAD_SHAPE] Edit request field "path" must be a string when provided.');
   }

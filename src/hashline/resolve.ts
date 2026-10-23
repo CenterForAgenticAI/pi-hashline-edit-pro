@@ -182,11 +182,25 @@ function resolveParsedEdit(removeFrom: string, removeTo: string, parsed: ParsedT
 
 export const ANCHOR_ROW_RE = new RegExp(`^([+-]?)(${HASH_RUN})│`);
 
+const NUMBERED_ANCHOR_ROW_RE = new RegExp(`^\\s*\\d+\\s*[:-]?\\s*│\\s*(${HASH_RUN})│`);
+
+const PAREN_LINE_SUFFIX_RE = new RegExp(`^(${HASH_RUN})\\s*\\(\\s*(?:line|lines)\\s+\\d+(?:\\s*[-–—]\\s*\\d+)?\\s*\\)$`, "i");
+
 export function stripAnchorRow(
 	trimmed: string,
 	entryLabel: string,
 	warnings?: string[],
 ): string {
+	const numbered = trimmed.match(NUMBERED_ANCHOR_ROW_RE);
+	if (numbered) {
+		warnings?.push(`[W_BAD_REF] Stripped line-numbered row from ${entryLabel} "${clipLine(trimmed, 48)}".`);
+		return numbered[1]!;
+	}
+	const paren = trimmed.match(PAREN_LINE_SUFFIX_RE);
+	if (paren) {
+		warnings?.push(`[W_BAD_REF] Stripped "(line N)" suffix from ${entryLabel} "${clipLine(trimmed, 48)}".`);
+		return paren[1]!;
+	}
 	const match = trimmed.match(ANCHOR_ROW_RE);
 	if (!match) return trimmed;
 	const marker =
