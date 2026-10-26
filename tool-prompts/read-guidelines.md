@@ -1,3 +1,3 @@
 - `read`: call again after an edit when you need anchors you lack — post-edit diff `+`/` ` rows and served `anchor│content` rows already carry fresh anchors for the changed range.
-- `read`: an auto-read-all outline row shows a symbol label, or a single-line symbol's content; its `[limit N]` is the span to request.
+- `read`: an auto-read-all outline row is the first line of a symbol's declaration, and a `[limit N]` line under it is the span to request; a row clipped with a trailing `...` is not served for editing.
 - `read`: `replace_match` needs both boundary lines served; copy `match` from a served row or read the lines first.

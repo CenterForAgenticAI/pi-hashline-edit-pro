@@ -6,6 +6,7 @@ import {
   toggleAnchorGrep,
   toggleCopyMove,
   toggleReplaceMatch,
+  toggleOutline,
   cycleReadOnDisabledModels,
   toggleRequirePath,
   toggleStrictInput,
@@ -558,6 +559,27 @@ describe("config - undoRetentionDays", () => {
       expect(row.label).toBe("Undo retention");
       expect(row.group).toBe("State");
       expect(row.value).toBe(30);
+    });
+  });
+});
+
+describe("config - toggleOutline", () => {
+  it("defaults to off and round-trips through multiple toggles", async () => {
+    await withTempDir("pi-hashline-config-test-", async () => {
+      expect((await readConfig()).outlineEnabled).toBe(false);
+      expect(await toggleOutline()).toBe(true);
+      expect((await readConfig()).outlineEnabled).toBe(true);
+      expect(await toggleOutline()).toBe(false);
+      expect((await readConfig()).outlineEnabled).toBe(false);
+    });
+  });
+
+  it("exposes the row", async () => {
+    await withTempDir("pi-hashline-config-test-", async () => {
+      const row = configRows(await readConfig()).find((candidate) => candidate.key === "outlineEnabled")!;
+      expect(row.label).toBe("Outline tool");
+      expect(row.group).toBe("Tools");
+      expect(row.enabled).toBe(false);
     });
   });
 });

@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { discoverAutoReadAllFiles, buildAutoReadAllInjection, normalizeAutoReadAllIgnoreList, isExcludedByCustomIgnore } from "../../src/auto-read-all";
 import { parseAutoReadAllIgnore, setAutoReadAllIgnore, setAutoReadAllIgnoreFromText, setDisableOnModels, readConfig } from "../../src/config";
 import { configRows, HashlineConfigOverlay } from "../../src/config-ui";
-import { makeConfigOverlay, makeTempDir, rmRetry, withTempDir } from "../support/fixtures";
+import { configRowNavigator, makeConfigOverlay, makeTempDir, rmRetry, withTempDir } from "../support/fixtures";
 
 function initGitRepo(cwd: string): void {
   execFileSync("git", ["init", "-q"], { cwd });
@@ -213,10 +213,8 @@ describe("HashlineConfigOverlay ignore editing", () => {
         seen.push({ key, value });
       });
       await overlay.load();
-      overlay.handleInput("j");
-      overlay.handleInput("j");
-      overlay.handleInput("j");
-      overlay.handleInput("j");
+      const select = configRowNavigator(overlay);
+      select("autoReadAllIgnore");
       overlay.handleInput(" ");
       overlay.handleInput("d");
       overlay.handleInput("o");
@@ -237,10 +235,8 @@ describe("HashlineConfigOverlay ignore editing", () => {
         calls += 1;
       });
       await overlay.load();
-      overlay.handleInput("j");
-      overlay.handleInput("j");
-      overlay.handleInput("j");
-      overlay.handleInput("j");
+      const select = configRowNavigator(overlay);
+      select("autoReadAllIgnore");
       overlay.handleInput(" ");
       overlay.handleInput("x");
       overlay.handleInput("\x1b");
@@ -258,10 +254,8 @@ describe("HashlineConfigOverlay ignore editing", () => {
         seen.push(value ?? "");
       });
       await overlay.load();
-      overlay.handleInput("j");
-      overlay.handleInput("j");
-      overlay.handleInput("j");
-      overlay.handleInput("j");
+      const select = configRowNavigator(overlay);
+      select("autoReadAllIgnore");
       overlay.handleInput(" ");
       overlay.handleInput("a");
       overlay.handleInput("b");
@@ -293,7 +287,8 @@ describe("HashlineConfigOverlay ignore editing", () => {
         seen.push({ key, value });
       });
       await overlay.load();
-      for (let step = 0; step < 10; step++) overlay.handleInput("j");
+      const select = configRowNavigator(overlay);
+      select("disableOnModels");
       overlay.handleInput(" ");
       for (const char of "openai/*") overlay.handleInput(char);
       overlay.handleInput("\r");

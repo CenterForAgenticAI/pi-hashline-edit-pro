@@ -234,6 +234,37 @@ describe("discoverAutoReadAllFiles", () => {
     }
   });
 
+  it("does not count a file with a clipped outline row as complete", async () => {
+    const cwd = await makeTempDir("pi-hashline-auto-read-all-clipped-");
+    try {
+      initGitRepo(cwd);
+      const long = `export const value = '${"a".repeat(260)}';`;
+      await writeFile(join(cwd, "long.ts"), `${long}\n`);
+      await writeFile(join(cwd, "small.txt"), "alpha\nbeta\n");
+      const injection = await buildAutoReadAllInjection(cwd, 1_000_000, "outline");
+      expect(injection).toBeDefined();
+      expect(injection!.completeFiles).toBe(1);
+      expect(injection!.text).toContain("[coverage: 1 complete]");
+    } finally {
+      await cleanupCwd(cwd);
+    }
+  });
+
+  it("does not count a head-and-tail preview as complete", async () => {
+    const cwd = await makeTempDir("pi-hashline-auto-read-all-preview-");
+    try {
+      initGitRepo(cwd);
+      await writeFile(join(cwd, "notes.txt"), Array.from({ length: 40 }, (_, index) => `line ${index + 1}`).join("\n") + "\n");
+      const injection = await buildAutoReadAllInjection(cwd, 1_000_000, "outline");
+      expect(injection).toBeDefined();
+      expect(injection!.completeFiles).toBe(0);
+      expect(injection!.text).toContain("[coverage: 0 complete]");
+      expect(injection!.text).toContain("... (10 more lines)");
+    } finally {
+      await cleanupCwd(cwd);
+    }
+  });
+
   it("keeps Laravel view overrides under resources/views/vendor", async () => {
     const cwd = await makeTempDir("pi-hashline-auto-read-all-vendor-views-");
     try {
@@ -347,7 +378,7 @@ describe("buildAutoReadAllInjection", () => {
       const injection = await buildAutoReadAllInjection(cwd, 1_000_000, "outline");
       expect(injection).toBeDefined();
       expect(injection!.text).toContain("=== app.ts (TypeScript) — 3 lines ===");
-      expect(injection!.text).toMatch(/[a-z]{5}│function run/);
+      expect(injection!.text).toMatch(/[a-z]{5}│export function run/);
       expect(injection!.text).not.toContain("return 1");
       expect(injection!.text).toContain("=== notes.txt — 2 lines ===");
     } finally {
@@ -363,6 +394,7 @@ describe("buildAutoReadAllInjection", () => {
       const injection = await buildAutoReadAllInjection(cwd, 1_000_000, "outline");
       expect(injection).toBeDefined();
       expect(injection!.text).toContain("outlined below");
+      expect(injection!.text).toContain("[N nested]");
       expect(injection!.text).toContain("=== app.ts (TypeScript) — 3 lines ===");
       expect(injection!.text).not.toContain("return 1");
     } finally {

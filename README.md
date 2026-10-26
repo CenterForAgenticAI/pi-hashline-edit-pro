@@ -29,6 +29,7 @@ the result is the post-edit diff with fresh anchors, so the next edit needs no r
 - [Quickstart](#quickstart)
 - [Tools](#tools)
   - [read](#read)
+  - [outline](#outline)
   - [replace](#replace)
   - [replace_match](#replace_match)
   - [insert](#insert)
@@ -87,6 +88,7 @@ pi install /path/to/pi-hashline-edit-pro
 | Built-in | Effect |
 | --- | --- |
 | `read` | overridden, returns `anchor│content` rows |
+| `outline` | new opt-in tool; returns one file's structural outline |
 | `edit` | disabled |
 | `grep` | replaced by an anchored `grep`; pi's own `grep` returns when Anchor grep is off |
 | `copy`, `move` | disabled while Copy/move is off |
@@ -155,7 +157,7 @@ Nothing commits until an edit call returns: the extension validates the request 
 
 ## Tools
 
-The extension registers eight tools: `read`, `replace`, `replace_match`, `insert`, `copy`, `move`, `grep`, and `undo_last_change`. The built-in `edit` tool is disabled. `copy` and `move` are enabled by default; turn Copy/move off in `/hashline-config` to remove both. `replace_match` is enabled by default; turn Replace match off in `/hashline-config` to remove it. `replace`, `replace_match`, `insert`, `copy`, and `move` do not need a `path` parameter by default: the file is resolved from the anchors' session ownership alone, so an edit can only land on the file the anchors were served for. A `path` passed anyway is checked against anchor ownership: a matching path is accepted, a mismatch is rejected. Opt in with `/hashline-config` to require `path` in `replace`, `replace_match`, `insert`, `copy`, and `move` for RPC visibility (for example pimacs.el); anchors still resolve the target and `path` must match.
+The extension registers nine tools: `read`, `outline`, `replace`, `replace_match`, `insert`, `copy`, `move`, `grep`, and `undo_last_change`. The built-in `edit` tool is disabled. `copy` and `move` are enabled by default; turn Copy/move off in `/hashline-config` to remove both. `replace_match` is enabled by default; turn Replace match off in `/hashline-config` to remove it. `outline` is off by default; turn Outline tool on in `/hashline-config` to enable it, which also activates it when the host's default tool list omits it. `replace`, `replace_match`, `insert`, `copy`, and `move` do not need a `path` parameter by default: the file is resolved from the anchors' session ownership alone, so an edit can only land on the file the anchors were served for. A `path` passed anyway is checked against anchor ownership: a matching path is accepted, a mismatch is rejected. Opt in with `/hashline-config` to require `path` in `replace`, `replace_match`, `insert`, `copy`, and `move` for RPC visibility (for example pimacs.el); anchors still resolve the target and `path` must match.
 
 ### read
 
@@ -167,7 +169,7 @@ The extension registers eight tools: `read`, `replace`, `replace_match`, `insert
 | `offset` | Line number (1-indexed) or a served anchor to start reading from. |
 | `limit` | Maximum number of lines to return from `offset`. |
 
-Output is capped at 2000 lines and 50KB. Paged output ends with a continuation hint, for example `[Showing lines 1-50 of 120. Use offset=emnox to continue.]`.
+Output is capped at 2000 lines and 50KB. Paged output ends with a continuation hint, for example `[Showing lines 1-50 of 120. Use offset=emnox to continue.]`. When the `outline` tool is enabled, a truncated read appends a notice pointing at it.
 
 A line whose `anchor│content` row exceeds 50KB is replaced by a marker that keeps the line's anchor: `anchor│[Line N is 2.2MB, exceeds 50.0KB; content not shown. Use bash: sed -n 'Np' <path> | head -c 51200]`. The marker is served like a normal row, so the whole line can still be replaced through it.
 
@@ -179,6 +181,17 @@ Edge cases:
 - An empty file comes back as one empty-line row (`anchor│`); replace that anchor to insert content.
 - BOMs are stripped for display. Non-UTF-8 bytes are shown as `U+FFFD`; editing such a file rewrites it as UTF-8, with a warning.
 - Files over 1,353,139 lines or 100MB are rejected with `[E_FILE_TOO_LARGE]`.
+
+### outline
+
+`outline` returns the structural outline of one file: a `=== path (language) — N lines ===` header, then one `anchor│content` row per symbol whose content is the first line of that symbol's declaration (annotations and attributes excluded). A `[limit N]` line under a multi-line symbol is the span to pass as `read`'s `limit` when reading the body from that anchor, and an `[N nested]` line marks children hidden by `depth`. Hiding children that way is a view choice rather than truncation, so `truncated` stays false and the section still counts as complete. The structured result reports `complete`, which is true only when no row or byte cap cut the outline, every rendered row was served, and no line was skipped for a missing anchor; a head-and-tail preview that omits lines is incomplete. Files the parser cannot outline fall back to the same head-and-tail preview auto-read all uses. A row whose line is longer than 200 characters is clipped and is not served for editing, so read that line first. The tool is offered only while Outline tool is on in `/hashline-config`.
+
+| Parameter | Description |
+| --- | --- |
+| `path` | Path to the file to outline (relative or absolute). |
+| `depth` | Nesting depth: `0` lists top-level symbols only, `1` adds their members, and the default is `2` (maximum `10`). |
+
+Rows are the file's real lines, so an outline anchor is editable with `replace` or `insert` without a separate `read`, exactly like an auto-read-all outline row. The outline shows only each symbol's declaration line, so an edit inside a body still needs a `read` of that span.
 
 ### replace
 
@@ -338,9 +351,9 @@ Auto-read all is off by default and has three modes, selected in `/hashline-conf
 
 Files are filtered before injection: symlinks, directories, image extensions (including SVG), binary files (a NUL byte in the first 8KB), files over 200KB, any path with a vendored segment (vendor, node_modules, bower_components, third_party, thirdparty, jspm_packages, .venv, venv, site-packages, __pycache__, .tox, .gradle, .terraform, Pods, Carthage, DerivedData, coreui, coreui-icons, case-insensitive; `resources/views/vendor` is kept so Laravel view overrides stay attached), and vendored or generated names and patterns (*.min.js, *.min.css, *.min.mjs, *-min.js, *-min.css, *.bundle.*, *.chunk.*, *.umd.js, *.map, *.lock, package-lock.json, yarn.lock, composer.lock, Gemfile.lock, Cargo.lock, poetry.lock, Pipfile.lock, go.sum, flake.lock, *.generated.*, *.gen.*, *_pb2.py, *.pb.go, *.g.dart, *.freezed.dart, *.designer.cs, *.g.cs, *.snap, _ide_helper.php, _ide_helper_models.php, .phpstorm.meta.php, .eslintcache, coreui-icons.*, coreui.css) are skipped. The attachment stops at 500 files or at a byte budget derived from the model context window (200KB floor, 2MB ceiling), and it never drops below one file; `full` also caps the budget at 2MB, while `outline` follows the context-derived budget because outlines stay compact. Files are ranked before the budget applies: working-tree changes first, then manifest and entry files, then the dominant source tree, then everything else, and no single top-level directory may take more than 40% of the budget in the first pass, so one large subtree cannot crowd out the rest. Skipped and not-attached files are named at the end of the message so the model can `read` them on demand. A model matched by `disableOnModels` skips the injection entirely.
 
-Each attached file starts with a header (`=== path ===` in `full` mode, `=== path (language) — lines ===` in `outline` mode) followed by its anchor rows. Edit directly from the attachment with replace and insert, so no `read` is needed. `full` attaches files whole; `outline` attaches each file's structural outline within the budget. In outline mode, multi-line symbols appear as labels with `[limit N]` and single-line symbols appear as their content.
+Each attached file starts with a header (`=== path ===` in `full` mode, `=== path (language) — lines ===` in `outline` mode) followed by its anchor rows. Edit directly from the attachment with replace and insert, so no `read` is needed. `full` attaches files whole; `outline` attaches each file's structural outline within the budget. In outline mode each symbol appears as the first line of its declaration, a `[limit N]` line under it gives the span to read when the symbol spans several lines, and `[N nested]` marks children hidden by auto-read all's six-level depth cap.
 
-A coverage line after the header reports how many attached files were served in full; a section truncated by the per-file budget is not counted as complete. Each attached file begins with a `=== path ===` header, and files that were not attached are named in the footer.
+A coverage line after the header reports how many attached files were served in full; a section truncated by the per-file budget, a preview that omitted lines, or one that includes a clipped row is not counted as complete. Children hidden by the outline depth cap are marked `[N nested]` and do not make a section incomplete. Each attached file begins with a `=== path ===` header, and files that were not attached are named in the footer.
 
 The setting lives in `/hashline-config` as Auto-read all and in `config.json` as `autoReadAll` (`"off"`, `"outline"`, or `"full"`; older configs with `"on"` or `true` are read as `"full"`, `"git"` as `"full"`, `"outline(git)"` as `"outline"` — both with Git repos only on — and `false` as `"off"`), and as `autoReadAllRequireGit`, the Git repos only switch (on by default). Extra folders and files are ignored via `/hashline-config` as Ignore folders/files and via `config.json` as `autoReadAllIgnore` (array of folder names, file names, or globs, for example `["docs", "scratch.md", "*.test.ts"]`). A single-segment entry skips any folder or file with that exact name (case-insensitive); an entry containing glob characters (`*`, `?`, `[`, `]`, `{`, `}`) is matched as a glob against the file name, or against the whole relative path when it also contains a slash, with the same syntax as `grep`'s `glob`; any other entry with a slash (for example `"src/tmp"`) skips that path. Custom ignores are counted with the vendor/name/pattern skips in the footer.
 
@@ -348,7 +361,7 @@ The setting lives in `/hashline-config` as Auto-read all and in `config.json` as
 
 | Command | Description |
 | --- | --- |
-| `/hashline-config` | Open the settings window: auto-read anchors, auto-read all mode, git repos only, ignore folders/files, disable on models, read on disabled models, diff context lines, `grep` tool, copy/move tools, replace_match tool, required `path`, strict input, and undo retention. Persists across sessions. |
+| `/hashline-config` | Open the settings window: auto-read anchors, auto-read all mode, git repos only, ignore folders/files, disable on models, read on disabled models, diff context lines, `grep` tool, copy/move tools, replace_match tool, outline tool, required `path`, strict input, and undo retention. Persists across sessions. |
 | `/clear-anchors` | Clear the session's anchor claims. Anchors are re-claimed on the next `read`. |
 
 Settings live in `~/.config/pi-hashline-edit-pro/config.json`, created when a setting is first changed in `/hashline-config`:
@@ -362,6 +375,7 @@ Settings live in `~/.config/pi-hashline-edit-pro/config.json`, created when a se
   "anchorGrepEnabled": true,
   "copyMoveEnabled": true,
   "replaceMatchEnabled": true,
+  "outlineEnabled": false,
   "requirePath": false,
   "strictInput": false,
   "diffContextLines": 1,
@@ -380,6 +394,7 @@ Settings live in `~/.config/pi-hashline-edit-pro/config.json`, created when a se
 | `anchorGrepEnabled` | Anchor grep | `true` | Register an anchored `grep` in place of pi's own `grep` while it is on. |
 | `copyMoveEnabled` | Copy/move | `true` | Offer the `copy` and `move` tools; when off, both are removed from the active tools. |
 | `replaceMatchEnabled` | Replace match | `true` | Offer the `replace_match` tool; when off, it is removed from the active tools. |
+| `outlineEnabled` | Outline tool | `false` | Register the `outline` tool for one file's structure on demand; when off, it is removed from the active tools. |
 | `requirePath` | Require path | `false` | `replace`, `replace_match`, `insert`, `copy`, and `move` require a `path` argument that must match anchor ownership. |
 | `strictInput` | Strict input | `false` | Reject auto-fixable slips (`[W_BAD_SHAPE]`, `[W_BAD_REF]`, `[W_INVALID_PATCH]`, `[W_BARE_HASH_PREFIX]`, `[W_ANCHOR_CASE]`) with `[E_BAD_SHAPE]` instead of applying them with a warning. |
 | `diffContextLines` | Diff context | `1` | Surrounding lines in post-edit diffs, 0-10 (needs Auto-read). |
@@ -387,7 +402,7 @@ Settings live in `~/.config/pi-hashline-edit-pro/config.json`, created when a se
 | `readOnDisabledModels` | Read on disabled models | `"vanilla"` | `read` for a model matched by `disableOnModels`: `"vanilla"` keeps pi's ordinary `read` active while the anchored edit tools stay off; `"remove"` disables `read` with the rest of the anchored tools. |
 | `undoRetentionDays` | Undo retention | `30` | Days to keep undo history; records older than this are deleted when the store opens. `0` keeps them forever (0-3650). |
 
-`disableOnModels` turns off the whole anchored surface for the models you name, so another edit tool (`apply_patch`, a shell read) can own the session without competing instructions. A match removes `replace`, `replace_match`, `insert`, `copy`, `move`, `grep`, and `undo_last_change` from the active tools, and also `read` when Read on disabled models is `remove`, registering pi's plain `grep` for those models, and it also skips the auto-read-all injection, the auto-read block after `write`, the post-edit diff substitution, and the `write` hook that refuses a `write` echoing a served anchor. Because the extension's `read` replaces the built-in one, a matched model has no `read` at all under `remove` unless another extension provides one; the default `vanilla` gives those models pi's ordinary `read` while the anchored edit tools stay off. The list is checked on `session_start`, on `model_select`, and again on `before_agent_start`, so a model change inside a session switches the surface immediately and another extension cannot re-add the tools mid-session. The default `[]` leaves every model unchanged.
+`disableOnModels` turns off the whole anchored surface for the models you name, so another edit tool (`apply_patch`, a shell read) can own the session without competing instructions. A match removes `outline`, `replace`, `replace_match`, `insert`, `copy`, `move`, `grep`, and `undo_last_change` from the active tools, and also `read` when Read on disabled models is `remove`, registering pi's plain `grep` for those models, and it also skips the auto-read-all injection, the auto-read block after `write`, the post-edit diff substitution, and the `write` hook that refuses a `write` echoing a served anchor. Because the extension's `read` replaces the built-in one, a matched model has no `read` at all under `remove` unless another extension provides one; the default `vanilla` gives those models pi's ordinary `read` while the anchored edit tools stay off. The list is checked on `session_start`, on `model_select`, and again on `before_agent_start`, so a model change inside a session switches the surface immediately and another extension cannot re-add the tools mid-session. The default `[]` leaves every model unchanged.
 
 When `PI_HASHLINE_DIR` is unset or empty, non-Windows platforms honor `XDG_CONFIG_HOME` when set (falling back to `~/.config`); on Windows the directory always uses `~/.config`, where `~` is `%USERPROFILE%`. To move the directory explicitly, see [Isolated state](#isolated-state).
 
@@ -397,7 +412,7 @@ When `PI_HASHLINE_DIR` is unset or empty, non-Windows platforms honor `XDG_CONFI
 | --- | --- | --- |
 | Output cap | 2000 lines and 50KB | `read`, auto-read after `write`, post-edit diffs, patches, previews, `details.patch` |
 | Oversized row | 50KB per `anchor│content` row | replaced by an anchor-keeping marker you can still edit through |
-| Line cap | 1,353,139 lines per file | `read`, `replace`, `replace_match`, `insert`, `copy`, `move` (`[E_FILE_TOO_LARGE]`) |
+| Line cap | 1,353,139 lines per file | `read`, `outline`, `replace`, `replace_match`, `insert`, `copy`, `move` (`[E_FILE_TOO_LARGE]`) |
 | File size | 100MB | all tools (`[E_FILE_TOO_LARGE]`) |
 | Hash window | first 500 bytes of a line | anchor identity for long lines |
 | Patch guard | 1MB of pre-edit + post-edit text | patch generation is skipped and `patchTruncated` is set |
@@ -405,6 +420,7 @@ When `PI_HASHLINE_DIR` is unset or empty, non-Windows platforms honor `XDG_CONFI
 | Grep output | 2000 rows and 50KB | `grep` |
 | Grep row fragment | 500 bytes | long match and context rows shown as `...` fragments |
 | Auto-read all files | 500 files, 200KB per file | files larger than 200KB and files past the cap are omitted |
+| Outline rows | 400 symbol rows and 50KB of content per file (a truncation footer may follow) | `outline`, auto-read all `outline` mode |
 | Auto-read all budget | 200KB floor; 2MB ceiling in `full` | total injection size derived from the model context window; `outline` is not capped at 2MB |
 | Stale-range feedback | first 100 lines | rows returned with `[E_RANGE_STALE]` |
 | Session anchors | 1,353,139 anchors in use | all tools; the least recently read or edited files are freed when the quota is exhausted (`[W_ANCHOR_RECLAIMED]`) |
@@ -414,13 +430,15 @@ When `PI_HASHLINE_DIR` is unset or empty, non-Windows platforms honor `XDG_CONFI
 
 ## Tool result details
 
-All eight tools return machine-readable metadata in `details` alongside the model-visible text.
+All nine tools return machine-readable metadata in `details` alongside the model-visible text.
 
-All eight tools also declare an `outputSchema` and return `structuredContent`, so codemode scripts receive anchors, line numbers, diffs, and errors as data instead of parsing the rendered text. In a codemode session `tools.read()` resolves to the file's text, like the built-in `read`; pass `anchors: true` to receive `{ text, lines, notices }`, where `text` is the raw file content of the served window and `lines` carries the anchored rows. The model still receives `content`. Every structured result is either `{ ok: true, kind, ... }` or `{ ok: false, kind: "error", error: { code, message } }`; a failed call is still a tool error (`isError: true`) and also carries `structuredContent`, so a script can branch on the code without matching the message.
+All nine tools also declare an `outputSchema` and return `structuredContent`, so codemode scripts receive anchors, line numbers, diffs, and errors as data instead of parsing the rendered text. In a codemode session `tools.read()` resolves to the file's text, like the built-in `read`; pass `anchors: true` to receive `{ text, lines, notices }`, where `text` is the raw file content of the served window and `lines` carries the anchored rows. The model still receives `content`. Every structured result is either `{ ok: true, kind, ... }` or `{ ok: false, kind: "error", error: { code, message } }`; a failed call is still a tool error (`isError: true`) and also carries `structuredContent`, so a script can branch on the code without matching the message.
 
 `read` returns `{ kind: "read", path, text, lines, totalLines, startLine, nextOffset, truncated, blockedByLongLine, hadUtf8DecodeErrors, notices }`, where `text` is the raw file content of the served window (no anchors, no footers) and each entry of `lines` is `{ line, text, anchor, rendered }` for a row that was served (`text` there is what was shown, so an oversized line appears as its marker while keeping its anchor). `notices` carries non-file notes such as the UTF-8 rewrite note and `[W_ANCHOR_RECLAIMED]`. An image read returns `{ type: "image", data, mimeType, note }`.
 
 `replace`, `replace_match`, `insert`, `copy`, `move`, and `undo_last_change` return `{ kind: "edit", verb, classification, path, text, diff, warnings, hints, firstChangedLine, anchors, anchorsOmitted }`, where `verb` is `"replaced"`, `"inserted"`, `"copied"`, `"moved"`, or `"undone"`, `anchors` are the live rows of the post-edit diff, and `anchorsOmitted` is true when the diff was truncated or carried no rows, meaning a fresh read is needed. A cross-file move reports the destination file and its anchors.
+
+`outline` returns `{ kind: "outline", path, text, totalLines, depth, lines, truncated, complete, notices }`, where `text` is the outline body without the notices, `lines` is the anchored rows it served, `complete` is true only when no cap cut the outline, every rendered row was served, and no line was skipped for a missing anchor; `notices` carries non-file notes such as the UTF-8 rewrite note and `[W_ANCHOR_RECLAIMED]`; in a codemode session `tools.outline()` resolves to the served outline text (with notices) unless `anchors: true` is passed.
 
 `grep` returns `{ kind: "grep", text, matches, files, truncated, results }`, where each entry of `results` is `{ path, matchLines, lines, hadUtf8DecodeErrors }` and `lines` uses the same `{ line, text, anchor, rendered }` shape as `read`.
 
@@ -431,6 +449,7 @@ All eight tools also declare an `outputSchema` and return `structuredContent`, s
 | `replace_match` | Same shape as `replace`: `diff` (post-edit diff with current anchors), `patch`, `patchTruncated`, `firstChangedLine`, `snapshotId`, `classification` (`"noop"` when nothing changed), and `metrics` with the same counters. |
 | `copy`, `move` | Same shape as `replace`: `diff` (post-edit diff with current anchors), `patch`, `patchTruncated`, `firstChangedLine`, `snapshotId`, `classification` (`"noop"` when a move changes nothing), and `metrics` with the same counters. |
 | `undo_last_change` | `diff` (the undo diff with restored anchors), `patch`, `patchTruncated`, and `metrics` in the same shape as `replace`. |
+| `outline` | `truncated` (true when the row or byte cap cut the outline), `complete` (true only when no cap cut the outline, every rendered row was served, and no line was skipped for a missing anchor), `snapshotId`, and `metrics` with `rows` (every rendered symbol row, including clipped ones) and `truncated`; structured `lines` holds only the rows that were served for editing. |
 | `grep` | `metrics` with `matches` (capped at `limit`), `files`, and `truncated`; `truncation` (the standard pi truncation report) when output was cut; and `linesTruncated` (true when long lines were shown as fragments). |
 
 `snapshotId`, `firstChangedLine`, and `metrics.warnings` are the three fields external consumers most often read; `snapshotId` is a string fingerprint, `firstChangedLine` is a 1-based line number on the result file, and `metrics.warnings` counts the `[W_*]` notices in `details.warnings`; hint `[H_*]` notices live in `details.hints` and are not counted.

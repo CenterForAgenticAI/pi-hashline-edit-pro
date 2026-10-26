@@ -4,7 +4,6 @@ export interface OutlineSymbol {
 	startLine: number;
 	endLine: number;
 	children?: OutlineSymbol[];
-	detail?: string;
 }
 
 export interface OutlineParse {

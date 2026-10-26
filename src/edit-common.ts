@@ -17,6 +17,7 @@ export interface EditToolFlags {
   autoReadAllOutline: boolean;
   replaceMatchEnabled: boolean;
   copyMoveEnabled: boolean;
+  outlineEnabled: boolean;
   codemode: boolean;
 }
 
@@ -28,8 +29,18 @@ export const DEFAULT_EDIT_FLAGS: EditToolFlags = {
   autoReadAllOutline: false,
   replaceMatchEnabled: true,
   copyMoveEnabled: true,
+  outlineEnabled: false,
   codemode: false,
 };
+
+export type EditToolGate = Pick<EditToolFlags, "replaceMatchEnabled" | "copyMoveEnabled" | "outlineEnabled">;
+
+export function editToolEnabled(tool: string, flags: EditToolGate): boolean {
+  if (tool === "outline") return flags.outlineEnabled;
+  if (tool === "replace_match") return flags.replaceMatchEnabled;
+  if (tool === "copy" || tool === "move") return flags.copyMoveEnabled;
+  return true;
+}
 
 export async function currentEditFlags(codemode = false): Promise<EditToolFlags> {
   const config = await readConfig();
@@ -41,19 +52,20 @@ export async function currentEditFlags(codemode = false): Promise<EditToolFlags>
     autoReadAllOutline: (config.autoReadAll ?? "off") === "outline",
     replaceMatchEnabled: config.replaceMatchEnabled !== false,
     copyMoveEnabled: config.copyMoveEnabled !== false,
+    outlineEnabled: config.outlineEnabled === true,
     codemode
   };
 }
 
 function preferenceGuideline(flags: EditToolFlags): string {
-  const tools = gatedEditOps(["read", "replace", "replace_match", "insert", "copy", "move", "undo_last_change"], flags);
+  const tools = gatedEditOps(["read", "outline", "replace", "replace_match", "insert", "copy", "move", "undo_last_change"], flags);
   return `Remember to use the hashline tools for every file read and edit: ${joinOps(tools, { backtick: true })}.`;
 }
 
 const SHARED_EDIT_OPS = ["replace", "replace_match", "insert", "copy", "move"];
 const SHARED_PAYLOAD_OPS = ["replace", "replace_match", "insert"];
 const SHARED_DIFF_OPS = ["replace", "replace_match", "insert", "copy", "move", "undo_last_change"];
-const SHARED_SCRIPT_OPS = ["read", "replace", "replace_match", "insert", "copy", "move", "grep", "undo_last_change"];
+const SHARED_SCRIPT_OPS = ["read", "outline", "replace", "replace_match", "insert", "copy", "move", "grep", "undo_last_change"];
 
 function resultContractGuideline(flags: EditToolFlags): string {
   const tools = operationNames(SHARED_SCRIPT_OPS, flags);
@@ -161,11 +173,7 @@ export function withReplaceMatchPrompts(base: { description: string; snippet: st
 }
 
 function gatedEditOps(ops: string[], flags: EditToolFlags): string[] {
-  return ops.filter((op) => {
-    if (op === "replace_match") return flags.replaceMatchEnabled;
-    if (op === "copy" || op === "move") return flags.copyMoveEnabled;
-    return true;
-  });
+  return ops.filter((op) => editToolEnabled(op, flags));
 }
 
 function joinOps(ops: string[], options?: { backtick?: boolean; separator?: "/" }): string {

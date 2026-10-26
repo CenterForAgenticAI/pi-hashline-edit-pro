@@ -94,7 +94,7 @@ describe("auto-read all", () => {
       expect(content).toContain("outlined below");
       expect(content).toContain("=== app.ts (TypeScript) — 3 lines ===");
       expect(content).not.toContain("return 1");
-      const anchor = content.match(/([a-z]{5})│function run/)![1]!;
+      const anchor = content.match(/([a-z]{5})│export function run/)![1]!;
       const editResult = await getTool("replace").execute(
         "e1",
         { remove_from: anchor, remove_to: anchor, text: "export async function run() {" },

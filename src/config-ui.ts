@@ -2,7 +2,7 @@ import { Key, matchesKey, truncateToWidth, visibleWidth, wrapTextWithAnsi } from
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import { DEFAULT_UNDO_RETENTION_DAYS, readConfig, type Config } from "./config";
 
-export type ConfigToggleKey = "autoRead" | "autoReadAll" | "autoReadAllRequireGit" | "autoReadAllIgnore" | "anchorGrepEnabled" | "copyMoveEnabled" | "replaceMatchEnabled" | "requirePath" | "strictInput" | "diffContextLines" | "disableOnModels" | "readOnDisabledModels" | "undoRetentionDays";
+export type ConfigToggleKey = "autoRead" | "autoReadAll" | "autoReadAllRequireGit" | "autoReadAllIgnore" | "anchorGrepEnabled" | "copyMoveEnabled" | "replaceMatchEnabled" | "outlineEnabled" | "requirePath" | "strictInput" | "diffContextLines" | "disableOnModels" | "readOnDisabledModels" | "undoRetentionDays";
 
 export interface ConfigRow {
   key: ConfigToggleKey;
@@ -36,6 +36,7 @@ export function configRows(config: Config): ConfigRow[] {
     { key: "anchorGrepEnabled", group: "Tools", depth: 0, label: "Anchor grep", hint: "Use the anchored grep in place of pi's own grep", enabled: config.anchorGrepEnabled === true },
     { key: "copyMoveEnabled", group: "Tools", depth: 0, label: "Copy/move", hint: "Enable the copy and move tools", enabled: config.copyMoveEnabled !== false },
     { key: "replaceMatchEnabled", group: "Tools", depth: 0, label: "Replace match", hint: "Enable the replace_match tool", enabled: config.replaceMatchEnabled !== false },
+    { key: "outlineEnabled", group: "Tools", depth: 0, label: "Outline tool", hint: "Offer the outline tool for one file's structure on demand", enabled: config.outlineEnabled === true },
     { key: "requirePath", group: "Edit behavior", depth: 0, label: "Require path", hint: "Edit tools must also send a matching path", enabled: config.requirePath === true },
     { key: "strictInput", group: "Edit behavior", depth: 0, label: "Strict input", hint: "Reject auto-fixable slips instead of warnings", enabled: config.strictInput === true },
     { key: "disableOnModels", group: "Model gating", depth: 0, label: "Disable on models", hint: "Model globs that turn off anchored tools (comma-separated)", enabled: (config.disableOnModels ?? []).length > 0, entries: config.disableOnModels ?? [] },
@@ -99,6 +100,10 @@ export class HashlineConfigOverlay {
 
   async load(): Promise<void> {
     this.rows = configRows(await readConfig());
+  }
+
+  rowKeys(): ConfigToggleKey[] {
+    return this.rows.map((row) => row.key);
   }
 
   private runToggle(row: ConfigRow, delta?: number, value?: string): void {

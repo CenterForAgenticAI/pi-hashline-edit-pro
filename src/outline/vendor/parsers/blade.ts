@@ -76,7 +76,7 @@ function directiveSymbol(node: Node, parameter: Node | null, source: string): Sy
   const raw = textOf(parameter, source);
   const quoted = unquote(raw);
   return quoted === undefined
-    ? { name: "", type: label, startLine, endLine, detail: raw.trim() }
+    ? { name: "", type: label, startLine, endLine }
     : { name: quoted, type: label, startLine, endLine };
 }
 

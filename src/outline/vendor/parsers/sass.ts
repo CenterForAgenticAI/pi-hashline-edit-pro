@@ -96,18 +96,12 @@ function extractNamedBlock(
   label: string,
 ): SymbolInfo | null {
   let name = "<unknown>";
-  let detail: string | undefined;
 
   for (let i = 0; i < child.namedChildCount; i++) {
     const c = child.namedChild(i);
     if (!c) continue;
     if (c.type === "name") {
       name = source.slice(c.startIndex, c.endIndex);
-    } else if (c.type === "parameters") {
-      detail =
-        "(" +
-        source.slice(c.startIndex, c.endIndex).replace(/^\(|\)$/g, "") +
-        ")";
     }
   }
 
@@ -117,7 +111,6 @@ function extractNamedBlock(
     type: label,
     startLine: sl,
     endLine: el,
-    detail,
   };
 
   if (depth < MAX_DEPTH) {
@@ -293,15 +286,12 @@ function extractBlockChildren(
 
 function extractInclude(child: Node, source: string): SymbolInfo | null {
   let name: string | undefined;
-  let detail: string | undefined;
 
   for (let i = 0; i < child.namedChildCount; i++) {
     const c = child.namedChild(i);
     if (!c) continue;
     if (c.type === "mixin_name") {
       name = source.slice(c.startIndex, c.endIndex);
-    } else if (c.type === "arguments") {
-      detail = source.slice(c.startIndex, c.endIndex);
     }
   }
   if (!name) return null;
@@ -311,7 +301,6 @@ function extractInclude(child: Node, source: string): SymbolInfo | null {
     type: "include",
     startLine: child.startPosition.row + 1,
     endLine: child.endPosition.row + 1,
-    detail,
   };
 }
 

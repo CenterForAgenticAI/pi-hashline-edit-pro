@@ -8,6 +8,7 @@ export interface Guideline {
 
 const GUIDELINE_IDS_BY_NAME: Record<string, readonly string[]> = {
   "read-guidelines.md": ["read-reread", "read-outline", "read-match-served"],
+  "outline-guidelines.md": ["outline-real-lines", "outline-read-span"],
   "replace-guidelines.md": ["replace-disjoint", "replace-deletion", "replace-single-line"],
   "replace-match-guidelines.md": ["replace-match-fragment", "replace-match-wide-range", "replace-match-whole-range"],
   "insert-guidelines.md": ["insert-blank-edges"],

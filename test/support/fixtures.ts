@@ -8,7 +8,7 @@ import { loadHashStore, shutdownHashStore } from "../../src/hash-store";
 import { initRegistry, resetRegistryForTests } from "../../src/anchor-registry";
 import { resetBatchStateForTests } from "../../src/batch";
 import { errCode } from "../../src/utils";
-import { HashlineConfigOverlay } from "../../src/config-ui";
+import { HashlineConfigOverlay, type ConfigToggleKey } from "../../src/config-ui";
 import { drainEnvRestores, pushEnvRestore } from "./env-restores";
 
 afterEach(() => {
@@ -300,6 +300,18 @@ export function makeConfigOverlay(input: {
     maxHeight: input.maxHeight,
     onToggle: input.onToggle,
   });
+}
+
+export function configRowNavigator(overlay: HashlineConfigOverlay): (key: ConfigToggleKey) => void {
+  const keys = overlay.rowKeys();
+  let position = 0;
+  return (key: ConfigToggleKey): void => {
+    const target = keys.indexOf(key);
+    if (target < 0) throw new Error(`Unknown config row: ${key}`);
+    const steps = (target - position + keys.length) % keys.length;
+    for (let step = 0; step < steps; step += 1) overlay.handleInput("j");
+    position = target;
+  };
 }
 
 export function expectedEditContent(

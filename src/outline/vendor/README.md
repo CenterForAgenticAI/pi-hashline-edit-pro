@@ -9,6 +9,10 @@ These files are copied from [pi-codebase-reader](https://github.com/HanzCEO/pi-c
 - `parsers/manager.ts` extracts anonymous default exports (`export default function`/`class`), function expressions, top-level variable declarators, and nested `describe`/`test`/`it` calls, so entry-point, config, data, and test files outline instead of falling back to a preview.
 - `parsers/manager.ts` adds PHP support: `parsers/php.ts` outlines classes, interfaces, traits, enums, methods, properties, constants, top-level functions, and assigned closures.
 - `parsers/manager.ts` adds Blade support: `parsers/blade.ts` outlines `@section`/`@push`/`@once`/`@php` blocks, named directives such as `@extends` and `@include`, and `<x-…>`/`<livewire:…>` components.
+- `parsers/java.ts` reads the field-based tree-sitter-java grammar shipped in `wasm/` (method, constructor, field, constant, enum, record, and annotation-element nodes), so annotated members keep their names; every member anchors on its declaration line rather than on its annotation.
+- `parsers/php.ts` anchors a declaration on its first line after its attributes, so a member with `#[Test]` starts on the declaration instead of the attribute.
+- `types.ts` and every parser drop the upstream `detail` string: outlines render the first line of each symbol's declaration, so the parameters, inheritance, and qualifier text was computed and discarded.
+- `types.ts` keeps `SymbolInfo.name` and `SymbolInfo.type`: the extractors use them while building symbol trees and the upstream contract carries them, even though outlines render a real file line for each symbol.
 
 The `wasm/` grammars come from the MIT-licensed `tree-sitter-javascript`, `tree-sitter-typescript`, `tree-sitter-python`, `tree-sitter-go`, `tree-sitter-rust`, `tree-sitter-solidity`, and `tree-sitter-java` packages, plus pi-codebase-reader's vendored Sass and SCSS grammars, the VS Code WebAssembly build of `tree-sitter-php`, and `tree-sitter-blade` built from v0.12.3; see `wasm/LICENSES.md` for the per-grammar copyright notices. Comments in these files are upstream prose and are exempt from this repository's no-comments rule.
 

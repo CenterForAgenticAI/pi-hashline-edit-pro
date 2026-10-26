@@ -8,6 +8,7 @@ import { regCopy, regMove } from "./src/copy-move";
 import { regGrep, regVanillaGrep } from "./src/grep";
 import { regUndo, clearUndo } from "./src/replace-undo";
 import { regRead, fmtReadPreview } from "./src/read";
+import { regOutline } from "./src/outline-tool";
 import { ANCHOR_TOOL_NAMES, modelDisabled, type ModelLike } from "./src/model-gate";
 import { buildAutoReadAllInjection, autoReadAllBudget, isOutlineAutoReadAll } from "./src/auto-read-all";
 import type { RMetrics } from "./src/replace-response";
@@ -15,7 +16,7 @@ import type { ReplaceDetails } from "./src/replace";
 import { extractHints, extractWarnings } from "./src/replace-render";
 import { MAX_HASH_LINES } from "./src/hashline";
 import { withStructuredText } from "./src/structured";
-import type { AutoReadAllMode, ReadOnDisabledModels } from "./src/config";
+import type { AutoReadAllMode, Config, ReadOnDisabledModels } from "./src/config";
 import {
   readConfig,
   readConfigWithStatus,
@@ -25,6 +26,7 @@ import {
   toggleAnchorGrep,
   toggleCopyMove,
   toggleReplaceMatch,
+  toggleOutline,
   cycleReadOnDisabledModels,
   toggleRequirePath,
   toggleStrictInput,
@@ -38,7 +40,7 @@ import { loadHashStore, pruneExpiredUndo, pruneMissing } from "./src/hash-store"
 import { type AnchorSessionContext, initRegistry, gcRegistrySidecars, clearRegistry, freeAnchors, freeAnchorsForPaths, sessionKeyFor, sessionContextReadable, withAnchorSession, releaseRegistrySession, formatAnchorReclaimNotice, takeReclaimedPaths } from "./src/anchor-registry";
 import { serveRows } from "./src/served";
 import { finalizeTurn, planAssistantMessage } from "./src/batch";
-import { currentEditFlags } from "./src/edit-common";
+import { currentEditFlags, editToolEnabled } from "./src/edit-common";
 import { HashlineConfigOverlay } from "./src/config-ui";
 import { registerWriteHook } from "./src/write-hook";
 import { readNormFile } from "./src/file-reader";
@@ -53,8 +55,18 @@ interface PendingRegistrySession {
   alive: () => boolean;
 }
 
+function configEnablesTool(tool: string, config: Config): boolean {
+  if (tool === "grep") return config.anchorGrepEnabled === true;
+  return editToolEnabled(tool, {
+    replaceMatchEnabled: config.replaceMatchEnabled !== false,
+    copyMoveEnabled: config.copyMoveEnabled !== false,
+    outlineEnabled: config.outlineEnabled === true,
+  });
+}
+
 export default function (pi: ExtensionAPI): void {
   regRead(pi);
+  regOutline(pi);
 
   regReplace(pi);
   regReplaceMatch(pi);
@@ -82,11 +94,21 @@ export default function (pi: ExtensionAPI): void {
   let gateApplied = false;
   const pendingRegistrySessions: PendingRegistrySession[] = [];
 
+  function setAnchorToolEnabled(tools: readonly string[], enabled: boolean): void {
+    const active = pi.getActiveTools();
+    pi.setActiveTools(enabled ? [...new Set([...active, ...tools])] : active.filter((tool) => !tools.includes(tool)));
+    for (const tool of tools) {
+      if (enabled) baseAnchorTools.add(tool);
+      else baseAnchorTools.delete(tool);
+    }
+  }
+
   async function refreshEditTools(): Promise<void> {
     try {
       codemodeActive = pi.getActiveTools().includes("codemode");
       const flags = await currentEditFlags(codemodeActive);
       if (readFlavor !== "vanilla") regRead(pi, flags);
+      regOutline(pi, flags);
       regReplace(pi, flags);
       regReplaceMatch(pi, flags);
       regInsert(pi, flags);
@@ -144,10 +166,7 @@ export default function (pi: ExtensionAPI): void {
     const enabled = ANCHOR_TOOL_NAMES.filter((tool) => {
       if (tool === "read") return true;
       if (!baseAnchorTools.has(tool)) return false;
-      if (tool === "replace_match") return config.replaceMatchEnabled !== false;
-      if (tool === "copy" || tool === "move") return config.copyMoveEnabled !== false;
-      if (tool === "grep") return config.anchorGrepEnabled === true;
-      return true;
+      return configEnablesTool(tool, config);
     });
     const active = pi.getActiveTools().filter((tool) => tool !== "edit");
     const base = enabled.includes("grep") ? active.filter((tool) => tool !== "grep") : active;
@@ -216,12 +235,9 @@ export default function (pi: ExtensionAPI): void {
     autoReadAllInjected = sessionBranch.some((entry) => entry.type === "custom_message" && entry.customType === AUTO_READ_ALL_CUSTOM_TYPE);
     await refreshEditTools();
     pi.setActiveTools(
-      pi.getActiveTools().filter((t) => {
-        if (config.copyMoveEnabled === false && (t === "copy" || t === "move")) return false;
-        if (config.replaceMatchEnabled === false && t === "replace_match") return false;
-        return true;
-      }),
+      pi.getActiveTools().filter((tool) => tool === "grep" || configEnablesTool(tool, config)),
     );
+    setAnchorToolEnabled(["outline"], config.outlineEnabled === true);
     await syncModelGate(ctx.model, ctx.cwd);
     const debugValue = process.env.PI_HASHLINE_DEBUG;
     if (debugValue === "1" || debugValue === "true") {
@@ -278,7 +294,7 @@ export default function (pi: ExtensionAPI): void {
   }));
 
   pi.registerCommand("hashline-config", {
-    description: "Open the hashline settings window (auto-read, diff context, auto-read all, git repos only, ignore folders/files, grep, copy/move, replace_match, path, strict input, disable on models, read on disabled models)",
+    description: "Open the hashline settings window (auto-read, diff context, auto-read all, git repos only, ignore folders/files, grep, copy/move, replace_match, outline, path, strict input, disable on models, read on disabled models)",
     handler: async (_args, ctx) => {
       if (!ctx.hasUI) {
         ctx.ui.notify("/hashline-config requires interactive mode", "error");
@@ -307,22 +323,9 @@ export default function (pi: ExtensionAPI): void {
               if (enabled) baseAnchorTools.add("grep");
               else baseAnchorTools.delete("grep");
             }
-            else if (key === "copyMoveEnabled") {
-              const enabled = await toggleCopyMove();
-              const active = pi.getActiveTools();
-              pi.setActiveTools(enabled ? [...new Set([...active, "copy", "move"])] : active.filter((t) => t !== "copy" && t !== "move"));
-              for (const tool of ["copy", "move"]) {
-                if (enabled) baseAnchorTools.add(tool);
-                else baseAnchorTools.delete(tool);
-              }
-            }
-            else if (key === "replaceMatchEnabled") {
-              const enabled = await toggleReplaceMatch();
-              const active = pi.getActiveTools();
-              pi.setActiveTools(enabled ? [...new Set([...active, "replace_match"])] : active.filter((t) => t !== "replace_match"));
-              if (enabled) baseAnchorTools.add("replace_match");
-              else baseAnchorTools.delete("replace_match");
-            }
+            else if (key === "copyMoveEnabled") setAnchorToolEnabled(["copy", "move"], await toggleCopyMove());
+            else if (key === "replaceMatchEnabled") setAnchorToolEnabled(["replace_match"], await toggleReplaceMatch());
+            else if (key === "outlineEnabled") setAnchorToolEnabled(["outline"], await toggleOutline());
             else if (key === "requirePath") await toggleRequirePath();
             else if (key === "strictInput") await toggleStrictInput();
             await refreshEditTools();

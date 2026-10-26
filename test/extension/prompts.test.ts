@@ -143,6 +143,31 @@ describe("read tool guidelines", () => {
     const guidelines = getTool("read").promptGuidelines as string[];
     expect(guidelines[0]).toBe("Remember to use the hashline tools for every file read and edit: `read`, `replace`, `replace_match`, `insert`, `copy`, `move`, or `undo_last_change`.");
   });
+
+  it("mentions the outline tool in the preference line only while it is enabled", () => {
+    const { pi, getTool } = makeFakePiRegistry();
+    regRead(pi, { ...DEFAULT_EDIT_FLAGS, outlineEnabled: true });
+    const guidelines = getTool("read").promptGuidelines as string[];
+    expect(guidelines[0]).toBe("Remember to use the hashline tools for every file read and edit: `read`, `outline`, `replace`, `replace_match`, `insert`, `copy`, `move`, or `undo_last_change`.");
+  });
+
+  it("describes outline rows as declaration lines in the read guidelines", () => {
+    const { pi, getTool } = makeFakePiRegistry();
+    regRead(pi, { ...DEFAULT_EDIT_FLAGS, autoReadAllOutline: true });
+    const guidelines = getTool("read").promptGuidelines as string[];
+    expect(guidelines.some((guideline) => guideline.includes("first line of a symbol's declaration"))).toBe(true);
+    expect(guidelines.some((guideline) => guideline.includes("symbol label"))).toBe(false);
+  });
+});
+
+describe("tool-prompts/outline.md (model-facing contract)", () => {
+  it("declares the declaration line, the span hint, and the serving rule", () => {
+    const outlinePrompt = readFileSync(new URL("../../tool-prompts/outline.md", import.meta.url), "utf-8");
+    expect(outlinePrompt).toContain("first line of that symbol's declaration");
+    expect(outlinePrompt).toContain("[limit N]");
+    expect(outlinePrompt).toContain("not served for editing");
+    expect(outlinePrompt).not.toContain("label");
+  });
 });
 
 describe("prompt file packaging", () => {
@@ -436,6 +461,13 @@ describe("codemode prompt variants", () => {
     expect(withGrepPrompts(grepBase, { ...DEFAULT_EDIT_FLAGS, codemode: true }).guidelines.some((g) => g.includes("failures resolve to"))).toBe(false);
     expect(withUndoPrompts(undoBase, { ...DEFAULT_EDIT_FLAGS, codemode: true }).guidelines.some((g) => g.includes("failures resolve to"))).toBe(false);
     expect(withReplacePrompts(replaceBase, { ...DEFAULT_EDIT_FLAGS, codemode: true }).guidelines.some((g) => g.includes("failures resolve to"))).toBe(false);
+  });
+
+  it("includes outline in the result contract only while it is enabled", () => {
+    const withOutline = withReadPrompts(readBase, { ...DEFAULT_EDIT_FLAGS, codemode: true, outlineEnabled: true });
+    expect(withOutline.guidelines.find((g) => g.includes("failures resolve to"))).toContain("`outline`");
+    const withoutOutline = withReadPrompts(readBase, { ...DEFAULT_EDIT_FLAGS, codemode: true });
+    expect(withoutOutline.guidelines.find((g) => g.includes("failures resolve to"))).not.toContain("`outline`");
   });
 
   it("drops disabled tools from the result contract", () => {

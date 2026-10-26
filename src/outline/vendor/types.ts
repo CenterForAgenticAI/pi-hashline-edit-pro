@@ -5,7 +5,6 @@ export interface SymbolInfo {
   startLine: number; // 1-indexed
   endLine: number;
   children?: SymbolInfo[];
-  detail?: string; // optional extra info (e.g. parameters, visibility)
 }
 
 /** Result of parsing a source file. */

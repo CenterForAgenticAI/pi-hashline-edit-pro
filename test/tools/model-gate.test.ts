@@ -49,6 +49,20 @@ describe("disableOnModels gate", () => {
     });
   });
 
+  it("removes the outline tool while it is enabled and restores it when the gate lifts", async () => {
+    await withTempDir("model-gate-outline-", async (dir) => {
+      await writeConfig(dir, { autoRead: true, anchorGrepEnabled: true, disableOnModels: ["openai/*"], outlineEnabled: true });
+      const { pi, handlers, getActive } = makePiStub([...ANCHOR_TOOLS, "outline", "edit"]);
+      register(pi);
+      await handlers.get("session_start")!({}, sessionContext(dir, OPENAI));
+      expect(getActive()).not.toContain("outline");
+      expect(getActive()).toContain("read");
+      await handlers.get("model_select")!(modelSelect(ANTHROPIC, OPENAI), sessionContext(dir, ANTHROPIC));
+      expect(getActive()).toContain("outline");
+      expect(getActive()).toContain("replace");
+    });
+  });
+
   it("keeps the vanilla read for a matching model by default", async () => {
     await withTempDir("model-gate-read-", async (dir) => {
       await writeConfig(dir, { autoRead: true, anchorGrepEnabled: true, disableOnModels: ["openai/*"] });

@@ -1,0 +1,2 @@
+- `outline`: a row shows the first line of the symbol's declaration, and its anchor addresses that line; a `[limit N]` line under it is the span to read.
+- `outline`: read a symbol's span before editing inside its body, because the outline never shows body lines.

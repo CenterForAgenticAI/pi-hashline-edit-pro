@@ -6,6 +6,7 @@ export interface ModelLike {
 
 export const ANCHOR_TOOL_NAMES: readonly string[] = [
   "read",
+  "outline",
   "replace",
   "replace_match",
   "insert",

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { withTempDir, makePiStub } from "../support/fixtures";
+import { configRowNavigator, withTempDir, makePiStub } from "../support/fixtures";
 import { mkdir } from "fs/promises";
 import { join } from "path";
 import { isValidHashList } from "../../src/hash-store/validation";
@@ -174,11 +174,8 @@ describe("grep default", () => {
         expect(getActive()).toContain("grep");
         expect(getTool("grep").promptSnippet).toContain("anchor│content");
         const overlay = await openConfigOverlay(commands, dir);
-        overlay.handleInput("j");
-        overlay.handleInput("j");
-        overlay.handleInput("j");
-        overlay.handleInput("j");
-        overlay.handleInput("j");
+        const select = configRowNavigator(overlay);
+        select("anchorGrepEnabled");
         overlay.handleInput(" ");
         await waitForConfig(async () => (await readConfig()).anchorGrepEnabled === false && !getTool("grep").promptSnippet.includes("anchor│content"));
         expect(getActive()).toContain("grep");
@@ -210,11 +207,8 @@ describe("grep default", () => {
         expect(getActive()).not.toContain("grep");
         expect(getTool("grep").promptSnippet).toContain("anchor│content");
         const overlay = await openConfigOverlay(commands, dir);
-        overlay.handleInput("j");
-        overlay.handleInput("j");
-        overlay.handleInput("j");
-        overlay.handleInput("j");
-        overlay.handleInput("j");
+        const select = configRowNavigator(overlay);
+        select("anchorGrepEnabled");
         overlay.handleInput(" ");
         await waitForConfig(async () => (await readConfig()).anchorGrepEnabled === false && !getTool("grep").promptSnippet.includes("anchor│content"));
         expect(getActive()).not.toContain("grep");
@@ -329,7 +323,8 @@ describe("copy/move default", () => {
         await sessionStart({}, { cwd: dir, ui: { notify: vi.fn() } });
         expect(getActive()).toContain("copy");
         const overlay = await openConfigOverlay(commands, dir);
-        for (let step = 0; step < 6; step++) overlay.handleInput("j");
+        const select = configRowNavigator(overlay);
+        select("copyMoveEnabled");
         overlay.handleInput(" ");
         await waitForConfig(async () => (await readConfig()).copyMoveEnabled === false && !getActive().includes("copy") && !getActive().includes("move"));
         expect(getActive()).not.toContain("copy");
@@ -413,7 +408,8 @@ describe("replace_match default", () => {
         await sessionStart({}, { cwd: dir, ui: { notify: vi.fn() } });
         expect(getActive()).toContain("replace_match");
         const overlay = await openConfigOverlay(commands, dir);
-        for (let step = 0; step < 7; step++) overlay.handleInput("j");
+        const select = configRowNavigator(overlay);
+        select("replaceMatchEnabled");
         overlay.handleInput(" ");
         await waitForConfig(async () => (await readConfig()).replaceMatchEnabled === false && !getActive().includes("replace_match"));
         expect(getActive()).not.toContain("replace_match");
@@ -453,7 +449,7 @@ describe("hashline-config overlay rendering", () => {
         expect(lines.some((line) => line.includes("Hashline Config"))).toBe(true);
         expect(lines.some((line) => line.includes("↑↓ navigate"))).toBe(true);
         expect(lines.filter((line) => line.includes("[x]")).length).toBe(5);
-        expect(lines.filter((line) => line.includes("[ ]")).length).toBe(2);
+        expect(lines.filter((line) => line.includes("[ ]")).length).toBe(3);
         expect(lines.filter((line) => line.includes("[on]")).length).toBe(0);
         expect(lines.filter((line) => line.includes("[off]")).length).toBe(1);
         expect(lines.filter((line) => line.includes("[vanilla]")).length).toBe(1);
@@ -485,31 +481,28 @@ describe("hashline-config overlay rendering", () => {
         const sessionStart = handlers.get("session_start") as (a: unknown, b: unknown) => Promise<void>;
         await sessionStart({}, { cwd: dir, ui: { notify: vi.fn() } });
         const overlay = await openConfigOverlay(commands, dir);
+        const select = configRowNavigator(overlay);
 
         overlay.handleInput(" ");
         await waitForConfig(async () => (await readConfig()).autoRead === false);
 
-        overlay.handleInput("j");
-        overlay.handleInput("j");
+        select("autoReadAll");
         overlay.handleInput(" ");
         await waitForConfig(async () => (await readConfig()).autoReadAll === "outline");
 
-        overlay.handleInput("j");
-        overlay.handleInput("j");
-        overlay.handleInput("j");
+        select("anchorGrepEnabled");
         overlay.handleInput(" ");
         await waitForConfig(async () => (await readConfig()).anchorGrepEnabled === false);
 
-        overlay.handleInput("j");
+        select("copyMoveEnabled");
         overlay.handleInput(" ");
         await waitForConfig(async () => (await readConfig()).copyMoveEnabled === false);
 
-        overlay.handleInput("j");
-        overlay.handleInput("j");
+        select("requirePath");
         overlay.handleInput(" ");
         await waitForConfig(async () => (await readConfig()).requirePath === true);
 
-        overlay.handleInput("j");
+        select("strictInput");
         overlay.handleInput(" ");
         await waitForConfig(async () => (await readConfig()).strictInput === true);
 
@@ -544,18 +537,19 @@ describe("hashline-config overlay rendering", () => {
         const sessionStart = handlers.get("session_start") as (a: unknown, b: unknown) => Promise<void>;
         await sessionStart({}, { cwd: dir, ui: { notify: vi.fn() } });
         const overlay = await openConfigOverlay(commands, dir);
+        const select = configRowNavigator(overlay);
 
-        overlay.handleInput("j");
+        select("diffContextLines");
         overlay.handleInput("+");
         await waitForConfig(async () => (await readConfig()).diffContextLines === 2);
         overlay.handleInput("-");
         await waitForConfig(async () => (await readConfig()).diffContextLines === 1);
 
-        overlay.handleInput("k");
+        select("autoRead");
         overlay.handleInput(" ");
         await waitForConfig(async () => (await readConfig()).autoRead === false);
         await new Promise((resolve) => setTimeout(resolve, 250));
-        overlay.handleInput("j");
+        select("diffContextLines");
         overlay.handleInput("+");
         overlay.handleInput("-");
         overlay.handleInput(" ");
@@ -584,7 +578,8 @@ describe("hashline-config overlay rendering", () => {
         await sessionStart({}, { cwd: dir, model: codex, ui: { notify: vi.fn() } });
         expect(getActive()).toContain("read");
         const overlay = await openConfigOverlay(commands, dir);
-        for (let step = 0; step < 10; step++) overlay.handleInput("j");
+        const select = configRowNavigator(overlay);
+        select("disableOnModels");
         overlay.handleInput(" ");
         for (const char of "openai/*") overlay.handleInput(char);
         overlay.handleInput("\r");
@@ -602,6 +597,87 @@ describe("hashline-config overlay rendering", () => {
         const { shutdownHashStore } = await import("../../src/hash-store");
         shutdownHashStore();
       }
+    });
+  });
+});
+
+describe("outline tool default", () => {
+  async function withStartup(run: (cwd: string) => Promise<void>, config?: Record<string, unknown>): Promise<void> {
+    await withTempDir("startup-outline-", async (dir) => {
+      const home = join(dir, "home");
+      const configDir = join(home, ".config", "pi-hashline-edit-pro");
+      await mkdir(configDir, { recursive: true });
+      vi.stubEnv("HOME", home);
+      vi.stubEnv("XDG_CONFIG_HOME", "");
+      if (config !== undefined) {
+        const { writeFile } = await import("fs/promises");
+        await writeFile(join(configDir, "config.json"), JSON.stringify(config));
+      }
+      try {
+        await run(dir);
+      } finally {
+        vi.unstubAllEnvs();
+        const { shutdownHashStore } = await import("../../src/hash-store");
+        shutdownHashStore();
+      }
+    });
+  }
+
+  it("session_start removes outline when outlineEnabled is off", async () => {
+    await withStartup(async (dir) => {
+      const { pi, handlers, getActive } = makePiStub(["read", "replace", "insert", "outline", "grep", "undo_last_change"]);
+      const { default: register } = await import("../../index");
+      register(pi);
+      const sessionStart = handlers.get("session_start") as (a: unknown, b: unknown) => Promise<void>;
+      await sessionStart({}, { cwd: dir, ui: { notify: vi.fn() } });
+      expect(getActive()).toContain("read");
+      expect(getActive()).not.toContain("outline");
+    });
+  });
+
+  it("session_start keeps outline when outlineEnabled is true", async () => {
+    await withStartup(async (dir) => {
+      const { pi, handlers, getActive, getTool } = makePiStub(["read", "replace", "insert", "grep", "undo_last_change"]);
+      const { default: register } = await import("../../index");
+      register(pi);
+      const sessionStart = handlers.get("session_start") as (a: unknown, b: unknown) => Promise<void>;
+      await sessionStart({}, { cwd: dir, ui: { notify: vi.fn() } });
+      expect(getActive()).toContain("outline");
+      expect(getTool("outline").promptSnippet).toContain("Outline one file");
+    }, { autoRead: true, anchorGrepEnabled: true, outlineEnabled: true });
+  });
+
+  it("keeps outline active when a codemode refresh re-registers the tools", async () => {
+    await withStartup(async (dir) => {
+      const { pi, handlers, getActive, getTool } = makePiStub(["read", "replace", "insert", "grep", "undo_last_change"]);
+      const { default: register } = await import("../../index");
+      register(pi);
+      await handlers.get("session_start")!({}, { cwd: dir, ui: { notify: vi.fn() } });
+      expect(getActive()).toContain("outline");
+      pi.setActiveTools([...getActive(), "codemode"]);
+      await handlers.get("before_agent_start")!({}, { cwd: dir, ui: { notify: vi.fn() }, sessionManager: { getBranch: () => [] } });
+      expect(getActive()).toContain("outline");
+      expect((getTool("outline").promptGuidelines as string[]).some((guideline) => guideline.includes("anchors: true"))).toBe(true);
+    }, { autoRead: true, anchorGrepEnabled: true, outlineEnabled: true });
+  });
+
+  it("hashline-config toggles the outline tool", async () => {
+    await withStartup(async (dir) => {
+      const { pi, commands, handlers, getActive } = makePiStub(["read", "replace", "insert", "outline", "grep", "undo_last_change"]);
+      const { default: register } = await import("../../index");
+      register(pi);
+      const sessionStart = handlers.get("session_start") as (a: unknown, b: unknown) => Promise<void>;
+      await sessionStart({}, { cwd: dir, ui: { notify: vi.fn() } });
+      expect(getActive()).not.toContain("outline");
+      const overlay = await openConfigOverlay(commands, dir);
+      const select = configRowNavigator(overlay);
+      select("outlineEnabled");
+      overlay.handleInput(" ");
+      await waitForConfig(async () => (await readConfig()).outlineEnabled === true && getActive().includes("outline"));
+      expect(getActive()).toContain("outline");
+      overlay.handleInput(" ");
+      await waitForConfig(async () => (await readConfig()).outlineEnabled === false && !getActive().includes("outline"));
+      expect(getActive()).not.toContain("outline");
     });
   });
 });

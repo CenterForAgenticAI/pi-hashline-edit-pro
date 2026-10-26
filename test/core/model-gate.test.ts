@@ -4,8 +4,8 @@ import { ANCHOR_TOOL_NAMES, modelDisabled, modelLabels } from "../../src/model-g
 const codex = { provider: "openai", id: "gpt-5.1-codex", api: "openai-codex-responses" };
 
 describe("ANCHOR_TOOL_NAMES", () => {
-  it("lists read and the seven anchored edit tools", () => {
-    expect(ANCHOR_TOOL_NAMES).toEqual(["read", "replace", "replace_match", "insert", "copy", "move", "grep", "undo_last_change"]);
+  it("lists read, outline, and the seven anchored edit tools", () => {
+    expect(ANCHOR_TOOL_NAMES).toEqual(["read", "outline", "replace", "replace_match", "insert", "copy", "move", "grep", "undo_last_change"]);
   });
 });
 

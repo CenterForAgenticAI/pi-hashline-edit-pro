@@ -82,6 +82,38 @@ export const readResultSchema = Type.Union([
 	structuredErrorSchema,
 ]);
 
+export type OutlineStructured = {
+	ok: true;
+	kind: "outline";
+	path: string;
+	text: string;
+	totalLines: number;
+	depth: number;
+	lines: AnchoredLine[];
+	truncated: boolean;
+	complete: boolean;
+	notices: string[];
+};
+
+export type OutlineResult = OutlineStructured | string | StructuredError;
+
+export const outlineResultSchema = Type.Union([
+	Type.Object({
+		ok: Type.Literal(true),
+		kind: Type.Literal("outline"),
+		path: Type.String(),
+		text: Type.String(),
+		totalLines: Type.Integer(),
+		depth: Type.Integer(),
+		lines: Type.Array(anchoredLineSchema),
+		truncated: Type.Boolean(),
+		complete: Type.Boolean(),
+		notices: Type.Array(Type.String()),
+	}),
+	Type.String(),
+	structuredErrorSchema,
+]);
+
 export type EditVerb = "replaced" | "inserted" | "copied" | "moved" | "undone" | "edited";
 
 export type EditStructured = {

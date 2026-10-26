@@ -31,7 +31,7 @@ const HEADER =
   "[hashline auto-read-all] Every non-ignored project file is attached below as `=== path ===` then `anchor│content` rows with live anchors.\nEdit directly from the attachment with replace and insert; do not call read for attached files.\nFiles listed as not attached can be read normally.\nAnchors are lowercase and stay valid until their line is edited.";
 
 const OUTLINE_HEADER =
-  "[hashline auto-read-all] Every non-ignored project file is outlined below as `=== path (language) — lines ===` then `anchor│...` rows with live anchors: multi-line symbols show a label with `[limit N]`, the span to request when reading from the anchor, and single-line symbols show the line content.\nEdit a row's anchor with replace or insert, or read from it with `offset` set to that anchor (and the row's `limit` when it shows one); do not call read for attached files.\nFiles listed as not attached can be read normally.\nAnchors are lowercase and stay valid until their line is edited.";
+  "[hashline auto-read-all] Every non-ignored project file is outlined below as `=== path (language) — lines ===` then `anchor│content` rows with live anchors: each symbol row is the first line of that symbol's declaration (annotations and attributes excluded), a `[limit N]` line under a multi-line symbol is the span to request when reading from that anchor, a `[N nested]` line marks children hidden by the six-level depth cap, and a file the parser cannot outline falls back to a head-and-tail preview.\nEdit a row's anchor with replace or insert, or read from it with `offset` set to that anchor (and the row's `limit` when the next line shows one); the outline shows only symbol declaration lines, so read a span before editing inside a body. A row whose line is too long is clipped with a trailing `...` and is not served for editing; read that line first. Do not call read for attached files except to fetch a symbol span or a clipped row.\nFiles listed as not attached can be read normally.\nAnchors are lowercase and stay valid until their line is edited.";
 
 const IMAGE_EXTENSIONS = new Set([
   ".avif",
@@ -554,7 +554,7 @@ async function renderFile(file: string, cwd: string, outline: boolean): Promise<
     if (outline) {
       const section = await buildFileOutline({ displayPath: file, content: normalized, hashes: fileHashes });
       serveRows(absolutePath, fileHashes, fileLines, section.servedHashes);
-      return { file, text: section.text, totalLines: fileHashes.length, absolutePath, complete: !section.truncated };
+      return { file, text: section.text, totalLines: fileHashes.length, absolutePath, complete: section.complete };
     }
     const preview = await fmtReadPreview(normalized, {}, fileHashes, absolutePath, AUTO_READ_ALL_MAX_BUDGET_BYTES, MAX_HASH_LINES);
     serveRows(absolutePath, fileHashes, fileLines, preview.servedHashes);

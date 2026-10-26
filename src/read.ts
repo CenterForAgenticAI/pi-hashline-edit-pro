@@ -397,6 +397,7 @@ export function regRead(pi: ExtensionAPI, flags: EditToolFlags = DEFAULT_EDIT_FL
 				const notices = [
 					hadUtf8DecodeErrors ? "[Non-UTF-8 bytes shown as U+FFFD; editing rewrites the file as UTF-8.]" : undefined,
 					reclaimNotice,
+					flags.outlineEnabled && preview.truncation !== undefined ? "[Read truncated; call `outline` on this file to see its structure.]" : undefined,
 				].filter((part): part is string => part !== undefined);
 				const previewText = [preview.text, ...notices].join("\n\n");
 				const servedRawText = preview.anchoredLines.map((row) => fileLines[row.line - 1] ?? "").join("\n");

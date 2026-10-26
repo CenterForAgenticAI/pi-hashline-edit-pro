@@ -8,34 +8,23 @@ const PHP_TYPE_LABELS: Record<string, string> = {
   enum_declaration: "enum",
 };
 
-const MODIFIER_TYPES = new Set([
-  "visibility_modifier",
-  "static_modifier",
-  "abstract_modifier",
-  "final_modifier",
-  "readonly_modifier",
-]);
-
 function textOf(node: Node, source: string): string {
   return source.slice(node.startIndex, node.endIndex);
 }
 
-function rangeOf(node: Node): [number, number] {
-  return [node.startPosition.row + 1, node.endPosition.row + 1];
-}
+const PHP_SKIPPED_TYPES = new Set(["attribute_list", "comment"]);
 
-function detailOf(parts: Array<string | undefined>): string | undefined {
-  const kept = parts.filter((part): part is string => part !== undefined && part.length > 0);
-  return kept.length > 0 ? kept.join(" ") : undefined;
-}
-
-function modifiersOf(node: Node, source: string): string[] {
-  const modifiers: string[] = [];
-  for (let i = 0; i < node.namedChildCount; i++) {
-    const child = node.namedChild(i);
-    if (child && MODIFIER_TYPES.has(child.type)) modifiers.push(textOf(child, source));
+function firstDeclaredTokenRow(node: Node): number | undefined {
+  for (let index = 0; index < node.childCount; index++) {
+    const child = node.child(index);
+    if (child === null || PHP_SKIPPED_TYPES.has(child.type)) continue;
+    return child.startPosition.row + 1;
   }
-  return modifiers;
+  return undefined;
+}
+
+function rangeOf(node: Node): [number, number] {
+  return [firstDeclaredTokenRow(node) ?? node.startPosition.row + 1, node.endPosition.row + 1];
 }
 
 function findChild(node: Node, type: string): Node | undefined {
@@ -46,35 +35,9 @@ function findChild(node: Node, type: string): Node | undefined {
   return undefined;
 }
 
-function nameFieldsOf(node: Node, source: string): string[] {
-  const names: string[] = [];
-  for (let i = 0; i < node.namedChildCount; i++) {
-    const child = node.namedChild(i);
-    if (child !== null && child.type === "name") names.push(textOf(child, source));
-  }
-  return names;
-}
-
 function nameOf(node: Node, source: string): string {
   const name = findChild(node, "name");
   return name === undefined ? "<unknown>" : textOf(name, source);
-}
-
-function paramsOf(node: Node, source: string): string | undefined {
-  const params = node.childForFieldName("parameters");
-  return params === null ? undefined : textOf(params, source);
-}
-
-function returnOf(node: Node, source: string): string | undefined {
-  const returned = node.childForFieldName("return_type");
-  return returned === null ? undefined : `: ${textOf(returned, source)}`;
-}
-
-function signatureOf(node: Node, source: string): string | undefined {
-  const params = paramsOf(node, source);
-  const returned = returnOf(node, source);
-  if (params === undefined) return returned;
-  return returned === undefined ? params : `${params}${returned}`;
 }
 
 function extractMethod(node: Node, source: string): SymbolInfo {
@@ -84,7 +47,6 @@ function extractMethod(node: Node, source: string): SymbolInfo {
     type: "method",
     startLine,
     endLine,
-    detail: detailOf([...modifiersOf(node, source), signatureOf(node, source)]),
   };
 }
 
@@ -95,58 +57,52 @@ function extractFunction(node: Node, source: string): SymbolInfo {
     type: "function",
     startLine,
     endLine,
-    detail: detailOf([signatureOf(node, source)]),
   };
 }
 
 function extractProperties(node: Node, source: string): SymbolInfo[] {
-  const modifiers = modifiersOf(node, source);
-  const typeNode = node.childForFieldName("type");
-  const propertyType = typeNode === null ? undefined : textOf(typeNode, source);
   const results: SymbolInfo[] = [];
+  const declarationStart = firstDeclaredTokenRow(node) ?? node.startPosition.row + 1;
   for (let i = 0; i < node.namedChildCount; i++) {
     const element = node.namedChild(i);
     if (element === null || element.type !== "property_element") continue;
-    const [startLine, endLine] = rangeOf(element);
+    const [elementStart, endLine] = rangeOf(element);
+    const startLine = results.length === 0 ? Math.min(declarationStart, elementStart) : elementStart;
     results.push({
       name: element.childForFieldName("name")?.text ?? "<unknown>",
       type: "property",
       startLine,
       endLine,
-      detail: detailOf([...modifiers, propertyType]),
     });
   }
   return results;
 }
 
 function extractConstants(node: Node, source: string): SymbolInfo[] {
-  const modifiers = modifiersOf(node, source);
   const results: SymbolInfo[] = [];
+  const declarationStart = firstDeclaredTokenRow(node) ?? node.startPosition.row + 1;
   for (let i = 0; i < node.namedChildCount; i++) {
     const element = node.namedChild(i);
     if (element === null || element.type !== "const_element") continue;
-    const value = element.namedChild(element.namedChildCount - 1);
-    const [startLine, endLine] = rangeOf(element);
+    const [elementStart, endLine] = rangeOf(element);
+    const startLine = results.length === 0 ? Math.min(declarationStart, elementStart) : elementStart;
     results.push({
       name: nameOf(element, source),
       type: "const",
       startLine,
       endLine,
-      detail: detailOf([...modifiers, value === null ? undefined : `= ${textOf(value, source)}`]),
     });
   }
   return results;
 }
 
 function extractEnumCase(node: Node, source: string): SymbolInfo {
-  const value = node.childForFieldName("value");
   const [startLine, endLine] = rangeOf(node);
   return {
     name: node.childForFieldName("name")?.text ?? "<unknown>",
     type: "case",
     startLine,
     endLine,
-    detail: detailOf([value === null ? undefined : `= ${textOf(value, source)}`]),
   };
 }
 
@@ -176,32 +132,12 @@ function extractMembers(body: Node, source: string): SymbolInfo[] {
 }
 
 function extractTypeDeclaration(node: Node, source: string, depth: number, maxDepth: number): SymbolInfo {
-  const detailParts: string[] = [...modifiersOf(node, source)];
-  const base = findChild(node, "base_clause");
-  if (base !== undefined) {
-    const baseNames = nameFieldsOf(base, source);
-    if (node.type === "interface_declaration") {
-      if (baseNames.length > 0) detailParts.push(`extends ${baseNames.join(", ")}`);
-    } else if (baseNames.length > 0 && baseNames[0] !== undefined) {
-      detailParts.push(`extends ${baseNames[0]}`);
-    }
-  }
-  if (node.type === "enum_declaration") {
-    const backing = findChild(node, "primitive_type");
-    if (backing !== undefined) detailParts.push(`: ${textOf(backing, source)}`);
-  }
-  const implemented = findChild(node, "class_interface_clause");
-  if (implemented !== undefined) {
-    const implementedNames = nameFieldsOf(implemented, source);
-    if (implementedNames.length > 0) detailParts.push(`implements ${implementedNames.join(", ")}`);
-  }
   const [startLine, endLine] = rangeOf(node);
   const symbol: SymbolInfo = {
     name: node.childForFieldName("name")?.text ?? "<unknown>",
     type: PHP_TYPE_LABELS[node.type] ?? "class",
     startLine,
     endLine,
-    detail: detailOf(detailParts),
   };
   if (depth < maxDepth) {
     const body = findChild(node, "declaration_list") ?? findChild(node, "enum_declaration_list");
@@ -227,7 +163,6 @@ function extractAssignedFunction(statement: Node, source: string): SymbolInfo | 
       type: value.type === "arrow_function" ? "arrow_function" : "function",
       startLine,
       endLine,
-      detail: detailOf([signatureOf(value, source)]),
     };
   }
   return null;

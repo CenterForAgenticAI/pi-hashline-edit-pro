@@ -41,9 +41,9 @@ function structured(result: { structuredContent?: unknown }): Structured {
 }
 
 describe("structuredContent for read and replace", () => {
-	it("declares outputSchema on all eight tools", () => {
+	it("declares outputSchema on all nine tools", () => {
 		const { getTool } = setupIntegrationTest("/tmp");
-		for (const name of ["read", "replace", "replace_match", "insert", "copy", "move", "grep", "undo_last_change"]) {
+		for (const name of ["read", "outline", "replace", "replace_match", "insert", "copy", "move", "grep", "undo_last_change"]) {
 			expect(getTool(name).outputSchema).toBeDefined();
 		}
 	});
@@ -388,6 +388,8 @@ describe("read codemode contract", () => {
 				["read", { path: "sample.ts" }, "s-read"],
 				["read", { path: "pixel.png" }, "s-image"],
 				["read", { path: "missing.ts" }, "s-read-error"],
+				["outline", { path: "sample.ts" }, "s-outline"],
+				["outline", { path: "missing.ts" }, "s-outline-error"],
 				["insert", { anchor: alpha, direction: "after", text: "mid" }, "s-insert"],
 				["copy", { source_from: beta, source_to: beta, anchor: gamma, direction: "after" }, "s-copy"],
 				["move", { source_from: beta, source_to: beta, anchor: gamma, direction: "after" }, "s-move"],

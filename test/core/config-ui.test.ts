@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { visibleWidth } from "@earendil-works/pi-tui";
 import { configRows } from "../../src/config-ui";
-import { makeConfigOverlay, withTempDir } from "../support/fixtures";
+import { configRowNavigator, makeConfigOverlay, withTempDir } from "../support/fixtures";
 
 const right = "\x1b[C";
 const left = "\x1b[D";
@@ -38,6 +38,7 @@ describe("configRows ordering and gating", () => {
       "anchorGrepEnabled",
       "copyMoveEnabled",
       "replaceMatchEnabled",
+      "outlineEnabled",
       "requirePath",
       "strictInput",
       "disableOnModels",
@@ -75,22 +76,21 @@ describe("HashlineConfigOverlay arrow keys", () => {
       const { calls, onToggle } = collectToggles();
       const overlay = makeConfigOverlay({ onToggle });
       await overlay.load();
-      overlay.handleInput("j");
+      const select = configRowNavigator(overlay);
+      select("diffContextLines");
       overlay.handleInput(right);
       overlay.handleInput(left);
-      overlay.handleInput("j");
+      select("autoReadAll");
       overlay.handleInput(right);
       overlay.handleInput(left);
-      overlay.handleInput("j");
+      select("autoReadAllRequireGit");
       overlay.handleInput(right);
       overlay.handleInput(left);
-      overlay.handleInput("j");
+      select("autoReadAllIgnore");
       overlay.handleInput(right);
-      overlay.handleInput("j");
+      select("anchorGrepEnabled");
       overlay.handleInput(left);
-      overlay.handleInput("j");
-      overlay.handleInput("j");
-      overlay.handleInput("j");
+      select("requirePath");
       overlay.handleInput(right);
       await settle();
       expect(calls).toEqual([
