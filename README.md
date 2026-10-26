@@ -184,7 +184,7 @@ Edge cases:
 
 ### outline
 
-`outline` returns the structural outline of one file: a `=== path (language) — N lines ===` header, then one `anchor│content` row per symbol whose content is the first line of that symbol's declaration (annotations and attributes excluded). A `[limit N]` line under a multi-line symbol is the span to pass as `read`'s `limit` when reading the body from that anchor, and an `[N nested]` line marks children hidden by `depth`. Hiding children that way is a view choice rather than truncation, so `truncated` stays false and the section still counts as complete. The structured result reports `complete`, which is true only when no row or byte cap cut the outline, every rendered row was served, and no line was skipped for a missing anchor; a head-and-tail preview that omits lines is incomplete. Files the parser cannot outline fall back to the same head-and-tail preview auto-read all uses. A row whose line is longer than 200 characters is clipped and is not served for editing, so read that line first. The tool is offered only while Outline tool is on in `/hashline-config`.
+`outline` returns the structural outline of one file: a `=== path (language) — N lines ===` header, then one `anchor│content` row per symbol whose content is the first line of that symbol's declaration (annotations and attributes excluded). Rows cover top-level declarations and the members of a type or module; a declaration inside a function body is never a row, whatever `depth` you pass. A `[limit N]` line under a multi-line symbol is the span to pass as `read`'s `limit` when reading the body from that anchor, and an `[N nested]` line marks children hidden by `depth`. Hiding children that way is a view choice rather than truncation, so `truncated` stays false and the section still counts as complete. The structured result reports `complete`, which is true only when no row or byte cap cut the outline, every rendered row was served, and no line was skipped for a missing anchor; a head-and-tail preview that omits lines is incomplete. Files the parser cannot outline fall back to the same head-and-tail preview auto-read all uses. A row whose line is longer than 200 characters is clipped and is not served for editing, so read that line first. The tool is offered only while Outline tool is on in `/hashline-config`.
 
 | Parameter | Description |
 | --- | --- |
@@ -273,7 +273,7 @@ Example: read served `hasux│old` in `a.ts` and `qwerx│top` in `b.ts`; to cop
 { "source_from": "hasux", "source_to": "hasux", "anchor": "qwerx", "direction": "after" }
 ```
 
-The source lines stay in place and keep their anchors; the copied lines are minted fresh anchors in the destination's post-edit diff and keep their source line endings. A cross-file copy writes only the destination, so one `undo_last_change` on it reverts the copy. In a same-message batch, a same-file copy and a cross-file copy join the destination file's batch; the copy still duplicates the content its source anchors were served from, not the result of a sibling edit. Anchoring the block's last line with `direction: "after"` (or its first line with `direction: "before"`) duplicates the block right beside itself.
+The source lines stay in place and keep their anchors; the copied lines are minted fresh anchors in the destination's post-edit diff and carry the source's line endings. The destination's end-of-file state is preserved either way: a destination that ended without a newline still does, and one that ended with a newline still does. A cross-file copy writes only the destination, so one `undo_last_change` on it reverts the copy. In a same-message batch, a same-file copy and a cross-file copy join the destination file's batch; the copy still duplicates the content its source anchors were served from, not the result of a sibling edit. Anchoring the block's last line with `direction: "after"` (or its first line with `direction: "before"`) duplicates the block right beside itself.
 
 ### move
 
@@ -303,6 +303,10 @@ Patterns are evaluated by ripgrep's linear-time regex engine, so shapes that sta
 
 Output is capped at `limit` matched lines, 2000 rows, and 50KB of text, whichever comes first, with a note naming the caps that cut the results (the exact one is in `details.truncation`). A matched line whose `anchor│content` row exceeds 500 bytes is shown as a fragment around the match, with `...` marking the truncated sides; a context row over 500 bytes is shown as its head with a trailing `...`. Fragments keep the line's anchor (long lines are hashed from their first 500 bytes) and are served like full rows, so a fragmented match is still editable, and `replace` always replaces the whole line.
 
+A path ripgrep cannot read does not abort the search. ripgrep reports the error and keeps scanning, so directory searches return every match from the readable files and add a `[grep: some paths could not be searched, so these results are partial: ...]` note naming the failure. `[E_GREP_FAILED]` is reserved for a search that produced nothing: an unusable pattern or glob, ripgrep failing to start, or an exit that left no matches at all.
+
+Matching uses the same line model as `read`, so `^` and `$` address the file's own line boundaries: in a CRLF file `TWO$` matches the second line, and a byte order mark does not keep `^` from matching line 1. A file with lone-CR (classic Mac) endings is still read, displayed, and anchored by its real lines, and every match is attributed to the line it is on, but ripgrep only breaks lines at `\n` there, so `^` and `$` see such a file as a single line: unanchored patterns work, `^` matches only at the start of the file, and `$` only at its end. Use `read` when line anchoring matters for a lone-CR file.
+
 ### undo_last_change
 
 `undo_last_change` reverts the most recent successful `replace`, `replace_match`, `insert`, `copy`, or `move` on a file, restoring the exact previous content, BOM and line endings included, plus the previous anchors.
@@ -315,6 +319,7 @@ Output is capped at `limit` matched lines, 2000 rows, and 50KB of text, whicheve
 - A successful `write` clears the history for that file.
 - If the file was modified since the last edit, the undo is refused with `[E_UNDO_STALE]` rather than overwriting those changes, and the record is kept. Once the file matches the edited state again, `undo_last_change` succeeds.
 - If the file was deleted since the last edit, `undo_last_change` restores it from the recorded pre-edit content.
+- A path with no undo record reports `[E_UNDO_NONE]`, and `[E_NOT_FOUND]` when that path does not exist either. The record is looked up first, so a file deleted since its last edit is still restored.
 - Missing-file cleanup never touches the undo record. The per-session prune removes snapshots and served records of files that no longer exist (both are recomputed on the next read), but the undo history survives, even when the file is temporarily absent during a branch switch.
 - Records are keyed by file path, not by session, so in a multi-conversation host any conversation that names the file can revert its most recent edit, even one made by another conversation.
 
@@ -504,7 +509,7 @@ Full reference:
 | `[E_PATH_CHANGED]` | A write target changed identity after it was read; the write was refused to avoid following a swapped symlink or overwriting a replacement file. |
 | `[E_BATCH_OVERLAP]` | Batched edit calls target overlapping ranges; the whole batch was refused. One `before` plus one `after` insert on the same anchor line is not an overlap. Retry with disjoint ranges. |
 | `[E_OP_ABORTED]` | The edit was aborted before writing: the file changed or was deleted after it was read (a single edit or a cross-file move reports the file; a batch reports the batch and the failing call), the base read failed, a cross-file member could not be prepared, or the composed result exceeded a limit. Nothing was written; a call whose own request is invalid is left out of the batch instead. Fix the cause and retry, otherwise call `read` for fresh anchors and retry. The batch abort names the failing call and its error code when one is known. |
-| `[E_GREP_FAILED]` | `grep` could not start ripgrep or ripgrep exited with an error (for example a pattern with backreferences, look-around, or invalid regex syntax, which ripgrep's regex engine does not support); the message carries ripgrep's output. Retry with `literal: true` or simplify the pattern. |
+| `[E_GREP_FAILED]` | `grep` could not start ripgrep or ripgrep exited with an error (for example a pattern with backreferences, look-around, or invalid regex syntax, which ripgrep's regex engine does not support); the message carries ripgrep's output. Retry with `literal: true` or simplify the pattern. A path ripgrep cannot read is not one of these: the search returns the readable matches with a partial-results note. |
 | `[E_GREP_TIMEOUT]` | `grep` timed out after 10 seconds; narrow `path` or simplify `pattern` and retry. |
 
 ## Troubleshooting

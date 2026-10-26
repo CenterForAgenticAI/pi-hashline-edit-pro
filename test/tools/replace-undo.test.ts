@@ -46,6 +46,19 @@ describe("undo_last_change", () => {
     });
   });
 
+  it("reports a missing path as not found instead of no undo history", async () => {
+    await withTempFile("sample.ts", "aaa\nbbb\n", async ({ cwd }) => {
+      const { getTool, ctx } = setupIntegrationTest(cwd);
+      const undo = getTool("undo_last_change");
+
+      const result = await undo.execute("u1", { path: "ghost.ts" }, undefined, undefined, ctx);
+
+      expect(result.isError).toBe(true);
+      expect(getText(result)).toContain("[E_NOT_FOUND]");
+      expect(getText(result)).not.toMatch(/no undo history/i);
+    });
+  });
+
   it("restores file content after a single-line replace", async () => {
     await withTempFile("sample.ts", "aaa\nbbb\nccc\n", async ({ cwd }) => {
       const { getTool, ctx } = setupIntegrationTest(cwd);

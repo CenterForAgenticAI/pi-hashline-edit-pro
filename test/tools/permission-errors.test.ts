@@ -3,7 +3,7 @@ import { chmodSync, mkdirSync } from "fs";
 import { mkdtempSync, rmSync, writeFileSync } from "fs";
 import { join } from "path";
 import register from "../../index";
-import { makeFakePiRegistry, withHome, toolError } from "../support/fixtures";
+import { makeFakePiRegistry, withHome, toolError, getText, setupIntegrationTest } from "../support/fixtures";
 import { shutdownHashStore } from "../../src/hash-store";
 
 const isRoot = typeof process.getuid === "function" && process.getuid() === 0;
@@ -128,6 +128,35 @@ describe.skipIf(isRoot || isWindows)("permission errors", () => {
         expect(result.structuredContent?.error?.code).toBe("E_ACCESS");
       } finally {
         chmodSync(lockedDir, 0o755);
+      }
+    });
+  });
+
+  describe("grep tool unreadable entry", () => {
+    it("returns the readable matches and reports the path it could not search", async () => {
+      const searchDir = join(tempDir, "grep-partial");
+      mkdirSync(searchDir);
+      const readable = join(searchDir, "readable.txt");
+      const locked = join(searchDir, "locked.txt");
+      writeFileSync(readable, "alpha\nbeta\n", "utf-8");
+      writeFileSync(locked, "alpha\n", "utf-8");
+      chmodSync(locked, 0o000);
+
+      try {
+        const { ctx, getTool } = setupIntegrationTest(searchDir);
+        const result = await getTool("grep").execute(
+          "g1",
+          { pattern: "alpha", path: searchDir },
+          undefined,
+          undefined,
+          ctx,
+        ) as { content: Array<{ text?: string }>; isError?: boolean };
+
+        expect(result.isError).toBeFalsy();
+        expect(getText(result)).toContain("readable.txt");
+        expect(getText(result)).toContain("some paths could not be searched");
+      } finally {
+        chmodSync(locked, 0o644);
       }
     });
   });

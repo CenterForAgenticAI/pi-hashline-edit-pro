@@ -15,6 +15,7 @@ import { loadP, loadGuidelines } from "./prompts";
 import { normReq } from "./payload-contract";
 import { DEFAULT_EDIT_FLAGS, withGrepPrompts, type EditToolFlags } from "./edit-common";
 import { abortIf, clipLine, errCode, isRec, makePrepareArguments, rejectUnknownFields, truncateToBytes, visLines, gutterWidth } from "./utils";
+import type { LineEnding } from "./normalize";
 import { withAnchorSession, formatAnchorReclaimNotice, takeReclaimedPaths } from "./anchor-registry";
 import { serveRows } from "./served";
 import { Text } from "@earendil-works/pi-tui";
@@ -139,6 +140,62 @@ function grepHeadFragment(line: string): string {
   return head.length < line.length ? `${head}...` : head;
 }
 
+function lineStartsOf(text: string): number[] {
+  const starts = [0];
+  for (let index = 0; index < text.length; index += 1) {
+    if (text.charCodeAt(index) === 10 && index + 1 < text.length) starts.push(index + 1);
+  }
+  return starts;
+}
+
+function physicalStartsOf(text: string, separators: readonly LineEnding[]): number[] {
+  const starts = [0];
+  let separatorIndex = 0;
+  for (let index = 0; index < text.length; index += 1) {
+    if (text.charCodeAt(index) !== 10) continue;
+    const separator = separators[separatorIndex] ?? "\n";
+    separatorIndex += 1;
+    if (separator === "\n" || separator === "\r\n") starts.push(index + 1);
+  }
+  return starts;
+}
+
+function lineIndexOf(starts: readonly number[], position: number): number {
+  let low = 0;
+  let high = starts.length - 1;
+  while (low < high) {
+    const mid = (low + high + 1) >>> 1;
+    if (starts[mid]! <= position) low = mid;
+    else high = mid - 1;
+  }
+  return low;
+}
+
+function toNormalizedMatches(
+  norm: { normalized: string; endingSeparators: readonly LineEnding[] },
+  matches: RgMatchLine[],
+): RgMatchLine[] {
+  if (!norm.endingSeparators.includes("\r")) return matches;
+  const text = norm.normalized;
+  const starts = lineStartsOf(text);
+  const physical = physicalStartsOf(text, norm.endingSeparators);
+  const lines = visLines(text);
+  return matches.map((match) => {
+    const base = physical[match.line - 1] ?? 0;
+    const physicalLine = text.slice(base, physical[match.line] ?? text.length);
+    const position = base + byteOffsetToCharIndex(physicalLine, match.start);
+    const index = lineIndexOf(starts, position);
+    const lineText = lines[index] ?? "";
+    const columnStart = Math.min(position - starts[index]!, lineText.length);
+    const columnEnd = Math.min(base + byteOffsetToCharIndex(physicalLine, match.end) - starts[index]!, lineText.length);
+    return {
+      line: index + 1,
+      start: Buffer.byteLength(lineText.slice(0, columnStart), "utf-8"),
+      end: Buffer.byteLength(lineText.slice(0, Math.max(columnStart, columnEnd)), "utf-8"),
+    };
+  });
+}
+
 function makeHitFromIndices(
   norm: { normalized: string; fileHashes: string[]; absolutePath: string; hadUtf8DecodeErrors: boolean },
   displayPath: string,
@@ -247,6 +304,11 @@ async function insideGitRepo(start: string): Promise<boolean> {
   }
 }
 
+interface RgSearch {
+  matches: Map<string, RgMatchLine[]>;
+  skipped?: string;
+}
+
 async function collectRgMatches(
   rgPath: string,
   pattern: string,
@@ -254,8 +316,8 @@ async function collectRgMatches(
   req: GrepReq,
   signal: AbortSignal | undefined,
   repoRooted: boolean,
-): Promise<Map<string, RgMatchLine[]>> {
-  const args = ["--json", "--line-number", "--color=never", "--hidden", "--glob", "!.git"];
+): Promise<RgSearch> {
+  const args = ["--json", "--line-number", "--color=never", "--hidden", "--crlf", "--glob", "!.git"];
   if (!repoRooted) args.push("--no-require-git");
   const wanted = req.limit ?? 100;
   args.push("--max-count", String(wanted + 1));
@@ -267,7 +329,7 @@ async function collectRgMatches(
   if (req.literal) args.push("--fixed-strings");
   args.push("--", pattern, searchPath);
   const result = new Map<string, RgMatchLine[]>();
-  return await new Promise<Map<string, RgMatchLine[]>>((resolve, reject) => {
+  return await new Promise<RgSearch>((resolve, reject) => {
     const child = spawn(rgPath, args, { stdio: ["ignore", "pipe", "pipe"] });
     const rl = createInterface({ input: child.stdout });
     let stderr = "";
@@ -331,12 +393,16 @@ async function collectRgMatches(
       }
       if (code !== 0 && code !== 1) {
         const detail = clipLine(stderr.trim(), 300);
-        reject(new Error(detail
-          ? `[E_GREP_FAILED] ripgrep exited with code ${code}: ${detail}`
-          : `[E_GREP_FAILED] ripgrep exited with code ${code}.`));
+        if (result.size === 0) {
+          reject(new Error(detail
+            ? `[E_GREP_FAILED] ripgrep exited with code ${code}: ${detail}`
+            : `[E_GREP_FAILED] ripgrep exited with code ${code}.`));
+          return;
+        }
+        resolve({ matches: result, ...(detail ? { skipped: detail } : {}) });
         return;
       }
-      resolve(result);
+      resolve({ matches: result });
     });
   });
 }
@@ -541,7 +607,8 @@ export function regGrep(pi: ExtensionAPI, flags: EditToolFlags = DEFAULT_EDIT_FL
         const readGrepFile = makeGrepReader("real");
         const readGrepFileShadow = makeGrepReader("shadow");
         const repoRooted = await insideGitRepo(globRoot);
-        const rgMatches = await collectRgMatches(rgPath, req.pattern, base, req, signal, repoRooted);
+        const rgSearch = await collectRgMatches(rgPath, req.pattern, base, req, signal, repoRooted);
+        const rgMatches = rgSearch.matches;
         const sortedFiles = [...rgMatches.keys()].sort(cmp);
         for (let f = 0; f < sortedFiles.length; f++) {
           abortIf(signal);
@@ -552,7 +619,7 @@ export function regGrep(pi: ExtensionAPI, flags: EditToolFlags = DEFAULT_EDIT_FL
             if (!matchesGlob(absPath)) continue;
             const norm = await readGrepFileShadow(absPath);
             if (!norm) continue;
-            const hit = makeHitFromIndices(norm, toDisplayPath(ctx.cwd, absPath), fileMatches, context, totalForFile, fileMatches.length);
+            const hit = makeHitFromIndices(norm, toDisplayPath(ctx.cwd, absPath), toNormalizedMatches(norm, fileMatches), context, totalForFile, fileMatches.length);
             const display = displayRowsForHit(hit);
             totalRows += display.length;
             for (const r of display) totalBytes += Buffer.byteLength(r, "utf-8") + 1;
@@ -574,7 +641,7 @@ export function regGrep(pi: ExtensionAPI, flags: EditToolFlags = DEFAULT_EDIT_FL
           if (!matchesGlob(absPath)) continue;
           const norm = await readGrepFile(absPath);
           if (!norm) continue;
-          const hit = makeHitFromIndices(norm, toDisplayPath(ctx.cwd, absPath), fileMatches, context, totalForFile, Math.min(totalForFile, remaining));
+          const hit = makeHitFromIndices(norm, toDisplayPath(ctx.cwd, absPath), toNormalizedMatches(norm, fileMatches), context, totalForFile, Math.min(totalForFile, remaining));
           const display = displayRowsForHit(hit);
           const keptRows: string[] = [];
           const keptHashes: string[] = [];
@@ -624,6 +691,7 @@ export function regGrep(pi: ExtensionAPI, flags: EditToolFlags = DEFAULT_EDIT_FL
         if (limitTruncated) notes.push(`[grep: showing first ${limit} matches; increase limit to see more.]`);
         if (linesReplaced > 0) notes.push(`[grep: ${linesReplaced} line(s) exceed ${formatSize(MAX_GREP_LINE_BYTES)} and are shown as truncated fragments; use read to see the full lines.]`);
         if (poolSkipped > 0) notes.push(`[grep: ${poolSkipped} file(s) skipped because the session's anchor pool is exhausted; narrow the search.]`);
+        if (rgSearch.skipped !== undefined) notes.push(`[grep: some paths could not be searched, so these results are partial: ${rgSearch.skipped}]`);
         const truncated = limitTruncated || rowTruncated;
         const truncation: TruncationResult | undefined = rowTruncated
           ? {

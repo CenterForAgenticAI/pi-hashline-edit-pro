@@ -2,10 +2,11 @@ import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { RG_TIMEOUT_MS } from "../../src/grep";
-import { setupIntegrationTest, withTempDir, toolError } from "../support/fixtures";
+import { setupIntegrationTest, withTempDir, toolError, getText } from "../support/fixtures";
 
 const state = vi.hoisted(() => ({
-  mode: "exit" as "exit" | "spawn-error" | "hang",
+  mode: "exit" as "exit" | "spawn-error" | "hang" | "partial",
+  partialPath: undefined as string | undefined,
   child: null as { killed: boolean; kill(signal?: string): boolean } | null,
   onSpawn: null as (() => void) | null,
 }));
@@ -39,6 +40,12 @@ vi.mock("node:child_process", async (importOriginal) => {
           child.stderr.write("regex parse error: look-around is not supported\n");
           setImmediate(() => child.emit("close", 2));
         }
+        if (state.mode === "partial") {
+          const path = state.partialPath ?? "";
+          child.stdout.write(`${JSON.stringify({ type: "match", data: { path: { text: path }, line_number: 1, submatches: [{ start: 0, end: 5 }] } })}\n`);
+          child.stderr.write(`${path}: Permission denied (os error 13)\n`);
+          setTimeout(() => child.emit("close", 2), 10);
+        }
       });
       return child;
     },
@@ -54,6 +61,7 @@ beforeEach(() => {
   state.mode = "exit";
   state.child = null;
   state.onSpawn = null;
+  state.partialPath = undefined;
 });
 
 describe("grep ripgrep failure contract", () => {
@@ -74,6 +82,23 @@ describe("grep ripgrep failure contract", () => {
       expect(await toolError(() => runGrep(dir, "alpha"))).toMatch(
         /\[E_GREP_FAILED\] ripgrep exited with code 2: regex parse error: look-around is not supported/,
       );
+    });
+  });
+
+  it("keeps the matches of readable files when ripgrep reports an unreadable path", async () => {
+    await withTempDir("grep-rg-partial-", async (dir) => {
+      const sample = join(dir, "sample.txt");
+      await writeFile(sample, "alpha\nbeta\n", "utf-8");
+      state.mode = "partial";
+      state.partialPath = sample;
+      const { ctx, getTool } = setupIntegrationTest(dir);
+      const result = await getTool("grep").execute("g1", { pattern: "alpha", path: "." }, undefined, undefined, ctx);
+      const text = getText(result);
+      expect(text).toContain("=== sample.txt ===");
+      expect(text).toContain("alpha");
+      expect(text).toContain("some paths could not be searched");
+      expect(text).toContain("Permission denied");
+      expect(result.isError).toBeFalsy();
     });
   });
 
