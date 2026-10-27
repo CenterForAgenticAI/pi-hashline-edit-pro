@@ -1,2 +1,2 @@
-- `outline`: a row shows the first line of the symbol's declaration, and its anchor addresses that line; a `[limit N]` line under it is the span to read.
-- `outline`: read a symbol's span before editing inside its body, because the outline never shows body lines.
+- `outline`: before you `read` a large or unfamiliar file or module, outline it and read only the spans you need.
+- `outline`: a span starts at the declaration line; read the lines above it before you delete or move a symbol, so its decorators go with it.

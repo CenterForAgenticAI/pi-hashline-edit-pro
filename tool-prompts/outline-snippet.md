@@ -1,1 +1,1 @@
-Outline one file's structure by anchor: one row per symbol with the first line of its declaration, `[limit N]` for the span of a multi-line symbol
+Map the symbols of a file or folder before reading it: one anchored row per declaration, with the span to read

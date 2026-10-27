@@ -161,12 +161,21 @@ describe("read tool guidelines", () => {
 });
 
 describe("tool-prompts/outline.md (model-facing contract)", () => {
-  it("declares the declaration line, the span hint, and the serving rule", () => {
+  it("declares the declaration line, the span hint, the serving rule, and when to use it", () => {
     const outlinePrompt = readFileSync(new URL("../../tool-prompts/outline.md", import.meta.url), "utf-8");
-    expect(outlinePrompt).toContain("first line of that symbol's declaration");
+    expect(outlinePrompt).toContain("real first line of that symbol's declaration");
     expect(outlinePrompt).toContain("[limit N]");
     expect(outlinePrompt).toContain("not served for editing");
+    expect(outlinePrompt).toContain("Use it before reading a large or unfamiliar file");
+    expect(outlinePrompt).toContain("outside its span");
+    expect(outlinePrompt).toContain("head-and-tail preview with a note");
     expect(outlinePrompt).not.toContain("label");
+  });
+
+  it("keeps format facts out of the guidelines", () => {
+    const guidelines = readFileSync(new URL("../../tool-prompts/outline-guidelines.md", import.meta.url), "utf-8");
+    expect(guidelines).not.toContain("[limit N]");
+    expect(guidelines).toContain("before you `read`");
   });
 });
 
@@ -458,6 +467,7 @@ describe("codemode prompt variants", () => {
     expect(withReadPrompts(readBase, DEFAULT_EDIT_FLAGS).guidelines.some((g) => g.includes("failures resolve to"))).toBe(false);
     const on = withReadPrompts(readBase, { ...DEFAULT_EDIT_FLAGS, codemode: true });
     expect(on.guidelines.find((g) => g.includes("failures resolve to"))).toContain("`read`/`replace`/`replace_match`/`insert`/`copy`/`move`/`grep`/`undo_last_change`");
+    expect(on.guidelines.find((g) => g.includes("failures resolve to"))).toContain("Arguments that fail the tool's schema still throw");
     expect(withGrepPrompts(grepBase, { ...DEFAULT_EDIT_FLAGS, codemode: true }).guidelines.some((g) => g.includes("failures resolve to"))).toBe(false);
     expect(withUndoPrompts(undoBase, { ...DEFAULT_EDIT_FLAGS, codemode: true }).guidelines.some((g) => g.includes("failures resolve to"))).toBe(false);
     expect(withReplacePrompts(replaceBase, { ...DEFAULT_EDIT_FLAGS, codemode: true }).guidelines.some((g) => g.includes("failures resolve to"))).toBe(false);
