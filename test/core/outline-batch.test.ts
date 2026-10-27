@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { AUTO_READ_ALL_MAX_FILE_BYTES } from "../../src/constants";
 import { buildFileOutline } from "../../src/outline";
 import { setAutoReadAllIgnore } from "../../src/config";
 import { readNormFile } from "../../src/file-reader";
@@ -109,6 +110,29 @@ describe("batch outline", () => {
 			expect(result.structuredContent.truncated).toBe(false);
 			expect(getText(result)).toContain("[Skipped src/bin.ts: [E_NOT_TEXT]");
 			expect(getText(result)).not.toContain("more files not outlined");
+		});
+	});
+
+	it("skips source files over the directory-outline size cap", async () => {
+		await withRepo("outline-size-", async (dir) => {
+			await source(dir, "src/a.ts");
+			await writeFile(join(dir, "src/big.ts"), `export const big = 1;\n${"x".repeat(AUTO_READ_ALL_MAX_FILE_BYTES)}\n`, "utf-8");
+			const result = await codemodeTool().execute("o1", { path: "src", anchors: true }, undefined, undefined, { cwd: dir } as never);
+			expect(result.structuredContent.files.map((file: { path: string }) => file.path)).toEqual(["src/a.ts"]);
+			expect(getText(result)).toContain("[Skipped src/big.ts:");
+			expect(getText(result)).toContain("directory-outline file limit");
+			expect(result.structuredContent.complete).toBe(false);
+		});
+	});
+
+	it("refuses a filesystem walk when Git cannot list a work tree", async () => {
+		await withTempDir("outline-git-failure-", async (dir) => {
+			await source(dir, "src/a.ts");
+			await writeFile(join(dir, ".git"), "gitdir: nowhere\n", "utf-8");
+			const tool = codemodeTool();
+			const message = await toolError(() => tool.execute("o1", { path: "src" }, undefined, undefined, { cwd: dir } as never));
+			expect(message).toContain("[E_ACCESS] Git could not list files");
+			expect(message).toContain("bypass .gitignore");
 		});
 	});
 

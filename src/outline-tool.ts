@@ -1,13 +1,13 @@
-import { DEFAULT_MAX_BYTES, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { DEFAULT_MAX_BYTES, formatSize, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { lstat, stat } from "node:fs/promises";
-import { basename, relative, resolve, sep } from "node:path";
+import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { Type } from "typebox";
 import { Text } from "@earendil-works/pi-tui";
 import { buildFileOutline, loadOutlineParser } from "./outline";
 import { AUTO_READ_ALL_EXCLUDED_NAMES, globRegexFor, isExcludedByCustomIgnore, isExcludedByPattern, isExcludedBySegment, listFromGit, normalizeAutoReadAllIgnoreList, walkDir } from "./auto-read-all";
 import { readConfig } from "./config";
 import { MAX_HASH_LINES } from "./hashline";
-import { ANCHOR_POOL_EXHAUSTED_PREFIX } from "./constants";
+import { ANCHOR_POOL_EXHAUSTED_PREFIX, AUTO_READ_ALL_MAX_FILE_BYTES } from "./constants";
 import { loadFileKindAndText } from "./file-kind";
 import { readNormFile, safeSnapId } from "./file-reader";
 import { serveRows } from "./served";
@@ -23,6 +23,7 @@ const OUTLINE_DEFAULT_DEPTH = 2;
 const OUTLINE_MAX_ROWS = 400;
 const OUTLINE_MIN_FILE_ROWS = 20;
 const OUTLINE_BATCH_RESERVE_BYTES = 160;
+const OUTLINE_MAX_SOURCE_LINES = 400_000;
 export const OUTLINE_MAX_DEPTH = 10;
 
 export interface OutlineDetails {
@@ -104,7 +105,27 @@ const batchOutlineResultSchema = Type.Union([
 	}),
 ]);
 
-async function outlineCandidates(pattern: string, cwd: string, directory: boolean, signal: AbortSignal | undefined): Promise<string[]> {
+interface OutlineCandidate {
+	path: string;
+	size: number;
+}
+
+async function hasGitMarker(start: string): Promise<boolean> {
+	let current = resolve(start);
+	for (;;) {
+		try {
+			await lstat(join(current, ".git"));
+			return true;
+		} catch (error) {
+			if (errCode(error) !== "ENOENT") return true;
+		}
+		const parent = dirname(current);
+		if (parent === current) return false;
+		current = parent;
+	}
+}
+
+async function outlineCandidates(pattern: string, cwd: string, directory: boolean, signal: AbortSignal | undefined): Promise<OutlineCandidate[]> {
 	const ignore = normalizeAutoReadAllIgnoreList((await readConfig()).autoReadAllIgnore);
 	const parser = await loadOutlineParser();
 	if (parser === undefined) return [];
@@ -114,8 +135,15 @@ async function outlineCandidates(pattern: string, cwd: string, directory: boolea
 	const glob = directory ? null : globRegexFor(pattern);
 	if (!directory && glob === null) throw new Error(`[E_BAD_SHAPE] Invalid glob: ${pattern}`);
 	const prefix = relative(cwd, base).split(sep).join("/");
+	const baseIsDirectory = await stat(base).then((stats) => stats.isDirectory(), (error) => {
+		const code = errCode(error);
+		return code !== "ENOENT" && code !== "ENOTDIR";
+	});
 	let listed = (await listFromGit(base))?.map((file) => (prefix === "" ? file : `${prefix}/${file}`));
 	if (listed === undefined) {
+		if (baseIsDirectory && await hasGitMarker(base)) {
+			throw new Error(`[E_ACCESS] Git could not list files under ${base}; refusing a filesystem walk inside a Git work tree because it could bypass .gitignore.`);
+		}
 		listed = [];
 		await walkDir(base, cwd, listed, ignore);
 	}
@@ -125,8 +153,13 @@ async function outlineCandidates(pattern: string, cwd: string, directory: boolea
 		return !AUTO_READ_ALL_EXCLUDED_NAMES.includes(name) && !isExcludedBySegment(file) && !isExcludedByPattern(name)
 			&& !isExcludedByCustomIgnore(file, ignore) && parser.languageFor(file) !== null && (glob === null || glob.test(file));
 	});
-	const regular = await Promise.all(matched.map((file) => lstat(resolve(cwd, file)).then((stats) => stats.isFile(), () => false)));
-	return matched.filter((_, index) => regular[index]).sort();
+	const regular = await Promise.all(matched.map((file) => lstat(resolve(cwd, file)).then((stats) => stats.isFile() ? stats.size : undefined, () => undefined)));
+	const candidates: OutlineCandidate[] = [];
+	for (let index = 0; index < matched.length; index++) {
+		const size = regular[index];
+		if (size !== undefined) candidates.push({ path: matched[index]!, size });
+	}
+	return candidates.sort((left, right) => left.path < right.path ? -1 : left.path > right.path ? 1 : 0);
 }
 
 function outlineNotices(section: { preview?: "unsupported" | "no-symbols"; hasSyntaxErrors?: boolean }, path?: string): string[] {
@@ -204,6 +237,7 @@ export function regOutline(pi: ExtensionAPI, flags: EditToolFlags = DEFAULT_EDIT
 					let rows = 0;
 					let bytes = 0;
 					let totalLines = 0;
+					let sourceLines = 0;
 					let stopped = false;
 					let anyTruncated = false;
 					let skipped = 0;
@@ -217,9 +251,15 @@ export function regOutline(pi: ExtensionAPI, flags: EditToolFlags = DEFAULT_EDIT
 						bytes += size;
 						return true;
 					};
-					for (const [index, filePath] of candidates.entries()) {
+					for (const [index, candidate] of candidates.entries()) {
+						const filePath = candidate.path;
 						abortIf(signal);
-						if (rows >= OUTLINE_MAX_ROWS || bytes + reserve >= DEFAULT_MAX_BYTES) { stopped = true; break; }
+						if (rows >= OUTLINE_MAX_ROWS || bytes + reserve >= DEFAULT_MAX_BYTES || sourceLines >= OUTLINE_MAX_SOURCE_LINES) { stopped = true; break; }
+						if (candidate.size > AUTO_READ_ALL_MAX_FILE_BYTES) {
+							skipped += 1;
+							if (!addNotice(`[Skipped ${filePath}: ${formatSize(candidate.size)} exceeds the directory-outline file limit.]`)) unlistedSkips += 1;
+							continue;
+						}
 						let loaded: Awaited<ReturnType<typeof readNormFile>>;
 						try {
 							loaded = await readNormFile(filePath, ctx.cwd, { signal, maxLines: MAX_HASH_LINES });
@@ -231,6 +271,7 @@ export function regOutline(pi: ExtensionAPI, flags: EditToolFlags = DEFAULT_EDIT
 							continue;
 						}
 						const { normalized, fileHashes, absolutePath: resolvedPath, hadUtf8DecodeErrors } = loaded;
+						sourceLines += fileHashes.length;
 						const fileLines = splitLines(normalized);
 						const remainingRows = OUTLINE_MAX_ROWS - rows;
 						const fileRows = Math.min(remainingRows, Math.max(OUTLINE_MIN_FILE_ROWS, Math.ceil(remainingRows / (candidates.length - index))));
@@ -262,10 +303,15 @@ export function regOutline(pi: ExtensionAPI, flags: EditToolFlags = DEFAULT_EDIT
 					if (unlistedSkips > 0) notices.push(`[Skipped ${unlistedSkips} more unreadable files.]`);
 					const remaining = candidates.length - files.length - skipped;
 					const outlineText = [...sections, ...(stopped ? [footer(remaining)] : [])].join("\n\n");
-					const reclaimNotice = formatAnchorReclaimNotice(takeReclaimedPaths());
+					const reclaimedPaths = takeReclaimedPaths();
+					const reclaimNotice = formatAnchorReclaimNotice(reclaimedPaths);
 					if (reclaimNotice !== undefined) notices.push(reclaimNotice);
 					const text = [outlineText, ...notices].filter((part) => part.length > 0).join("\n\n");
 					const truncated = stopped || anyTruncated || remaining > 0;
+					for (const path of reclaimedPaths) {
+						const index = toServe.findIndex(([servedPath]) => servedPath === path);
+						if (index >= 0) files[index]!.complete = false;
+					}
 					const complete = !truncated && skipped === 0 && files.every((file) => file.complete);
 					return {
 						content: [{ type: "text", text }],
