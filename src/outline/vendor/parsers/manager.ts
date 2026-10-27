@@ -1429,10 +1429,13 @@ function extractMarkdown(source: string): SymbolInfo[] {
   let paragraph = false;
   let i = 0;
 
-  // YAML front matter
   if (lines[0]?.trim() === "---") {
     const close = lines.findIndex((line, index) => index > 0 && (line.trim() === "---" || line.trim() === "..."));
-    if (close !== -1) i = close + 1;
+    const first = close === -1 ? undefined : lines.slice(1, close).find((line) => {
+      const trimmed = line.trim();
+      return trimmed.length > 0 && !trimmed.startsWith("#");
+    });
+    if (first !== undefined && /^[A-Za-z0-9_.-]+\s*:/.test(first.trim())) i = close + 1;
   }
 
   for (; i < lines.length; i++) {

@@ -979,6 +979,36 @@ describe("buildFileOutline language coverage", () => {
 		]);
 	});
 
+	it("keeps headings after a leading thematic break", async () => {
+		const rows = await outlineRows("doc.md", [
+			"---",
+			"",
+			"# Heading",
+			"",
+			"Text",
+			"",
+			"---",
+			"",
+			"## Second",
+		]);
+		expect(rows).toEqual([
+			"3│# Heading",
+			"[limit 7]",
+			"9│## Second",
+		]);
+	});
+
+	it("recognizes front matter after a leading comment", async () => {
+		const rows = await outlineRows("doc.md", [
+			"---",
+			"# comment",
+			"title: x",
+			"---",
+			"# Body",
+		]);
+		expect(rows).toEqual(["5│# Body"]);
+	});
+
 	it("reports why it fell back to a preview", async () => {
 		const unsupported = await buildFileOutline({ displayPath: "notes.txt", content: "alpha\n", hashes: ["aaaaz"] });
 		expect(unsupported.preview).toBe("unsupported");
