@@ -8,7 +8,7 @@ import { setAutoReadAllIgnore } from "../../src/config";
 import { readNormFile } from "../../src/file-reader";
 import { DEFAULT_EDIT_FLAGS } from "../../src/edit-common";
 import { regOutline } from "../../src/outline-tool";
-import { getText, makeFakePiRegistry, setupIntegrationTest, toolError, withHome, withTempDir } from "../support/fixtures";
+import { getText, makeFakePiRegistry, rmRetry, setupIntegrationTest, toolError, withHome, withTempDir } from "../support/fixtures";
 
 async function source(dir: string, name: string, text = "export const value = 1;\n") {
 	await mkdir(join(dir, name, ".."), { recursive: true });
@@ -206,7 +206,7 @@ describe("batch outline", () => {
 			const result = await codemodeTool().execute("o1", { path: "src", anchors: true }, undefined, undefined, { cwd: dir } as never);
 			expect(result.structuredContent.files.map((file: { path: string }) => file.path)).toEqual(["src/a.ts"]);
 		} finally {
-			await rm(dir, { recursive: true, force: true });
+			await rmRetry(dir);
 			restoreHome();
 		}
 	});
