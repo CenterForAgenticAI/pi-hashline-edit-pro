@@ -6,7 +6,7 @@ import { loadHashStore, getSnapshot } from "../../src/hash-store";
 import { resolveTarget } from "../../src/fs-write";
 import { ownersForPath, initRegistry, resetRegistryForTests } from "../../src/anchor-registry";
 import { toCwd } from "../../src/paths";
-import { closeHashStore, withTempFile, withTempDir, withHome, makeFakePiRegistry, setupIntegrationTest, getText, extractHash, rmRetry, toolError } from "../support/fixtures";
+import { closeHashStore, withTempFile, withTempDir, withHome, makeFakePiRegistry, setupIntegrationTest, getText, extractHash, anchorFor, rmRetry, toolError } from "../support/fixtures";
 import register from "../../index";
 
 beforeEach(async () => {
@@ -920,5 +920,70 @@ describe("grep display", () => {
     );
     const rendered = (component as unknown as { text: string }).text ?? String(component);
     expect(rendered).toContain("1:│ bluex│<accent>blue</> sky");
+  });
+});
+
+describe("grep line endings", () => {
+  it("anchors ^ and $ to CRLF line boundaries and names the right lines", async () => {
+    await withTempFile("crlf.txt", "ONE\r\nTWO\r\nTHREE\r\n", async ({ cwd }) => {
+      const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
+      const anchors = (await readTool.execute("r1", { path: "crlf.txt" }, undefined, undefined, ctx)) as { content: Array<{ text?: string }> };
+      const text = getText(anchors);
+      const grepTool = getTool("grep");
+
+      const end = getText(await grepTool.execute("g1", { pattern: "TWO$", path: "crlf.txt" }, undefined, undefined, ctx));
+      expect(end).toBe(`=== crlf.txt ===\n2:│ ${anchorFor(text, "TWO")}│TWO`);
+
+      const whole = getText(await grepTool.execute("g2", { pattern: "^TWO$", path: "crlf.txt" }, undefined, undefined, ctx));
+      expect(whole).toContain(`2:│ ${anchorFor(text, "TWO")}│TWO`);
+
+      const first = getText(await grepTool.execute("g3", { pattern: "ONE$", path: "crlf.txt" }, undefined, undefined, ctx));
+      expect(first).toContain(`1:│ ${anchorFor(text, "ONE")}│ONE`);
+    });
+  });
+
+  it("anchors ^ and $ past a byte order mark on a CRLF file", async () => {
+    await withTempFile("bom.txt", "\uFEFFONE\r\nTWO\r\n", async ({ cwd }) => {
+      const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
+      const text = getText((await readTool.execute("r1", { path: "bom.txt" }, undefined, undefined, ctx)) as { content: Array<{ text?: string }> });
+      const head = getText(await getTool("grep").execute("g1", { pattern: "^ONE$", path: "bom.txt" }, undefined, undefined, ctx));
+      expect(head).toContain(`1:│ ${anchorFor(text, "ONE")}│ONE`);
+      const tail = getText(await getTool("grep").execute("g2", { pattern: "TWO$", path: "bom.txt" }, undefined, undefined, ctx));
+      expect(tail).toContain(`2:│ ${anchorFor(text, "TWO")}│TWO`);
+    });
+  });
+
+  it("keeps ^ and $ working on LF files", async () => {
+    await withTempFile("lf.txt", "ONE\nTWO\nTHREE\n", async ({ cwd }) => {
+      const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
+      const text = getText((await readTool.execute("r1", { path: "lf.txt" }, undefined, undefined, ctx)) as { content: Array<{ text?: string }> });
+      const end = getText(await getTool("grep").execute("g1", { pattern: "TWO$", path: "lf.txt" }, undefined, undefined, ctx));
+      expect(end).toContain(`2:│ ${anchorFor(text, "TWO")}│TWO`);
+      const start = getText(await getTool("grep").execute("g2", { pattern: "^THREE", path: "lf.txt" }, undefined, undefined, ctx));
+      expect(start).toContain(`3:│ ${anchorFor(text, "THREE")}│THREE`);
+    });
+  });
+
+  it("attributes matches on lone-CR files to their own lines and anchors", async () => {
+    await withTempFile("cr.txt", "ONE\rTWO\rTHREE\r", async ({ cwd }) => {
+      const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
+      const text = getText((await readTool.execute("r1", { path: "cr.txt" }, undefined, undefined, ctx)) as { content: Array<{ text?: string }> });
+      const second = getText(await getTool("grep").execute("g1", { pattern: "TWO", path: "cr.txt" }, undefined, undefined, ctx));
+      expect(second).toBe(`=== cr.txt ===\n2:│ ${anchorFor(text, "TWO")}│TWO`);
+      const third = getText(await getTool("grep").execute("g2", { pattern: "THREE", path: "cr.txt", context: 1 }, undefined, undefined, ctx));
+      expect(third).toContain(`3:│ ${anchorFor(text, "THREE")}│THREE`);
+      expect(third).toContain(`2-│ ${anchorFor(text, "TWO")}│TWO`);
+    });
+  });
+
+  it("attributes matches in a mixed-ending file to their own lines", async () => {
+    await withTempFile("mixed.txt", "A\r\nB\rC\nD\r\n", async ({ cwd }) => {
+      const { ctx, readTool, getTool } = setupIntegrationTest(cwd);
+      const text = getText((await readTool.execute("r1", { path: "mixed.txt" }, undefined, undefined, ctx)) as { content: Array<{ text?: string }> });
+      const third = getText(await getTool("grep").execute("g1", { pattern: "C", path: "mixed.txt" }, undefined, undefined, ctx));
+      expect(third).toBe(`=== mixed.txt ===\n3:│ ${anchorFor(text, "C")}│C`);
+      const first = getText(await getTool("grep").execute("g2", { pattern: "^A$", path: "mixed.txt" }, undefined, undefined, ctx));
+      expect(first).toContain(`1:│ ${anchorFor(text, "A")}│A`);
+    });
   });
 });

@@ -47,6 +47,25 @@ describe("read tool - offset addressing", () => {
     });
   });
 
+  it("reads a numeric string offset with padding and a sign", async () => {
+    await withTempFile("sample.txt", "l1\nl2\nl3\n", async ({ cwd }) => {
+      const { ctx, readTool } = setupIntegrationTest(cwd);
+      const padded = getText(await readTool.execute("r1", { path: "sample.txt", offset: " 2 ", limit: 1 }, undefined, undefined, ctx));
+      expect(contentRows(padded)).toEqual(["l2"]);
+      const signed = getText(await readTool.execute("r2", { path: "sample.txt", offset: "+3", limit: 1 }, undefined, undefined, ctx));
+      expect(contentRows(signed)).toEqual(["l3"]);
+    });
+  });
+
+  it("reports a negative offset as a bad shape instead of a bad anchor", async () => {
+    await withTempFile("sample.txt", "l1\nl2\n", async ({ cwd }) => {
+      const { ctx, readTool } = setupIntegrationTest(cwd);
+      const message = await toolError(() => readTool.execute("r1", { path: "sample.txt", offset: "-1" }, undefined, undefined, ctx));
+      expect(message).toContain("[E_BAD_SHAPE]");
+      expect(message).not.toContain("[E_BAD_REF]");
+    });
+  });
+
   it("keeps a served anchor readable after an edit elsewhere", async () => {
     await withTempFile("sample.txt", "l1\nl2\nl3\nl4\n", async ({ cwd }) => {
       const { ctx, readTool, editTool } = setupIntegrationTest(cwd);

@@ -204,7 +204,8 @@ export function resolveReadOffset(
 	resolvedPath: string,
 ): number | undefined {
 	if (offset === undefined || typeof offset === "number") return offset;
-	if (/^\d+$/.test(offset)) return Number(offset);
+	const numeric = offset.trim();
+	if (numeric.length > 0 && Number.isFinite(Number(numeric))) return Number(numeric);
 	const ref = parseHashRef(offset);
 	const owner = ownerOf(ref.hash);
 	if (owner === undefined) {

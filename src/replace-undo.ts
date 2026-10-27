@@ -107,6 +107,16 @@ export async function clearUndo(path: string): Promise<void> {
   }
 }
 
+async function targetIsGone(target: string): Promise<boolean> {
+  try {
+    await stat(target);
+    return false;
+  } catch (error) {
+    const code = errCode(error);
+    return code === "ENOENT" || code === "ENOTDIR";
+  }
+}
+
 function fallbackFileMode(): number {
   return 0o666 & ~process.umask();
 }
@@ -149,6 +159,9 @@ export function regUndo(pi: ExtensionAPI, flags: EditToolFlags = DEFAULT_EDIT_FL
 
         const undo = await getUndo(mutationTargetPath);
         if (!undo) {
+          if (await targetIsGone(mutationTargetPath)) {
+            return structuredFailure(new Error(`[E_NOT_FOUND] File not found: ${path}. Nothing was reverted.`), {});
+          }
           return structuredFailure(new Error(`[E_UNDO_NONE] No undo history for ${path}.`), {});
         }
 
