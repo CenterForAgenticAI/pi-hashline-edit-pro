@@ -786,3 +786,180 @@ describe("parseFileImports", () => {
 		]);
 	});
 });
+
+async function outlineRows(displayPath: string, lines: string[], maxDepth?: number): Promise<string[]> {
+	const content = lines.join("\n") + "\n";
+	const hashes = lines.map((_, index) => String(index + 1).padStart(4, "0") + "z");
+	const result = await buildFileOutline({ displayPath, content, hashes, ...(maxDepth !== undefined ? { maxDepth } : {}) });
+	return result.text
+		.split("\n")
+		.slice(1)
+		.map((row) => row.replace(/^(\d{4})z│/, (_, line: string) => `${Number(line)}│`));
+}
+
+describe("buildFileOutline language coverage", () => {
+	it("lists the members of a decorated Python class and module-level names", async () => {
+		const rows = await outlineRows("app.py", [
+			"LIMIT = 10",
+			"type Alias = list[int]",
+			"@dataclass",
+			"class Point:",
+			"    x: int",
+			"    @property",
+			"    def norm(self):",
+			"        return 0",
+			"a, b = 1, 2",
+		]);
+		expect(rows).toEqual([
+			"1│LIMIT = 10",
+			"2│type Alias = list[int]",
+			"4│class Point:",
+			"[limit 5]",
+			"5│    x: int",
+			"7│    def norm(self):",
+			"[limit 2]",
+		]);
+	});
+
+	it("lists JavaScript generators, CommonJS exports, and prototype methods", async () => {
+		const rows = await outlineRows("lib.js", [
+			"function* gen() {}",
+			"export async function* agen() {}",
+			"module.exports = function legacy() {};",
+			"exports.other = () => {};",
+			"Ctor.prototype.method = function () {};",
+			"module.exports.limit = 1;",
+			"foo.bar = 2;",
+		]);
+		expect(rows).toEqual([
+			"1│function* gen() {}",
+			"2│export async function* agen() {}",
+			"3│module.exports = function legacy() {};",
+			"4│exports.other = () => {};",
+			"5│Ctor.prototype.method = function () {};",
+			"6│module.exports.limit = 1;",
+		]);
+	});
+
+	it("lists TypeScript namespaces, ambient declarations, fields, and members", async () => {
+		const rows = await outlineRows("types.ts", [
+			"namespace A {",
+			"  export function f() {}",
+			"}",
+			"declare module \"foo\" {",
+			"  export function bar(): void;",
+			"}",
+			"declare global {",
+			"  interface Window {",
+			"    x: number;",
+			"  }",
+			"}",
+			"export abstract class K {",
+			"  static N = 1;",
+			"  @Input() name: string;",
+			"  abstract run(): void;",
+			"}",
+			"enum E {",
+			"  Red,",
+			"  Green = \"g\",",
+			"}",
+		]);
+		expect(rows).toEqual([
+			"1│namespace A {",
+			"[limit 3]",
+			"2│  export function f() {}",
+			"4│declare module \"foo\" {",
+			"[limit 3]",
+			"5│  export function bar(): void;",
+			"7│declare global {",
+			"[limit 5]",
+			"8│  interface Window {",
+			"[limit 3]",
+			"9│    x: number;",
+			"12│export abstract class K {",
+			"[limit 5]",
+			"13│  static N = 1;",
+			"14│  @Input() name: string;",
+			"15│  abstract run(): void;",
+			"17│enum E {",
+			"[limit 4]",
+			"18│  Red,",
+			"19│  Green = \"g\",",
+		]);
+	});
+
+	it("lists Rust modules, fields, variants, trait items, statics, and extern blocks", async () => {
+		const rows = await outlineRows("lib.rs", [
+			"struct P {",
+			"    pub x: i32,",
+			"}",
+			"enum S {",
+			"    A { r: f64 },",
+			"    B(f64),",
+			"}",
+			"trait Area {",
+			"    fn area(&self) -> f64;",
+			"    type Out;",
+			"}",
+			"#[cfg(test)]",
+			"mod tests {",
+			"    fn it_works() {}",
+			"}",
+			"pub mod decl;",
+			"static NAME: &str = \"x\";",
+			"extern \"C\" {",
+			"    fn c_func();",
+			"}",
+		]);
+		expect(rows).toEqual([
+			"1│struct P {",
+			"[limit 3]",
+			"2│    pub x: i32,",
+			"4│enum S {",
+			"[limit 4]",
+			"5│    A { r: f64 },",
+			"6│    B(f64),",
+			"8│trait Area {",
+			"[limit 4]",
+			"9│    fn area(&self) -> f64;",
+			"10│    type Out;",
+			"13│mod tests {",
+			"[limit 3]",
+			"14│    fn it_works() {}",
+			"16│pub mod decl;",
+			"17│static NAME: &str = \"x\";",
+			"18│extern \"C\" {",
+			"[limit 3]",
+			"19│    fn c_func();",
+		]);
+	});
+
+	it("reads Markdown headings outside code and front matter, including setext headings", async () => {
+		const rows = await outlineRows("doc.md", [
+			"---",
+			"title: x",
+			"---",
+			"Title",
+			"=====",
+			"```bash",
+			"# not a heading",
+			"```",
+			"~~~~",
+			"## also not",
+			"~~~~",
+			"Sub",
+			"---",
+			"    # indented code",
+			"## Last",
+			"text",
+		]);
+		expect(rows).toEqual([
+			"4│Title",
+			"[limit 13]",
+			"12│Sub",
+			"[limit 3]",
+			"15│## Last",
+			"[limit 2]",
+		]);
+	});
+});
