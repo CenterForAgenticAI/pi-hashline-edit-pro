@@ -78,7 +78,7 @@ function extractSassChild(
           name: varName,
           type: "variable",
           startLine: child.startPosition.row + 1,
-          endLine: child.endPosition.row + 1,
+          endLine: endLineOf(child, source),
         };
       }
       return null;
@@ -105,7 +105,7 @@ function extractNamedBlock(
     }
   }
 
-  const [sl, el] = [child.startPosition.row + 1, child.endPosition.row + 1];
+  const [sl, el] = [child.startPosition.row + 1, endLineOf(child, source)];
   const symbol: SymbolInfo = {
     name,
     type: label,
@@ -135,7 +135,7 @@ function extractRuleSet(
     ? source.slice(selectors.startIndex, selectors.endIndex).trim()
     : "<unknown>";
 
-  const [sl, el] = [child.startPosition.row + 1, child.endPosition.row + 1];
+  const [sl, el] = [child.startPosition.row + 1, endLineOf(child, source)];
   const symbol: SymbolInfo = {
     name,
     // `%placeholder` selectors get their own type.
@@ -163,7 +163,7 @@ function extractAtBlock(
   nameOf: (node: Node, source: string) => string,
 ): SymbolInfo | null {
   const name = nameOf(child, source);
-  const [sl, el] = [child.startPosition.row + 1, child.endPosition.row + 1];
+  const [sl, el] = [child.startPosition.row + 1, endLineOf(child, source)];
   const symbol: SymbolInfo = {
     name,
     type: "at-rule",
@@ -198,7 +198,7 @@ function extractKeyframes(
   const nameNode = findChildByType(child, ["keyframes_name"]);
   if (nameNode) name = source.slice(nameNode.startIndex, nameNode.endIndex);
 
-  const [sl, el] = [child.startPosition.row + 1, child.endPosition.row + 1];
+  const [sl, el] = [child.startPosition.row + 1, endLineOf(child, source)];
   const symbol: SymbolInfo = {
     name: `@keyframes ${name}`,
     type: "keyframes",
@@ -222,7 +222,7 @@ function extractKeyframes(
             name: stepText,
             type: "keyframe",
             startLine: kb.startPosition.row + 1,
-            endLine: kb.endPosition.row + 1,
+            endLine: endLineOf(kb, source),
           });
         }
       }
@@ -273,7 +273,7 @@ function extractBlockChildren(
             name: varName,
             type: "variable",
             startLine: child.startPosition.row + 1,
-            endLine: child.endPosition.row + 1,
+            endLine: endLineOf(child, source),
           });
         }
         break;
@@ -300,7 +300,7 @@ function extractInclude(child: Node, source: string): SymbolInfo | null {
     name: `@include ${name}`,
     type: "include",
     startLine: child.startPosition.row + 1,
-    endLine: child.endPosition.row + 1,
+    endLine: endLineOf(child, source),
   };
 }
 
@@ -325,7 +325,7 @@ function extractExtend(child: Node, source: string): SymbolInfo | null {
     name: `@extend ${target}`,
     type: "extend",
     startLine: child.startPosition.row + 1,
-    endLine: child.endPosition.row + 1,
+    endLine: endLineOf(child, source),
   };
 }
 
@@ -380,6 +380,12 @@ function stripQuotes(s: string): string {
 }
 
 // ---- Shared helpers ----
+
+/** The indented grammar includes trailing whitespace and sometimes the next line's indent. */
+function endLineOf(node: Node, source: string): number {
+  const text = source.slice(node.startIndex, node.endIndex).trimEnd();
+  return node.startPosition.row + 1 + (text.match(/\n/g)?.length ?? 0);
+}
 
 function findChildByType(node: Node, types: string[]): Node | null {
   for (let i = 0; i < node.namedChildCount; i++) {

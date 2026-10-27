@@ -67,6 +67,24 @@ describe("applyEdit - recovery scenarios", () => {
     expect(caught!.message).toContain(` 1: ${hashes[0]}│a`);
   });
 
+  it("does not serve a context row that it shows clipped", async () => {
+    const long = "x".repeat(260);
+    const content = `a\n${long}\nc`;
+    const hashes = await lineHashes(content, home.testPath);
+    let caught: (Error & { feedbackHashes?: string[] }) | undefined;
+    try {
+      applyEdit(content, resEdit(
+        { remove_from: "pybyx",
+        remove_to: hashes[0]!, text: ["X"] },
+      ), undefined, hashes);
+    } catch (error) {
+      caught = error as Error & { feedbackHashes?: string[] };
+    }
+    expect(caught!.message).toContain(` 2: ${hashes[1]}│${"x".repeat(200)}...`);
+    expect(caught!.feedbackHashes).toContain(hashes[0]);
+    expect(caught!.feedbackHashes).not.toContain(hashes[1]);
+  });
+
   it("omits context when both anchors are stale", async () => {
     const content = "a\nb\nc";
     const hashes = await lineHashes(content, home.testPath);

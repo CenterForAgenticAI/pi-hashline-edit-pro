@@ -88,7 +88,7 @@ export const AUTO_READ_ALL_EXCLUDED_NAMES = [
 ];
 const EXCLUDED_NAME_SET = new Set(AUTO_READ_ALL_EXCLUDED_NAMES);
 const EXCLUDED_SEGMENT_SET = new Set(AUTO_READ_ALL_EXCLUDED_SEGMENTS);
-function isExcludedBySegment(path: string): boolean {
+export function isExcludedBySegment(path: string): boolean {
   const lower = path.toLowerCase();
   const vendorViews = lower.startsWith("resources/views/vendor/");
   for (const segment of lower.split("/")) {
@@ -103,7 +103,7 @@ const EXCLUDED_PATTERN_SUFFIXES = [
 ];
 const EXCLUDED_PATTERN_INFIXES = [".bundle.", ".chunk.", ".generated.", ".gen."];
 
-function isExcludedByPattern(baseLower: string): boolean {
+export function isExcludedByPattern(baseLower: string): boolean {
   return EXCLUDED_PATTERN_SUFFIXES.some((suffix) => baseLower.endsWith(suffix))
     || EXCLUDED_PATTERN_INFIXES.some((infix) => baseLower.includes(infix))
     || baseLower.startsWith("coreui-icons.")
@@ -256,7 +256,7 @@ const GLOB_CHARS_RE = /[*?[\]{}]/;
 const GLOB_CACHE_LIMIT = 256;
 const globRegexCache = new Map<string, RegExp | null>();
 
-function globRegexFor(entry: string): RegExp | null {
+export function globRegexFor(entry: string): RegExp | null {
   const cached = globRegexCache.get(entry);
   if (cached !== undefined) return cached;
   let compiled: RegExp | null;
@@ -354,7 +354,7 @@ function runCommand(command: string, args: string[], cwd: string): Promise<{ std
   });
 }
 
-async function listFromGit(cwd: string): Promise<string[] | undefined> {
+export async function listFromGit(cwd: string): Promise<string[] | undefined> {
   const result = await runCommand("git", ["ls-files", "-z", "--cached", "--others", "--exclude-standard"], cwd);
   if (result.code !== 0) return undefined;
   return result.stdout.split("\0").filter((entry) => entry.length > 0);
@@ -403,7 +403,7 @@ async function listFromRg(cwd: string): Promise<string[] | undefined> {
   return result.stdout.split("\0").filter((entry) => entry.length > 0);
 }
 
-async function walkDir(dir: string, base: string, out: string[], customIgnore: readonly string[] = []): Promise<void> {
+export async function walkDir(dir: string, base: string, out: string[], customIgnore: readonly string[] = []): Promise<void> {
   let entries;
   try {
     entries = await readdir(dir, { withFileTypes: true });

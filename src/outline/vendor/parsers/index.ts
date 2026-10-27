@@ -21,6 +21,7 @@ export interface ParseFileResult {
   symbols: SymbolInfo[];
   language: string | null;
   languageName: string;
+  hasError?: boolean;
 }
 
 /**
@@ -38,8 +39,8 @@ export async function parseSourceFile(
   }
 
   try {
-    const symbols = await parseCode(lang, content);
-    return { symbols, language: lang, languageName: languageLabel(lang) };
+    const { symbols, hasError } = await parseCode(lang, content);
+    return { symbols, language: lang, languageName: languageLabel(lang), hasError };
   } catch (err) {
     console.warn(
       `[codebase-reader] Parse failed for ${filePath}:`,

@@ -170,10 +170,10 @@ export function languageLabel(key: string): string {
 export async function parseCode(
   key: string,
   source: string,
-): Promise<SymbolInfo[]> {
+): Promise<{ symbols: SymbolInfo[]; hasError: boolean }> {
   // Markdown uses regex-based parsing, not tree-sitter
   if (key === "markdown") {
-    return extractMarkdown(source);
+    return { symbols: extractMarkdown(source), hasError: false };
   }
 
   await ensureInit();
@@ -183,9 +183,9 @@ export async function parseCode(
 
   sharedParser.setLanguage(lang);
   const tree = sharedParser.parse(source);
-  if (!tree) return [];
+  if (!tree) return { symbols: [], hasError: false };
 
-  return extractSymbols(key, tree.rootNode, source, 0);
+  return { symbols: extractSymbols(key, tree.rootNode, source, 0), hasError: tree.rootNode.hasError };
 }
 
 // ---- Symbol extraction dispatch ----
@@ -275,33 +275,16 @@ function extractJavaScriptLike(
     const child = node.namedChild(i);
     if (!child) continue;
 
-    const symbol = extractJSChild(child, source);
+    const symbol = extractJSChild(child, source) ?? (node.type === "program" ? commonJsExportSymbol(child, source) : null);
     if (!symbol) continue;
 
-    const declaration =
-      child.type === "export_statement"
-        ? findChildByType(child, [
-            "class_declaration",
-            "class",
-            "abstract_class_declaration",
-            "interface_declaration",
-            "enum_declaration",
-          ]) ?? child
-        : child;
-
-    // For class/interface/enum, look inside their bodies
-    if (
-      symbol.type === "class" ||
-      symbol.type === "interface" ||
-      symbol.type === "enum"
-    ) {
-      const bodyNode = findChildByType(declaration, [
-        "class_body",
-        "interface_body",
-        "enum_body",
-        "object_type",
-      ]);
-      if (bodyNode && depth < MAX_DEPTH) {
+    // Look inside the bodies of container declarations
+    if (JS_CONTAINER_TYPES.has(symbol.type ?? "") && depth < MAX_DEPTH) {
+      const declaration = jsDeclarationNode(child);
+      const bodyNode =
+        declaration.childForFieldName("body") ??
+        findChildByType(declaration, ["class_body", "interface_body", "enum_body", "object_type", "statement_block"]);
+      if (bodyNode) {
         symbol.children = extractJavaScriptLike(bodyNode, source, depth + 1);
       }
     }
@@ -312,23 +295,60 @@ function extractJavaScriptLike(
   return results;
 }
 
+const JS_CONTAINER_TYPES = new Set(["class", "interface", "enum", "namespace"]);
+
+/** Unwrap `export`, `declare` and the expression statement TypeScript puts around `namespace`. */
+function jsDeclarationNode(child: Node): Node {
+  if (child.type === "export_statement" || child.type === "ambient_declaration" || child.type === "expression_statement") {
+    const inner = child.namedChildren.find((c) => c.type !== "decorator" && c.type !== "comment");
+    if (inner && inner.type !== "statement_block") return jsDeclarationNode(inner);
+  }
+  return child;
+}
+
 const JS_SYMBOL_TYPES: Record<string, string> = {
   function_declaration: "function",
+  generator_function_declaration: "function",
+  function_signature: "function",
   function_expression: "function",
   arrow_function: "arrow_function",
   method_definition: "method",
+  method_signature: "method",
+  abstract_method_signature: "method",
   class_declaration: "class",
   class: "class",
   interface_declaration: "interface",
   enum_declaration: "enum",
+  enum_assignment: "enum_member",
   type_alias_declaration: "type",
   abstract_class_declaration: "class",
+  internal_module: "namespace",
+  module: "namespace",
+  public_field_definition: "field",
+  field_definition: "field",
+  property_signature: "field",
   lexical_declaration: "variable",
   variable_declaration: "variable",
 };
 
 function isFunctionNode(node: Node): boolean {
-  return node.type === "arrow_function" || node.type === "function_expression" || node.type === "function";
+  return node.type === "arrow_function" || node.type === "function_expression" || node.type === "function" || node.type === "generator_function";
+}
+
+const COMMONJS_TARGET = /^(module\.exports(\.[\w$]+)?|exports\.[\w$]+|[\w$]+\.prototype\.[\w$]+)$/;
+
+/** Top-level `module.exports = ...`, `exports.x = ...` and `Foo.prototype.m = ...`. */
+function commonJsExportSymbol(child: Node, source: string): SymbolInfo | null {
+  if (child.type !== "expression_statement") return null;
+  const expr = child.namedChild(0);
+  if (!expr || expr.type !== "assignment_expression") return null;
+  const left = expr.childForFieldName("left");
+  const right = expr.childForFieldName("right");
+  if (!left || left.type !== "member_expression") return null;
+  const name = source.slice(left.startIndex, left.endIndex);
+  if (!COMMONJS_TARGET.test(name)) return null;
+  const [sl, el] = nodeRange(child);
+  return { name, type: right && isFunctionNode(right) ? "function" : "variable", startLine: sl, endLine: el };
 }
 
 function extractJSChild(
@@ -389,6 +409,10 @@ function extractJSChild(
         const result = extractJSChild(inner, source);
         if (result) {
           if (isDefault && result.name === "<anonymous>") result.name = "default";
+          const [sl, el] = nodeRange(child);
+          // Keep the row on the `export` line when the declaration starts there.
+          if (inner.type === "expression_statement" && result.startLine > sl) result.startLine = sl;
+          if (result.endLine < el && inner.type === "expression_statement") result.endLine = el;
           return result;
         }
       }
@@ -396,18 +420,50 @@ function extractJSChild(
     return null;
   }
 
-  if (type === "expression_statement") return testCallSymbol(child, source);
+  // `declare module "x" {}`, `declare function f(): void;`, `declare global {}`
+  if (type === "ambient_declaration") {
+    const inner = child.namedChildren.find((c) => c.type !== "comment");
+    if (!inner) return null;
+    const [sl, el] = nodeRange(child);
+    if (inner.type === "statement_block") return { name: "global", type: "namespace", startLine: sl, endLine: el };
+    const result = extractJSChild(inner, source);
+    if (result) {
+      result.startLine = sl;
+      result.endLine = el;
+    }
+    return result;
+  }
+
+  if (type === "expression_statement") {
+    const inner = child.namedChild(0);
+    if (inner?.type === "internal_module") {
+      const result = extractJSChild(inner, source);
+      if (result) [result.startLine, result.endLine] = nodeRange(child);
+      return result;
+    }
+    return testCallSymbol(child, source);
+  }
+
+  // Bare enum members: `enum E { Red, Green }`
+  if (type === "property_identifier" && child.parent?.type === "enum_body") {
+    const [sl, el] = nodeRange(child);
+    return { name: source.slice(child.startIndex, child.endIndex), type: "enum_member", startLine: sl, endLine: el };
+  }
 
   const symbolType = JS_SYMBOL_TYPES[type];
   if (!symbolType) return null;
 
   const name =
     fieldChildText(child, "name", source) ||
+    fieldChildText(child, "property", source) ||
     childText(child, "property_identifier", source) ||
     childText(child, "type_identifier", source) ||
     "<anonymous>";
 
-  const [sl, el] = nodeRange(child);
+  // Decorators on their own lines are children of fields and non-exported classes; start at the declaration.
+  const declarationStart = child.children.find((part) => part.type !== "decorator" && part.type !== "comment");
+  const [, el] = nodeRange(child);
+  const sl = (declarationStart ?? child).startPosition.row + 1;
 
   return { name, type: symbolType, startLine: sl, endLine: el };
 }
@@ -477,30 +533,15 @@ function extractPython(
 
     let symbol: SymbolInfo | null = null;
 
-    if (child.type === "class_definition") {
-      const name = fieldChildText(child, "name", source) || "<anonymous>";
-      const [sl, el] = nodeRange(child);
-      symbol = { name, type: "class", startLine: sl, endLine: el };
-
-      // Recurse into body for methods
-      const body = child.childForFieldName("body");
-      if (body && depth < MAX_DEPTH) {
-        symbol.children = extractPython(body, source, depth + 1);
-      }
-    } else if (child.type === "function_definition") {
-      const name = fieldChildText(child, "name", source) || "<anonymous>";
-      const [sl, el] = nodeRange(child);
-      symbol = { name, type: "function", startLine: sl, endLine: el };
-    } else if (child.type === "decorated_definition") {
-      // Unwrap to the inner definition
-      const def = child.namedChild(child.namedChildCount - 1);
-      if (def) {
-        const inner = extractPythonSingle(def, source);
-        if (inner) {
-          inner.type = "decorated_" + inner.type;
-          symbol = inner;
-        }
-      }
+    if (child.type === "decorated_definition") {
+      // The row and span start at the definition line; the decorators above it are excluded.
+      const def = child.childForFieldName("definition");
+      symbol = def ? extractPythonDefinition(def, source, depth, MAX_DEPTH) : null;
+      if (symbol) symbol.type = "decorated_" + symbol.type;
+    } else if (child.type === "expression_statement" || child.type === "type_alias_statement") {
+      symbol = extractPythonAssignment(child, source);
+    } else {
+      symbol = extractPythonDefinition(child, source, depth, MAX_DEPTH);
     }
 
     if (symbol) results.push(symbol);
@@ -509,14 +550,21 @@ function extractPython(
   return results;
 }
 
-function extractPythonSingle(
+function extractPythonDefinition(
   child: Node,
   source: string,
+  depth: number,
+  maxDepth: number,
 ): SymbolInfo | null {
   if (child.type === "class_definition") {
     const name = fieldChildText(child, "name", source) || "<anonymous>";
     const [sl, el] = nodeRange(child);
-    return { name, type: "class", startLine: sl, endLine: el };
+    const symbol: SymbolInfo = { name, type: "class", startLine: sl, endLine: el };
+    const body = child.childForFieldName("body");
+    if (body && depth < maxDepth) {
+      symbol.children = extractPython(body, source, depth + 1);
+    }
+    return symbol;
   }
   if (child.type === "function_definition") {
     const name = fieldChildText(child, "name", source) || "<anonymous>";
@@ -524,6 +572,20 @@ function extractPythonSingle(
     return { name, type: "function", startLine: sl, endLine: el };
   }
   return null;
+}
+
+/** `NAME = ...`, `NAME: T = ...` and `type NAME = ...` at module or class level; other targets are skipped. */
+function extractPythonAssignment(child: Node, source: string): SymbolInfo | null {
+  const [sl, el] = nodeRange(child);
+  if (child.type === "type_alias_statement") {
+    const left = child.namedChild(0);
+    return left ? { name: source.slice(left.startIndex, left.endIndex), type: "type", startLine: sl, endLine: el } : null;
+  }
+  const assignment = child.namedChild(0);
+  if (!assignment || assignment.type !== "assignment") return null;
+  const left = assignment.childForFieldName("left");
+  if (!left || left.type !== "identifier") return null;
+  return { name: source.slice(left.startIndex, left.endIndex), type: "variable", startLine: sl, endLine: el };
 }
 
 // ========================================================================
@@ -562,7 +624,7 @@ function extractGo(
       const specs: SymbolInfo[] = [];
       for (let j = 0; j < child.namedChildCount; j++) {
         const spec = child.namedChild(j);
-        if (!spec || spec.type !== "type_spec") continue;
+        if (!spec || (spec.type !== "type_spec" && spec.type !== "type_alias")) continue;
         const name = fieldChildText(spec, "name", source) || "<anonymous>";
         const [sl, el] = nodeRange(spec);
         const typeNode = spec.childForFieldName("type");
@@ -575,60 +637,62 @@ function extractGo(
 
         // Recurse into struct/interface body
         if (typeNode && depth < MAX_DEPTH) {
-          const body = findChildByType(typeNode, [
-            "field_declaration_list",
-          ]);
+          const body = typeNode.type === "interface_type"
+            ? typeNode
+            : findChildByType(typeNode, ["field_declaration_list"]);
           if (body) {
-            entry.children = extractGoFields(body, source);
+            const fields = extractGoFields(body, source);
+            if (fields.length > 0) entry.children = fields;
           }
         }
 
         specs.push(entry);
       }
-      if (specs.length === 1) {
+      if (child.children.some((part) => part.type === "(")) {
+        const [sl, el] = nodeRange(child);
+        symbol = { name: "type", type: "type", startLine: sl, endLine: el, children: specs };
+      } else if (specs.length === 1) {
         symbol = specs[0];
-      } else if (specs.length > 1) {
-        symbol = {
-          name: "",
-          type: "type",
-          startLine: specs[0].startLine,
-          endLine: specs[specs.length - 1].endLine,
-          children: specs,
-        };
       }
       if (symbol) results.push(symbol);
       continue;
     } else if (child.type === "const_declaration") {
       const [sl, el] = nodeRange(child);
-      const names: string[] = [];
+      const specs: SymbolInfo[] = [];
       for (let j = 0; j < child.namedChildCount; j++) {
         const spec = child.namedChild(j);
-        if (spec && spec.type === "const_spec") {
-          const n = fieldChildText(spec, "name", source);
-          if (n) names.push(n);
-        }
+        if (!spec || spec.type !== "const_spec") continue;
+        const name = fieldChildText(spec, "name", source) || "<anonymous>";
+        const [specStart, specEnd] = nodeRange(spec);
+        specs.push({ name, type: "const", startLine: specStart, endLine: specEnd });
       }
+      const grouped = child.children.some((part) => part.type === "(");
       symbol = {
-        name: names.join(", ") || "const",
+        name: grouped ? "const" : specs.map((spec) => spec.name).join(", ") || "const",
         type: "const",
         startLine: sl,
         endLine: el,
+        ...(grouped ? { children: specs } : {}),
       };
     } else if (child.type === "var_declaration") {
       const [sl, el] = nodeRange(child);
-      const names: string[] = [];
-      for (let j = 0; j < child.namedChildCount; j++) {
-        const spec = child.namedChild(j);
-        if (spec && spec.type === "var_spec") {
-          const n = fieldChildText(spec, "name", source);
-          if (n) names.push(n);
-        }
+      const specs: SymbolInfo[] = [];
+      const list = findChildByType(child, ["var_spec_list"]);
+      const container = list ?? child;
+      for (let j = 0; j < container.namedChildCount; j++) {
+        const spec = container.namedChild(j);
+        if (!spec || spec.type !== "var_spec") continue;
+        const name = fieldChildText(spec, "name", source) || "<anonymous>";
+        const [specStart, specEnd] = nodeRange(spec);
+        specs.push({ name, type: "var", startLine: specStart, endLine: specEnd });
       }
+      const grouped = list !== null;
       symbol = {
-        name: names.join(", ") || "var",
+        name: grouped ? "var" : specs.map((spec) => spec.name).join(", ") || "var",
         type: "var",
         startLine: sl,
         endLine: el,
+        ...(grouped ? { children: specs } : {}),
       };
     }
 
@@ -646,14 +710,16 @@ function extractGoFields(
 
   for (let i = 0; i < node.namedChildCount; i++) {
     const child = node.namedChild(i);
-    if (!child || child.type !== "field_declaration") continue;
+    if (!child || !["field_declaration", "method_elem", "type_elem"].includes(child.type)) continue;
 
-    const name = fieldChildText(child, "name", source);
+    const first = child.namedChild(0);
+    const name = fieldChildText(child, "name", source) ||
+      (first ? source.slice(first.startIndex, first.endIndex) : "");
     if (!name) continue;
     const [sl, el] = nodeRange(child);
     results.push({
       name,
-      type: "field",
+      type: child.type === "method_elem" ? "method" : "field",
       startLine: sl,
       endLine: el,
     });
@@ -670,6 +736,7 @@ function extractRust(
   node: Node,
   source: string,
   depth: number,
+  inImplOrTrait = false,
 ): SymbolInfo[] {
   const results: SymbolInfo[] = [];
   const MAX_DEPTH = depth + 10;
@@ -678,88 +745,77 @@ function extractRust(
     const child = node.namedChild(i);
     if (!child) continue;
 
+    const [sl, el] = nodeRange(child);
+    const name = fieldChildText(child, "name", source) || "<anonymous>";
     let symbol: SymbolInfo | null = null;
+    // Body whose items become children, and whether its functions are methods.
+    let body: Node | null = null;
+    let bodyIsImplOrTrait = false;
 
-    if (child.type === "function_item") {
-      const name = fieldChildText(child, "name", source) || "<anonymous>";
-      const [sl, el] = nodeRange(child);
-      symbol = { name, type: "function", startLine: sl, endLine: el };
-    } else if (child.type === "struct_item") {
-      const name = fieldChildText(child, "name", source) || "<anonymous>";
-      const [sl, el] = nodeRange(child);
-      symbol = { name, type: "struct", startLine: sl, endLine: el };
-    } else if (child.type === "enum_item") {
-      const name = fieldChildText(child, "name", source) || "<anonymous>";
-      const [sl, el] = nodeRange(child);
-      symbol = { name, type: "enum", startLine: sl, endLine: el };
-    } else if (child.type === "trait_item") {
-      const name = fieldChildText(child, "name", source) || "<anonymous>";
-      const [sl, el] = nodeRange(child);
-      symbol = { name, type: "trait", startLine: sl, endLine: el };
-    } else if (child.type === "impl_item") {
-      const trait = child.childForFieldName("trait");
-      const implType = child.childForFieldName("type");
-      const traitStr = trait
-        ? source.slice(trait.startIndex, trait.endIndex) + " for "
-        : "";
-      const typeStr = implType
-        ? source.slice(implType.startIndex, implType.endIndex)
-        : "";
-      const [sl, el] = nodeRange(child);
-      const name = `impl ${traitStr}${typeStr}`;
-      symbol = { name, type: "impl", startLine: sl, endLine: el };
-
-      // Recurse into body for associated functions/methods
-      const body = child.childForFieldName("body");
-      if (body && depth < MAX_DEPTH) {
-        symbol.children = extractRustImplBody(body, source);
+    switch (child.type) {
+      case "function_item":
+      case "function_signature_item":
+        symbol = { name, type: inImplOrTrait ? "method" : "function", startLine: sl, endLine: el };
+        break;
+      case "struct_item":
+      case "union_item":
+        symbol = { name, type: child.type === "struct_item" ? "struct" : "union", startLine: sl, endLine: el };
+        body = child.childForFieldName("body");
+        break;
+      case "enum_item":
+        symbol = { name, type: "enum", startLine: sl, endLine: el };
+        body = child.childForFieldName("body");
+        break;
+      case "field_declaration":
+        symbol = { name, type: "field", startLine: sl, endLine: el };
+        break;
+      case "enum_variant":
+        symbol = { name, type: "enum_variant", startLine: sl, endLine: el };
+        break;
+      case "trait_item":
+        symbol = { name, type: "trait", startLine: sl, endLine: el };
+        body = child.childForFieldName("body");
+        bodyIsImplOrTrait = true;
+        break;
+      case "impl_item": {
+        const trait = child.childForFieldName("trait");
+        const implType = child.childForFieldName("type");
+        const traitStr = trait ? source.slice(trait.startIndex, trait.endIndex) + " for " : "";
+        const typeStr = implType ? source.slice(implType.startIndex, implType.endIndex) : "";
+        symbol = { name: `impl ${traitStr}${typeStr}`, type: "impl", startLine: sl, endLine: el };
+        body = child.childForFieldName("body");
+        bodyIsImplOrTrait = true;
+        break;
       }
-    } else if (child.type === "type_item") {
-      const name = fieldChildText(child, "name", source) || "<anonymous>";
-      const [sl, el] = nodeRange(child);
-      symbol = { name, type: "type", startLine: sl, endLine: el };
-    } else if (child.type === "const_item") {
-      const name = fieldChildText(child, "name", source) || "<anonymous>";
-      const [sl, el] = nodeRange(child);
-      symbol = { name, type: "const", startLine: sl, endLine: el };
-    } else if (child.type === "macro_definition") {
-      const name = fieldChildText(child, "name", source) || "<anonymous>";
-      const [sl, el] = nodeRange(child);
-      symbol = { name: `${name}!`, type: "macro", startLine: sl, endLine: el };
+      case "mod_item":
+        symbol = { name, type: "module", startLine: sl, endLine: el };
+        body = child.childForFieldName("body");
+        break;
+      case "foreign_mod_item": {
+        const modifier = findChildByType(child, ["extern_modifier"]);
+        symbol = { name: modifier ? source.slice(modifier.startIndex, modifier.endIndex) : "extern", type: "extern", startLine: sl, endLine: el };
+        body = child.childForFieldName("body") ?? findChildByType(child, ["declaration_list"]);
+        break;
+      }
+      case "type_item":
+      case "associated_type":
+        symbol = { name, type: "type", startLine: sl, endLine: el };
+        break;
+      case "const_item":
+        symbol = { name, type: "const", startLine: sl, endLine: el };
+        break;
+      case "static_item":
+        symbol = { name, type: "static", startLine: sl, endLine: el };
+        break;
+      case "macro_definition":
+        symbol = { name: `${name}!`, type: "macro", startLine: sl, endLine: el };
+        break;
     }
 
-    if (symbol) results.push(symbol);
-  }
-
-  return results;
-}
-
-function extractRustImplBody(
-  node: Node,
-  source: string,
-): SymbolInfo[] {
-  const results: SymbolInfo[] = [];
-
-  for (let i = 0; i < node.namedChildCount; i++) {
-    const child = node.namedChild(i);
-    if (!child) continue;
-
-    let symbol: SymbolInfo | null = null;
-
-    if (child.type === "function_item") {
-      const name = fieldChildText(child, "name", source) || "<anonymous>";
-      const [sl, el] = nodeRange(child);
-      symbol = { name, type: "method", startLine: sl, endLine: el };
-    } else if (child.type === "const_item") {
-      const name = fieldChildText(child, "name", source) || "<anonymous>";
-      const [sl, el] = nodeRange(child);
-      symbol = { name, type: "const", startLine: sl, endLine: el };
-    } else if (child.type === "type_item") {
-      const name = fieldChildText(child, "name", source) || "<anonymous>";
-      const [sl, el] = nodeRange(child);
-      symbol = { name, type: "type", startLine: sl, endLine: el };
+    if (symbol && body && depth < MAX_DEPTH) {
+      const children = extractRust(body, source, depth + 1, bodyIsImplOrTrait);
+      if (children.length > 0) symbol.children = children;
     }
-
     if (symbol) results.push(symbol);
   }
 
@@ -1352,84 +1408,72 @@ function extractSolidityImports(node: Node, source: string): ImportInfo[] {
  */
 function extractMarkdown(source: string): SymbolInfo[] {
   const lines = source.split("\n");
+  // A trailing newline does not start another line.
+  if (lines.length > 0 && lines[lines.length - 1] === "") lines.pop();
   const results: SymbolInfo[] = [];
-  
+
   // Track heading hierarchy for nesting
   const stack: SymbolInfo[] = [];
-  
-  // First pass: extract headings and build hierarchy
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    const headingMatch = line.match(/^(#{1,6})\s+(.+)$/);
-    
-    if (headingMatch) {
-      const level = headingMatch[1].length;
-      const title = headingMatch[2].trim();
-      const startLine = i + 1; // 1-indexed
-      
-      const symbol: SymbolInfo = {
-        name: title,
-        type: `heading${level}`,
-        startLine,
-        endLine: lines.length, // Will be updated later
-        children: [],
-      };
-      
-      // Find parent: pop stack until we find a heading with lower level
-      while (stack.length > 0) {
-        const parentLevel = parseInt(stack[stack.length - 1].type?.replace('heading', '') || '0', 10);
-        if (parentLevel >= level) {
-          stack.pop();
-        } else {
-          break;
-        }
-      }
-      
-      // Add to parent or root
-      if (stack.length > 0) {
-        stack[stack.length - 1].children!.push(symbol);
-      } else {
-        results.push(symbol);
-      }
-      
-      stack.push(symbol);
+  const addHeading = (level: number, title: string, startLine: number): void => {
+    const symbol: SymbolInfo = { name: title, type: `heading${level}`, startLine, endLine: lines.length, children: [] };
+    while (stack.length > 0 && parseInt(stack[stack.length - 1].type?.replace("heading", "") || "0", 10) >= level) {
+      stack.pop();
     }
+    if (stack.length > 0) stack[stack.length - 1].children!.push(symbol);
+    else results.push(symbol);
+    stack.push(symbol);
+  };
+
+  let fence: { char: string; length: number } | null = null;
+  // Whether the previous line is paragraph text that a setext underline can turn into a heading.
+  let paragraph = false;
+  let i = 0;
+
+  if (lines[0]?.trim() === "---") {
+    const close = lines.findIndex((line, index) => index > 0 && (line.trim() === "---" || line.trim() === "..."));
+    const first = close === -1 ? undefined : lines.slice(1, close).find((line) => {
+      const trimmed = line.trim();
+      return trimmed.length > 0 && !trimmed.startsWith("#");
+    });
+    if (first !== undefined && /^[A-Za-z0-9_.-]+\s*:/.test(first.trim())) i = close + 1;
   }
-  
+
+  for (; i < lines.length; i++) {
+    const line = lines[i];
+
+    if (fence) {
+      const close = line.match(/^ {0,3}(`{3,}|~{3,})\s*$/);
+      if (close && close[1][0] === fence.char && close[1].length >= fence.length) fence = null;
+      continue;
+    }
+    const open = line.match(/^ {0,3}(`{3,}|~{3,})/);
+    if (open) {
+      fence = { char: open[1][0], length: open[1].length };
+      paragraph = false;
+      continue;
+    }
+
+    const atx = line.match(/^ {0,3}(#{1,6})[ \t]+(.*?)(?:[ \t]+#+)?[ \t]*$/);
+    if (atx && atx[2].length > 0) {
+      addHeading(atx[1].length, atx[2].trim(), i + 1);
+      paragraph = false;
+      continue;
+    }
+
+    const setext = paragraph ? line.match(/^ {0,3}(=+|-+)[ \t]*$/) : null;
+    if (setext) {
+      addHeading(setext[1][0] === "=" ? 1 : 2, lines[i - 1].trim(), i);
+      paragraph = false;
+      continue;
+    }
+
+    // Blank lines, indented code, quotes, list items and thematic breaks are not setext paragraph text.
+    paragraph = line.trim() !== "" && !/^( {4}|\t| {0,3}(>|[-*+][ \t]|\d+[.)][ \t]|[-*_]{3,}\s*$))/.test(line);
+  }
+
   // Update endLine for each heading: it ends just before the next sibling or parent's next sibling
   updateEndLines(results, lines.length);
-  
-  // Second pass: extract code blocks and nest them under appropriate headings
-  const codeBlockRegex = /^```(\w+)\s*$/gm; // Only match opening ``` with a language
-  let match;
-  while ((match = codeBlockRegex.exec(source)) !== null) {
-    const language = match[1];
-    const startLine = source.slice(0, match.index).split("\n").length;
-    
-    // Find closing ```
-    const afterMatch = source.slice(match.index + match[0].length);
-    const closingIdx = afterMatch.search(/^```\s*$/m);
-    let endLine = startLine + 1;
-    if (closingIdx !== -1) {
-      endLine = startLine + afterMatch.slice(0, closingIdx).split("\n").length + 1;
-    }
-    
-    const codeBlock: SymbolInfo = {
-      name: `code_block_${language}`,
-      type: "code_block",
-      startLine,
-      endLine,
-    };
-    
-    // Find the heading that contains this code block
-    const parent = findParentHeading(results, startLine);
-    if (parent) {
-      parent.children!.push(codeBlock);
-    } else {
-      results.push(codeBlock);
-    }
-  }
-  
+
   return results;
 }
 
@@ -1449,31 +1493,8 @@ function updateEndLines(symbols: SymbolInfo[], totalLines: number): void {
     // Recurse into children
     if (symbol.children && symbol.children.length > 0) {
       updateEndLines(symbol.children, symbol.endLine);
-      // The last child's endLine might extend to parent's endLine
-      const lastChild = symbol.children[symbol.children.length - 1];
-      if (lastChild.endLine < symbol.endLine) {
-        lastChild.endLine = symbol.endLine;
-      }
     }
   }
-}
-
-/** Find the heading that contains the given line number. */
-function findParentHeading(symbols: SymbolInfo[], line: number): SymbolInfo | null {
-  for (const symbol of symbols) {
-    if (symbol.type?.startsWith("heading")) {
-      // Check if line is within this heading's range
-      if (line >= symbol.startLine && line <= symbol.endLine) {
-        // Try to find a more specific child
-        if (symbol.children && symbol.children.length > 0) {
-          const child = findParentHeading(symbol.children, line);
-          if (child) return child;
-        }
-        return symbol;
-      }
-    }
-  }
-  return null;
 }
 
 /**

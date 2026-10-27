@@ -25,6 +25,8 @@ export interface OutlineRender {
 	servedHashes: string[];
 	truncated: boolean;
 	complete: boolean;
+	preview?: "unsupported" | "no-symbols";
+	hasSyntaxErrors?: boolean;
 }
 
 export interface SymbolOutlineInput {

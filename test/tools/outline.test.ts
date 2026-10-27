@@ -2,10 +2,10 @@ import { mkdir, readFile, truncate, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { setupIntegrationTest, makeFakePiRegistry, withTempFile, withTempDir, getText, toolError } from "../support/fixtures";
-import { MAX_BYTES } from "../../src/constants";
+import { ANCHOR_POOL_EXHAUSTED_PREFIX, MAX_BYTES } from "../../src/constants";
 import { DEFAULT_EDIT_FLAGS } from "../../src/edit-common";
 import { regRead } from "../../src/read";
-import { outlineDepth, regOutline } from "../../src/outline-tool";
+import { isSkippableOutlineReadError, outlineDepth, regOutline } from "../../src/outline-tool";
 import register from "../../index";
 
 const TS_SOURCE = [
@@ -80,6 +80,29 @@ describe("outline tool", () => {
 			expect(text).toContain("line 40");
 			expect(text).not.toContain("line 21");
 			expect(text).toContain("more lines");
+			expect(text).toContain("[No outline parser for this file type; showing the first and last lines instead of an outline.]");
+		});
+	});
+
+	it("says when the parser could not read part of a file, and not for an empty file", async () => {
+		await withTempDir("outline-notes-", async (dir) => {
+			await writeFile(join(dir, "broken.ts"), "export function a() {}\nfunction b( {\n}\nexport const d = 1;\n");
+			await writeFile(join(dir, "empty.ts"), "");
+			const { ctx, getTool } = setupIntegrationTest(dir);
+			const broken = getText(await getTool("outline").execute("o1", { path: "broken.ts" }, undefined, undefined, ctx));
+			expect(broken).toContain("export function a() {}");
+			expect(broken).toContain("[The parser could not read part of this file; symbols in that part may be missing.]");
+			const empty = getText(await getTool("outline").execute("o2", { path: "empty.ts" }, undefined, undefined, ctx));
+			expect(empty).toContain("File is empty.");
+			expect(empty).not.toContain("No symbols found");
+		});
+	});
+
+	it("says when a supported file has no symbols", async () => {
+		await withTempFile("only.ts", "// nothing to outline\n", async ({ cwd }) => {
+			const { ctx, getTool } = setupIntegrationTest(cwd);
+			const text = getText(await getTool("outline").execute("o1", { path: "only.ts" }, undefined, undefined, ctx));
+			expect(text).toContain("[No symbols found; showing the first and last lines instead of an outline.]");
 		});
 	});
 
@@ -105,8 +128,14 @@ describe("outline tool", () => {
 			const row = text.split("\n").find((line) => line.includes("const value ="))!;
 			expect(row.endsWith("...")).toBe(true);
 			const anchor = row.match(/^([a-z]{5})/)![1]!;
-			expect(await toolError(() => getTool("replace").execute("e1", { remove_from: anchor, remove_to: anchor, text: "const value = 1;" }, undefined, undefined, ctx)))
+			const stale = await toolError(() => getTool("replace").execute("e1", { remove_from: anchor, remove_to: anchor, text: "const value = 1;" }, undefined, undefined, ctx));
+			expect(stale).toMatch(/E_RANGE_STALE/);
+			expect(stale).toContain("Line 1 is clipped above and not editable from here; call read()");
+			expect(stale).not.toContain("Retry with the fresh anchors above without a read.");
+			const retryAnchor = stale.match(/^([a-z]{5})│/m)![1]!;
+			expect(await toolError(() => getTool("replace").execute("e2", { remove_from: retryAnchor, remove_to: retryAnchor, text: "const value = 1;" }, undefined, undefined, ctx)))
 				.toMatch(/E_RANGE_STALE/);
+			expect(await readFile(join(cwd, "long.ts"), "utf8")).toBe(`${long}\n`);
 		});
 	});
 
@@ -215,7 +244,7 @@ describe("outline tool", () => {
 			expect(await toolError(() => outlineTool.execute("o1", { path: "a.ts", anchors: "yes" }, undefined, undefined, ctx))).toContain('"anchors" must be a boolean');
 			expect(await toolError(() => outlineTool.execute("o1", { path: "a.ts", anchors: true }, undefined, undefined, ctx))).toContain("only valid in a codemode session");
 			await mkdir(join(dir, "sub"), { recursive: true });
-			expect(await toolError(() => outlineTool.execute("o1", { path: "sub" }, undefined, undefined, ctx))).toContain("[E_NOT_TEXT]");
+			expect(await toolError(() => outlineTool.execute("o1", { path: "sub" }, undefined, undefined, ctx))).toContain("[E_NOT_FOUND] No supported source files match: sub");
 			await writeFile(join(dir, "binary.bin"), Buffer.from([0x41, 0x00, 0x42]));
 			expect(await toolError(() => outlineTool.execute("o1", { path: "binary.bin" }, undefined, undefined, ctx))).toContain("[E_NOT_TEXT]");
 			const huge = join(dir, "huge.txt");
@@ -305,5 +334,19 @@ describe("outlineDepth", () => {
 		expect(() => outlineDepth("2")).toThrow("[E_BAD_SHAPE]");
 		expect(outlineDepth(10)).toBe(10);
 		expect(() => outlineDepth(11)).toThrow("[E_BAD_SHAPE]");
+	});
+});
+
+describe("outline directory read errors", () => {
+	it("skips only file-level failures and rethrows infrastructure errors", () => {
+		expect(isSkippableOutlineReadError(new Error("[E_NOT_TEXT] Path is a binary file: a.ts"))).toBe(true);
+		expect(isSkippableOutlineReadError(new Error("[E_FILE_TOO_LARGE] a.ts has 2000000 lines"))).toBe(true);
+		expect(isSkippableOutlineReadError(new Error("[E_NOT_FOUND] File not found: a.ts"))).toBe(true);
+		expect(isSkippableOutlineReadError(new Error("[E_ACCESS] File is not readable: a.ts"))).toBe(true);
+		expect(isSkippableOutlineReadError(Object.assign(new Error("gone"), { code: "ENOENT" }))).toBe(true);
+		expect(isSkippableOutlineReadError(new Error("[E_STORE_UNAVAILABLE] no sqlite runtime"))).toBe(false);
+		expect(isSkippableOutlineReadError(new Error("[E_REGISTRY] the session registry was released"))).toBe(false);
+		expect(isSkippableOutlineReadError(new Error(`${ANCHOR_POOL_EXHAUSTED_PREFIX}; use write for very large files.`))).toBe(false);
+		expect(isSkippableOutlineReadError(new Error("unexpected parser failure"))).toBe(false);
 	});
 });

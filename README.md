@@ -88,7 +88,7 @@ pi install /path/to/pi-hashline-edit-pro
 | Built-in | Effect |
 | --- | --- |
 | `read` | overridden, returns `anchor│content` rows |
-| `outline` | new opt-in tool; returns one file's structural outline |
+| `outline` | new opt-in tool; returns the structural outline of a file, a directory, or a glob |
 | `edit` | disabled |
 | `grep` | replaced by an anchored `grep`; pi's own `grep` returns when Anchor grep is off |
 | `copy`, `move` | disabled while Copy/move is off |
@@ -184,11 +184,13 @@ Edge cases:
 
 ### outline
 
-`outline` returns the structural outline of one file: a `=== path (language) — N lines ===` header, then one `anchor│content` row per symbol whose content is the first line of that symbol's declaration (annotations and attributes excluded). Rows cover top-level declarations and the members of a type or module; a declaration inside a function body is never a row, whatever `depth` you pass. A `[limit N]` line under a multi-line symbol is the span to pass as `read`'s `limit` when reading the body from that anchor, and an `[N nested]` line marks children hidden by `depth`. Hiding children that way is a view choice rather than truncation, so `truncated` stays false and the section still counts as complete. The structured result reports `complete`, which is true only when no row or byte cap cut the outline, every rendered row was served, and no line was skipped for a missing anchor; a head-and-tail preview that omits lines is incomplete. Files the parser cannot outline fall back to the same head-and-tail preview auto-read all uses. A row whose line is longer than 200 characters is clipped and is not served for editing, so read that line first. The tool is offered only while Outline tool is on in `/hashline-config`.
+`outline` returns the structural outline of a file, a directory, or a glob: a `=== path (language) — N lines ===` header per file, then one `anchor│content` row per symbol whose content is the first line of that symbol's declaration (annotations, decorators, and attributes excluded, and outside the symbol's span). Rows cover top-level declarations and the members of a type or module; a declaration inside a function body is never a row, whatever `depth` you pass. A `[limit N]` line under a multi-line symbol is the span to pass as `read`'s `limit` when reading the body from that anchor, and an `[N nested]` line marks children hidden by `depth`. Hiding children that way is a view choice rather than truncation, so `truncated` stays false and the section still counts as complete. The structured result reports `complete`, which is true only when no row or byte cap cut the outline, every rendered row was served, and no line was skipped for a missing anchor; a head-and-tail preview that omits lines is incomplete. Files the parser cannot outline, and supported files with no symbols, fall back to the same head-and-tail preview auto-read all uses, followed by a note that names the reason. Another note says when the parser could not read part of a file (a syntax error, or syntax the vendored grammar does not cover), since symbols in that part may be missing. A row whose line is longer than 200 characters is clipped and is not served for editing, even when an `E_RANGE_STALE` or `E_STALE_ANCHOR` error shows it again, so read that line first. The tool is offered only while Outline tool is on in `/hashline-config`.
+
+A directory or glob outlines every supported source file it matches, sorted by path, with files separated by a blank line. Listing starts at the named folder (or the glob's literal prefix): inside a Git work tree it uses tracked and untracked-but-not-ignored files, otherwise a filesystem walk, and it skips the folders and files auto-read all excludes plus your `autoReadAllIgnore` list. `*` and `**` both cross folders, as in `grep`'s `glob`. All files share the 400-row cap and the 50KB budget; each file gets at least 20 rows, or an equal share of what is left, so one large file does not hide the rest. When the budget runs out, a footer names how many files were not outlined and how to narrow the request. Listed paths that are no longer regular files (deleted, or symlinks) are dropped silently; a file that fails to read (binary, oversized, or unreadable) is skipped with a notice. All notices count against the budget, and each outlined file's own notes are always kept. A path that exists is never read as a glob, so `app/[id].ts` names that file; otherwise `*`, `?`, `[...]`, or `{a,b}` makes it a glob. A pattern that matches no supported file returns `[E_NOT_FOUND]`, and an invalid glob returns `[E_BAD_SHAPE]`.
 
 | Parameter | Description |
 | --- | --- |
-| `path` | Path to the file to outline (relative or absolute). |
+| `path` | A file (relative or absolute), a directory, or a glob such as `src/**/*.ts`, relative to the working directory. |
 | `depth` | Nesting depth: `0` lists top-level symbols only, `1` adds their members, and the default is `2` (maximum `10`). |
 
 Rows are the file's real lines, so an outline anchor is editable with `replace` or `insert` without a separate `read`, exactly like an auto-read-all outline row. The outline shows only each symbol's declaration line, so an edit inside a body still needs a `read` of that span.
@@ -399,7 +401,7 @@ Settings live in `~/.config/pi-hashline-edit-pro/config.json`, created when a se
 | `anchorGrepEnabled` | Anchor grep | `true` | Register an anchored `grep` in place of pi's own `grep` while it is on. |
 | `copyMoveEnabled` | Copy/move | `true` | Offer the `copy` and `move` tools; when off, both are removed from the active tools. |
 | `replaceMatchEnabled` | Replace match | `true` | Offer the `replace_match` tool; when off, it is removed from the active tools. |
-| `outlineEnabled` | Outline tool | `false` | Register the `outline` tool for one file's structure on demand; when off, it is removed from the active tools. |
+| `outlineEnabled` | Outline tool | `false` | Register the `outline` tool for the structure of a file, directory, or glob on demand; when off, it is removed from the active tools. |
 | `requirePath` | Require path | `false` | `replace`, `replace_match`, `insert`, `copy`, and `move` require a `path` argument that must match anchor ownership. |
 | `strictInput` | Strict input | `false` | Reject auto-fixable slips (`[W_BAD_SHAPE]`, `[W_BAD_REF]`, `[W_INVALID_PATCH]`, `[W_BARE_HASH_PREFIX]`, `[W_ANCHOR_CASE]`) with `[E_BAD_SHAPE]` instead of applying them with a warning. |
 | `diffContextLines` | Diff context | `1` | Surrounding lines in post-edit diffs, 0-10 (needs Auto-read). |
@@ -425,7 +427,7 @@ When `PI_HASHLINE_DIR` is unset or empty, non-Windows platforms honor `XDG_CONFI
 | Grep output | 2000 rows and 50KB | `grep` |
 | Grep row fragment | 500 bytes | long match and context rows shown as `...` fragments |
 | Auto-read all files | 500 files, 200KB per file | files larger than 200KB and files past the cap are omitted |
-| Outline rows | 400 symbol rows and 50KB of content per file (a truncation footer may follow) | `outline`, auto-read all `outline` mode |
+| Outline rows | 400 symbol rows and 50KB of content per file, shared across files for a directory or glob (a truncation footer may follow) | `outline`, auto-read all `outline` mode |
 | Auto-read all budget | 200KB floor; 2MB ceiling in `full` | total injection size derived from the model context window; `outline` is not capped at 2MB |
 | Stale-range feedback | first 100 lines | rows returned with `[E_RANGE_STALE]` |
 | Session anchors | 1,353,139 anchors in use | all tools; the least recently read or edited files are freed when the quota is exhausted (`[W_ANCHOR_RECLAIMED]`) |
@@ -443,7 +445,7 @@ All nine tools also declare an `outputSchema` and return `structuredContent`, so
 
 `replace`, `replace_match`, `insert`, `copy`, `move`, and `undo_last_change` return `{ kind: "edit", verb, classification, path, text, diff, warnings, hints, firstChangedLine, anchors, anchorsOmitted }`, where `verb` is `"replaced"`, `"inserted"`, `"copied"`, `"moved"`, or `"undone"`, `anchors` are the live rows of the post-edit diff, and `anchorsOmitted` is true when the diff was truncated or carried no rows, meaning a fresh read is needed. A cross-file move reports the destination file and its anchors.
 
-`outline` returns `{ kind: "outline", path, text, totalLines, depth, lines, truncated, complete, notices }`, where `text` is the outline body without the notices, `lines` is the anchored rows it served, `complete` is true only when no cap cut the outline, every rendered row was served, and no line was skipped for a missing anchor; `notices` carries non-file notes such as the UTF-8 rewrite note and `[W_ANCHOR_RECLAIMED]`; in a codemode session `tools.outline()` resolves to the served outline text (with notices) unless `anchors: true` is passed.
+`outline` returns `{ kind: "outline", path, text, totalLines, depth, lines, truncated, complete, notices }`, where `text` is the outline body without the notices, `lines` is the anchored rows it served, `complete` is true only when no cap cut the outline, every rendered row was served, and no line was skipped for a missing anchor; `notices` carries notes such as the preview reason, the UTF-8 rewrite note, and `[W_ANCHOR_RECLAIMED]`; for a directory or glob, `lines` is replaced by `files: [{ path, lines, totalLines, truncated, complete }]`, one entry per outlined file, and `totalLines` is their sum; in a codemode session `tools.outline()` resolves to the served outline text (with notices) unless `anchors: true` is passed.
 
 `grep` returns `{ kind: "grep", text, matches, files, truncated, results }`, where each entry of `results` is `{ path, matchLines, lines, hadUtf8DecodeErrors }` and `lines` uses the same `{ line, text, anchor, rendered }` shape as `read`.
 

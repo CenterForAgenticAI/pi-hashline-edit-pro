@@ -62,8 +62,13 @@ function bodyStart(node: Node): number {
 }
 
 function blockSymbol(node: Node, source: string): SymbolInfo | null {
+  const directive = node.namedChildren[0];
+  if (directive?.type === "directive_start" && (node.type === "conditional" || node.type === "loop")) {
+    const [startLine, endLine] = rangeOf(node);
+    return { name: parameterName(node, source), type: textOf(directive, source).slice(1), startLine, endLine };
+  }
   const label = BLOCK_LABELS[node.type];
-  if (label === undefined) return null;
+  if (label === undefined || (node.type === "php_statement" && directive?.type !== "directive_start")) return null;
   const [startLine, endLine] = rangeOf(node);
   return { name: parameterName(node, source), type: label, startLine, endLine };
 }

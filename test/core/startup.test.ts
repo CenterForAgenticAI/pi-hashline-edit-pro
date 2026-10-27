@@ -643,7 +643,7 @@ describe("outline tool default", () => {
       const sessionStart = handlers.get("session_start") as (a: unknown, b: unknown) => Promise<void>;
       await sessionStart({}, { cwd: dir, ui: { notify: vi.fn() } });
       expect(getActive()).toContain("outline");
-      expect(getTool("outline").promptSnippet).toContain("Outline one file");
+      expect(getTool("outline").promptSnippet).toContain("Map the symbols of a file or folder");
     }, { autoRead: true, anchorGrepEnabled: true, outlineEnabled: true });
   });
 

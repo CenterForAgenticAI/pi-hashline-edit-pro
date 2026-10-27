@@ -113,9 +113,12 @@ export function fmtMismatchWithHashes(
       for (let ln = from; ln <= to; ln++) {
         const h = fileHashes[ln - 1]!;
         const c = fileLines[ln - 1] ?? "";
-        hashes.push(h);
-        servedMap.set(h, lineChecksum(c));
-        rows.push(`    ${ln}: ${h}│${clipLine(c)}`);
+        const shown = clipLine(c);
+        if (shown === c) {
+          hashes.push(h);
+          servedMap.set(h, lineChecksum(c));
+        }
+        rows.push(`    ${ln}: ${h}│${shown}`);
       }
       out.push("");
       out.push(`  Current context around resolved anchor "${ctx.hash}" (line ${ctx.line}):\n${rows.join("\n")}`);
@@ -441,12 +444,18 @@ export function assertRangeServed(
   const rows: string[] = [];
   const shownHashes: string[] = [];
   const shownMap = new Map<string, string>();
+  const clippedLines: number[] = [];
   for (let line = startLine; line < startLine + shownLength; line++) {
     const hash = fileHashes[line - 1]!;
     const content = fileLines[line - 1]!;
+    const shown = clipLine(content);
+    rows.push(fmtRow(hash, shown));
+    if (shown !== content) {
+      clippedLines.push(line);
+      continue;
+    }
     shownHashes.push(hash);
     shownMap.set(hash, lineChecksum(content));
-    rows.push(fmtRow(hash, clipLine(content)));
   }
   const location = filePath ? ` in ${filePath}` : "";
   const rangeDescription = `the replaced range (lines ${startLine}-${endLine})${location}`;
@@ -457,7 +466,9 @@ export function assertRangeServed(
   const capHint =
     rangeLength > shownLength
       ? `\n\n[The range has ${rangeLength} lines; showing the first ${shownLength}. Call read()${filePath ? ` on ${filePath}` : ""} with offset=${startLine + shownLength} to see the rest.]`
-      : "\n\nRetry with the fresh anchors above without a read.";
+      : clippedLines.length > 0
+        ? `\n\n[${clippedLines.length === 1 ? `Line ${clippedLines[0]} is` : `Lines ${clippedLines.join(", ")} are`} clipped above and not editable from here; call read()${filePath ? ` on ${filePath}` : ""} before editing.]`
+        : "\n\nRetry with the fresh anchors above without a read.";
   const message =
     `[E_RANGE_STALE] ${mismatchText}. Current range with fresh anchors:\n\n${rows.join("\n")}${capHint}`;
   throw new RangeStaleError(message, shownHashes, shownMap);

@@ -69,7 +69,7 @@ const SHARED_SCRIPT_OPS = ["read", "outline", "replace", "replace_match", "inser
 
 function resultContractGuideline(flags: EditToolFlags): string {
   const tools = operationNames(SHARED_SCRIPT_OPS, flags);
-  return `${tools}: when called from a codemode script, failures resolve to \`{ ok: false, kind: "error", error: { code, message } }\`; branch on \`ok\` instead of \`try\`/\`catch\`.`;
+  return `${tools}: when called from a codemode script, failures resolve to \`{ ok: false, kind: "error", error: { code, message } }\`; branch on \`ok\` instead of \`try\`/\`catch\`. Arguments that fail the tool's schema still throw before the tool runs.`;
 }
 const READ_SCRIPT_GUIDELINE =
   '`read` in a codemode script resolves to the file\'s text, like the built-in `read`; pass `anchors: true` to receive `{ text, lines, notices }` with the raw file content and `lines[].anchor` for chained edits. An image read resolves to an image block.';
