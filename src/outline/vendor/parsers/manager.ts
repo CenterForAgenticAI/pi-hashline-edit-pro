@@ -170,10 +170,10 @@ export function languageLabel(key: string): string {
 export async function parseCode(
   key: string,
   source: string,
-): Promise<SymbolInfo[]> {
+): Promise<{ symbols: SymbolInfo[]; hasError: boolean }> {
   // Markdown uses regex-based parsing, not tree-sitter
   if (key === "markdown") {
-    return extractMarkdown(source);
+    return { symbols: extractMarkdown(source), hasError: false };
   }
 
   await ensureInit();
@@ -183,9 +183,9 @@ export async function parseCode(
 
   sharedParser.setLanguage(lang);
   const tree = sharedParser.parse(source);
-  if (!tree) return [];
+  if (!tree) return { symbols: [], hasError: false };
 
-  return extractSymbols(key, tree.rootNode, source, 0);
+  return { symbols: extractSymbols(key, tree.rootNode, source, 0), hasError: tree.rootNode.hasError };
 }
 
 // ---- Symbol extraction dispatch ----

@@ -80,6 +80,29 @@ describe("outline tool", () => {
 			expect(text).toContain("line 40");
 			expect(text).not.toContain("line 21");
 			expect(text).toContain("more lines");
+			expect(text).toContain("[No outline parser for this file type; showing the first and last lines instead of an outline.]");
+		});
+	});
+
+	it("says when the parser could not read part of a file, and not for an empty file", async () => {
+		await withTempDir("outline-notes-", async (dir) => {
+			await writeFile(join(dir, "broken.ts"), "export function a() {}\nfunction b( {\n}\nexport const d = 1;\n");
+			await writeFile(join(dir, "empty.ts"), "");
+			const { ctx, getTool } = setupIntegrationTest(dir);
+			const broken = getText(await getTool("outline").execute("o1", { path: "broken.ts" }, undefined, undefined, ctx));
+			expect(broken).toContain("export function a() {}");
+			expect(broken).toContain("[The parser could not read part of this file; symbols in that part may be missing.]");
+			const empty = getText(await getTool("outline").execute("o2", { path: "empty.ts" }, undefined, undefined, ctx));
+			expect(empty).toContain("File is empty.");
+			expect(empty).not.toContain("No symbols found");
+		});
+	});
+
+	it("says when a supported file has no symbols", async () => {
+		await withTempFile("only.ts", "// nothing to outline\n", async ({ cwd }) => {
+			const { ctx, getTool } = setupIntegrationTest(cwd);
+			const text = getText(await getTool("outline").execute("o1", { path: "only.ts" }, undefined, undefined, ctx));
+			expect(text).toContain("[No symbols found; showing the first and last lines instead of an outline.]");
 		});
 	});
 

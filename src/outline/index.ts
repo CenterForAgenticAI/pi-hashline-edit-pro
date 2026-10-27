@@ -18,7 +18,7 @@ export async function buildFileOutline(input: FileOutlineInput): Promise<Outline
 	const parser = await loadOutlineParser();
 	const parsed = parser === undefined ? undefined : await parser.parse(input.displayPath, input.content);
 	if (parsed !== undefined && parsed.symbols.length > 0) {
-		return renderSymbolOutline({
+		const outline = renderSymbolOutline({
 			displayPath: input.displayPath,
 			languageName: parsed.languageName,
 			totalLines: lines.length,
@@ -29,8 +29,9 @@ export async function buildFileOutline(input: FileOutlineInput): Promise<Outline
 			...(input.maxDepth !== undefined ? { maxDepth: input.maxDepth } : {}),
 			...(input.maxBytes !== undefined ? { maxBytes: input.maxBytes } : {}),
 		});
+		return parsed.hasSyntaxErrors ? { ...outline, hasSyntaxErrors: true } : outline;
 	}
-	return renderPreviewOutline({
+	const preview = renderPreviewOutline({
 		displayPath: input.displayPath,
 		lines,
 		hashes: input.hashes,
@@ -38,6 +39,8 @@ export async function buildFileOutline(input: FileOutlineInput): Promise<Outline
 		...(input.previewTailLines !== undefined ? { tailLines: input.previewTailLines } : {}),
 		...(input.maxBytes !== undefined ? { maxBytes: input.maxBytes } : {}),
 	});
+	if (lines.length === 0) return preview;
+	return { ...preview, preview: parsed === undefined ? "unsupported" : "no-symbols", ...(parsed?.hasSyntaxErrors ? { hasSyntaxErrors: true } : {}) };
 }
 
 export { loadOutlineParser } from "./parsers";

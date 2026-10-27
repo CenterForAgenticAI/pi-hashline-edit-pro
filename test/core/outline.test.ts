@@ -962,4 +962,13 @@ describe("buildFileOutline language coverage", () => {
 			"[limit 2]",
 		]);
 	});
+
+	it("reports why it fell back to a preview", async () => {
+		const unsupported = await buildFileOutline({ displayPath: "notes.txt", content: "alpha\n", hashes: ["aaaaz"] });
+		expect(unsupported.preview).toBe("unsupported");
+		const empty = await buildFileOutline({ displayPath: "only.ts", content: "// nothing here\n", hashes: ["aaaaz"] });
+		expect(empty.preview).toBe("no-symbols");
+		const outlined = await buildFileOutline({ displayPath: "app.ts", content: "function run() {}\n", hashes: ["aaaaz"] });
+		expect(outlined.preview).toBeUndefined();
+	});
 });

@@ -127,6 +127,17 @@ async function outlineCandidates(path: string, cwd: string, directory: boolean):
 	return [...new Set(candidates)].filter((file) => !isExcludedByCustomIgnore(file, ignore) && (glob === null || glob.test(file))).sort();
 }
 
+function outlineNotices(section: { preview?: "unsupported" | "no-symbols"; hasSyntaxErrors?: boolean }, path?: string): string[] {
+	const where = path === undefined ? "" : `${path}: `;
+	const notices: string[] = [];
+	if (section.preview !== undefined) {
+		const reason = section.preview === "unsupported" ? "No outline parser for this file type" : "No symbols found";
+		notices.push(`[${where}${reason}; showing the first and last lines instead of an outline.]`);
+	}
+	if (section.hasSyntaxErrors === true) notices.push(`[${where}The parser could not read part of this file; symbols in that part may be missing.]`);
+	return notices;
+}
+
 export function regOutline(pi: ExtensionAPI, flags: EditToolFlags = DEFAULT_EDIT_FLAGS): void {
 	const prompted = {
 		description: loadP("../tool-prompts/outline.md"),
@@ -212,6 +223,7 @@ export function regOutline(pi: ExtensionAPI, flags: EditToolFlags = DEFAULT_EDIT
 						const served = new Set(section.servedHashes);
 						files.push({ path: filePath, lines: section.rows.filter((row) => served.has(row.anchor)).map((row) => anchoredLine(row.line, row.text, row.anchor)),
 							totalLines: normalized.length === 0 ? 0 : fileLines.length, truncated: section.truncated, complete: section.complete });
+						notices.push(...outlineNotices(section, filePath));
 						if (hadUtf8DecodeErrors) notices.push(`[${filePath}: Non-UTF-8 bytes shown as U+FFFD; editing rewrites the file as UTF-8.]`);
 						sections.push(section.text);
 						bytes += sectionBytes;
@@ -259,6 +271,7 @@ export function regOutline(pi: ExtensionAPI, flags: EditToolFlags = DEFAULT_EDIT
 				const snapshotId = await safeSnapId(absolutePath, "outline");
 				const reclaimNotice = formatAnchorReclaimNotice(takeReclaimedPaths());
 				const notices = [
+					...outlineNotices(section),
 					hadUtf8DecodeErrors ? "[Non-UTF-8 bytes shown as U+FFFD; editing rewrites the file as UTF-8.]" : undefined,
 					reclaimNotice,
 				].filter((part): part is string => part !== undefined);

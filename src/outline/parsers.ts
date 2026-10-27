@@ -9,6 +9,7 @@ export interface OutlineSymbol {
 export interface OutlineParse {
 	symbols: OutlineSymbol[];
 	languageName: string;
+	hasSyntaxErrors: boolean;
 }
 
 export interface OutlineParser {
@@ -24,7 +25,7 @@ async function load(): Promise<OutlineParser | undefined> {
 			parse: async (path, content) => {
 				if (parsers.detectLanguage(path) === null) return undefined;
 				const parsed = await parsers.parseSourceFile(path, content);
-				return { symbols: parsed.symbols, languageName: parsed.languageName };
+				return { symbols: parsed.symbols, languageName: parsed.languageName, hasSyntaxErrors: parsed.hasError === true };
 			},
 		};
 	} catch (error) {
