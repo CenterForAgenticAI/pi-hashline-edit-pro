@@ -221,7 +221,7 @@ describe("outline tool", () => {
 			expect(await toolError(() => outlineTool.execute("o1", { path: "a.ts", anchors: "yes" }, undefined, undefined, ctx))).toContain('"anchors" must be a boolean');
 			expect(await toolError(() => outlineTool.execute("o1", { path: "a.ts", anchors: true }, undefined, undefined, ctx))).toContain("only valid in a codemode session");
 			await mkdir(join(dir, "sub"), { recursive: true });
-			expect(await toolError(() => outlineTool.execute("o1", { path: "sub" }, undefined, undefined, ctx))).toContain("[E_NOT_TEXT]");
+			expect(await toolError(() => outlineTool.execute("o1", { path: "sub" }, undefined, undefined, ctx))).toContain("[E_NOT_FOUND] No supported source files match: sub");
 			await writeFile(join(dir, "binary.bin"), Buffer.from([0x41, 0x00, 0x42]));
 			expect(await toolError(() => outlineTool.execute("o1", { path: "binary.bin" }, undefined, undefined, ctx))).toContain("[E_NOT_TEXT]");
 			const huge = join(dir, "huge.txt");

@@ -1,7 +1,11 @@
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { DEFAULT_MAX_BYTES, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { stat } from "node:fs/promises";
+import { basename, relative, resolve, sep } from "node:path";
 import { Type } from "typebox";
 import { Text } from "@earendil-works/pi-tui";
-import { buildFileOutline } from "./outline";
+import { buildFileOutline, loadOutlineParser } from "./outline";
+import { AUTO_READ_ALL_EXCLUDED_NAMES, globRegexFor, isExcludedByCustomIgnore, isExcludedByPattern, isExcludedBySegment, listFromGit, normalizeAutoReadAllIgnoreList, walkDir } from "./auto-read-all";
+import { readConfig } from "./config";
 import { MAX_HASH_LINES } from "./hashline";
 import { loadFileKindAndText } from "./file-kind";
 import { readNormFile, safeSnapId } from "./file-reader";
@@ -15,6 +19,8 @@ import { DEFAULT_EDIT_FLAGS, type EditToolFlags } from "./edit-common";
 import { anchoredLine, outlineResultSchema, withStructuredErrors, type OutlineStructured } from "./structured";
 
 const OUTLINE_DEFAULT_DEPTH = 2;
+const OUTLINE_MAX_ROWS = 400;
+const OUTLINE_MIN_FILE_ROWS = 20;
 export const OUTLINE_MAX_DEPTH = 10;
 
 export interface OutlineDetails {
@@ -27,7 +33,7 @@ export interface OutlineDetails {
 function buildOutlineToolSchema(codemode: boolean) {
 	return Type.Object({
 		path: Type.String({
-			description: "Path to the file to outline (relative or absolute).",
+			description: "File, directory, or glob (e.g. src/**/*.ts) to outline, relative to the working directory; files may also use absolute paths.",
 		}),
 		depth: Type.Optional(
 			Type.Integer({
@@ -83,6 +89,44 @@ export function normOutlineReq(request: unknown, allowAnchors = false): OutlineR
 	return { path: request.path, depth: outlineDepth(request.depth), anchors: request.anchors === true };
 }
 
+const batchOutlineResultSchema = Type.Union([
+	outlineResultSchema,
+	Type.Object({
+		ok: Type.Literal(true), kind: Type.Literal("outline"), path: Type.String(), text: Type.String(),
+		totalLines: Type.Integer(), depth: Type.Integer(), truncated: Type.Boolean(), complete: Type.Boolean(),
+		notices: Type.Array(Type.String()),
+		files: Type.Array(Type.Object({
+			path: Type.String(), lines: Type.Array(Type.Object({ line: Type.Integer(), text: Type.String(), anchor: Type.String() })),
+			totalLines: Type.Integer(), truncated: Type.Boolean(), complete: Type.Boolean(),
+		})),
+	}),
+]);
+
+async function outlineCandidates(path: string, cwd: string, directory: boolean): Promise<string[]> {
+	const ignore = normalizeAutoReadAllIgnoreList((await readConfig()).autoReadAllIgnore);
+	const parser = await loadOutlineParser();
+	if (parser === undefined) return [];
+	const pattern = relative(cwd, resolve(cwd, path)).split(sep).join("/");
+	const segments = pattern.split("/");
+	const literal = directory ? segments : segments.slice(0, segments.findIndex((segment) => /[*?[{]/.test(segment)));
+	const base = resolve(cwd, literal.join("/"));
+	let listed = await listFromGit(base);
+	if (listed === undefined || listed.length === 0) {
+		listed = [];
+		await walkDir(base, base, listed, ignore);
+	}
+	const prefix = relative(cwd, base).split(sep).join("/");
+	const glob = directory ? null : globRegexFor(pattern);
+	const candidates = listed
+		.map((file) => file.split(sep).join("/"))
+		.filter((file) => {
+			const name = basename(file).toLowerCase();
+			return !AUTO_READ_ALL_EXCLUDED_NAMES.includes(name) && !isExcludedBySegment(file) && !isExcludedByPattern(name) && parser.languageFor(file) !== null;
+		})
+		.map((file) => (prefix === "" ? file : `${prefix}/${file}`));
+	return [...new Set(candidates)].filter((file) => !isExcludedByCustomIgnore(file, ignore) && (glob === null || glob.test(file))).sort();
+}
+
 export function regOutline(pi: ExtensionAPI, flags: EditToolFlags = DEFAULT_EDIT_FLAGS): void {
 	const prompted = {
 		description: loadP("../tool-prompts/outline.md"),
@@ -99,7 +143,7 @@ export function regOutline(pi: ExtensionAPI, flags: EditToolFlags = DEFAULT_EDIT
 		promptGuidelines: prompted.guidelines,
 		prepareArguments: makePrepareArguments(),
 		parameters: buildOutlineToolSchema(flags.codemode),
-		outputSchema: outlineResultSchema,
+		outputSchema: batchOutlineResultSchema,
 		executionMode: "sequential",
 		renderCall(args: any, theme: any, context: any) {
 			const text = (context.lastComponent as Text | undefined) ?? new Text("", 0, 0);
@@ -124,6 +168,72 @@ export function regOutline(pi: ExtensionAPI, flags: EditToolFlags = DEFAULT_EDIT
 				const absolutePath = toCwd(rawPath, ctx.cwd);
 
 				abortIf(signal);
+				const isGlob = /[*?]/.test(rawPath);
+				const pathStat = isGlob ? undefined : await stat(absolutePath).catch(() => undefined);
+				if (isGlob || pathStat?.isDirectory()) {
+					const candidates = await outlineCandidates(rawPath, ctx.cwd, pathStat?.isDirectory() === true);
+					if (candidates.length === 0) throw new Error(`[E_NOT_FOUND] No supported source files match: ${rawPath}`);
+					const files: Array<{ path: string; lines: ReturnType<typeof anchoredLine>[]; totalLines: number; truncated: boolean; complete: boolean }> = [];
+					const sections: string[] = [];
+					const notices: string[] = [];
+					let rows = 0;
+					let bytes = 0;
+					let totalLines = 0;
+					let stopped = false;
+					let anyTruncated = false;
+					let skipped = 0;
+					const footer = (remaining: number) => `... (${remaining} more files not outlined; narrow path, lower depth, or outline one file.)`;
+					const footerBytes = Buffer.byteLength(footer(candidates.length), "utf-8") + 2;
+					for (const [index, filePath] of candidates.entries()) {
+						abortIf(signal);
+						if (rows >= OUTLINE_MAX_ROWS || bytes + footerBytes >= DEFAULT_MAX_BYTES) { stopped = true; break; }
+						let loaded: Awaited<ReturnType<typeof readNormFile>>;
+						try {
+							loaded = await readNormFile(filePath, ctx.cwd, { signal, maxLines: MAX_HASH_LINES });
+						} catch (error) {
+							const message = error instanceof Error ? error.message : String(error);
+							if (!/^\[E_(NOT_TEXT|FILE_TOO_LARGE)\]/.test(message)) throw error;
+							skipped += 1;
+							notices.push(`[Skipped ${filePath}: ${message}]`);
+							continue;
+						}
+						const { normalized, fileHashes, absolutePath: resolvedPath, hadUtf8DecodeErrors } = loaded;
+						const fileLines = splitLines(normalized);
+						const remainingRows = OUTLINE_MAX_ROWS - rows;
+						const fileRows = Math.min(remainingRows, Math.max(OUTLINE_MIN_FILE_ROWS, Math.ceil(remainingRows / (candidates.length - index))));
+						const section = await buildFileOutline({
+							displayPath: filePath, content: normalized, hashes: fileHashes, maxDepth: depth,
+							maxRows: fileRows, maxBytes: DEFAULT_MAX_BYTES - bytes - footerBytes - (sections.length > 0 ? 2 : 0),
+							previewHeadLines: Math.min(20, fileRows), previewTailLines: Math.min(10, Math.max(0, fileRows - 20)),
+						});
+						const sectionBytes = Buffer.byteLength(section.text, "utf-8") + (sections.length > 0 ? 2 : 0);
+						if (bytes + sectionBytes + footerBytes > DEFAULT_MAX_BYTES) { stopped = true; break; }
+						serveRows(resolvedPath, fileHashes, fileLines, section.servedHashes);
+						const served = new Set(section.servedHashes);
+						files.push({ path: filePath, lines: section.rows.filter((row) => served.has(row.anchor)).map((row) => anchoredLine(row.line, row.text, row.anchor)),
+							totalLines: normalized.length === 0 ? 0 : fileLines.length, truncated: section.truncated, complete: section.complete });
+						if (hadUtf8DecodeErrors) notices.push(`[${filePath}: Non-UTF-8 bytes shown as U+FFFD; editing rewrites the file as UTF-8.]`);
+						sections.push(section.text);
+						bytes += sectionBytes;
+						rows += section.rows.length;
+						totalLines += normalized.length === 0 ? 0 : fileLines.length;
+						if (section.truncated) anyTruncated = true;
+					}
+					const remaining = candidates.length - files.length - skipped;
+					const outlineText = [...sections, ...(stopped ? [footer(remaining)] : [])].join("\n\n");
+					const reclaimNotice = formatAnchorReclaimNotice(takeReclaimedPaths());
+					if (reclaimNotice !== undefined) notices.push(reclaimNotice);
+					const text = [outlineText, ...notices].join("\n\n");
+					const truncated = stopped || anyTruncated || remaining > 0;
+					return {
+						content: [{ type: "text", text }],
+						details: { truncated, complete: !truncated && files.every((file) => file.complete), metrics: { rows, truncated } },
+						structuredContent: flags.codemode && !request.anchors ? text : {
+							ok: true, kind: "outline", path: rawPath, text: outlineText, totalLines, depth, files,
+							truncated, complete: !truncated && files.every((file) => file.complete), notices,
+						},
+					};
+				}
 				await valAccess(absolutePath, rawPath);
 
 				abortIf(signal);
