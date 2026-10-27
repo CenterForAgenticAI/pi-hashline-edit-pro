@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import { loadGuidelines, loadGuide, loadP } from "../../src/prompts";
 import { withReadPrompts, withReplacePrompts, withReplaceMatchPrompts, withInsertPrompts, withTransferPrompts, withUndoPrompts, withGrepPrompts, DEFAULT_EDIT_FLAGS } from "../../src/edit-common";
 import { regRead } from "../../src/read";
+import { regOutline } from "../../src/outline-tool";
 import { makeFakePiRegistry } from "../support/fixtures";
 
 const replaceBase = {
@@ -170,6 +171,13 @@ describe("tool-prompts/outline.md (model-facing contract)", () => {
     expect(outlinePrompt).toContain("outside its span");
     expect(outlinePrompt).toContain("head-and-tail preview with a note");
     expect(outlinePrompt).not.toContain("label");
+  });
+
+  it("tells codemode scripts about the batch result shape", () => {
+    const { pi, getTool } = makeFakePiRegistry();
+    regOutline(pi, { ...DEFAULT_EDIT_FLAGS, codemode: true });
+    const guidelines = getTool("outline").promptGuidelines as string[];
+    expect(guidelines.some((guideline) => guideline.includes("`files: [{ path, lines, totalLines, truncated, complete }]`"))).toBe(true);
   });
 
   it("keeps format facts out of the guidelines", () => {

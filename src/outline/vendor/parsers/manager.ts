@@ -460,7 +460,10 @@ function extractJSChild(
     childText(child, "type_identifier", source) ||
     "<anonymous>";
 
-  const [sl, el] = nodeRange(child);
+  // Decorators on their own lines are children of fields and non-exported classes; start at the declaration.
+  const declarationStart = child.children.find((part) => part.type !== "decorator" && part.type !== "comment");
+  const [, el] = nodeRange(child);
+  const sl = (declarationStart ?? child).startPosition.row + 1;
 
   return { name, type: symbolType, startLine: sl, endLine: el };
 }
@@ -621,7 +624,7 @@ function extractGo(
       const specs: SymbolInfo[] = [];
       for (let j = 0; j < child.namedChildCount; j++) {
         const spec = child.namedChild(j);
-        if (!spec || spec.type !== "type_spec") continue;
+        if (!spec || (spec.type !== "type_spec" && spec.type !== "type_alias")) continue;
         const name = fieldChildText(spec, "name", source) || "<anonymous>";
         const [sl, el] = nodeRange(spec);
         const typeNode = spec.childForFieldName("type");

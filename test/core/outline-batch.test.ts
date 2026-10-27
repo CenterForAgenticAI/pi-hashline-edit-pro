@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { buildFileOutline } from "../../src/outline";
@@ -14,6 +14,13 @@ async function source(dir: string, name: string, text = "export const value = 1;
 	await writeFile(join(dir, name), text);
 }
 
+function withRepo(prefix: string, run: (dir: string) => Promise<void>): Promise<void> {
+	return withTempDir(prefix, async (dir) => {
+		execFileSync("git", ["init", "-q"], { cwd: dir });
+		await run(dir);
+	});
+}
+
 function codemodeTool() {
 	const { pi, getTool } = makeFakePiRegistry();
 	regOutline(pi, { ...DEFAULT_EDIT_FLAGS, codemode: true });
@@ -22,7 +29,7 @@ function codemodeTool() {
 
 describe("batch outline", () => {
 	it("recurses directories in sorted order, skipping unsupported and built-in excluded files", async () => {
-		await withTempDir("outline-batch-", async (dir) => {
+		await withRepo("outline-batch-", async (dir) => {
 			await source(dir, "src/z.ts");
 			await source(dir, "src/deep/a.ts");
 			await source(dir, "src/node_modules/ignored.ts");
@@ -37,8 +44,7 @@ describe("batch outline", () => {
 	});
 
 	it("matches ** and ? globs relative to cwd and honors git and custom ignores", async () => {
-		await withTempDir("outline-glob-", async (dir) => {
-			execFileSync("git", ["init", "-q"], { cwd: dir });
+		await withRepo("outline-glob-", async (dir) => {
 			await source(dir, ".gitignore", "src/ignored/\n");
 			await source(dir, "src/a1.ts");
 			await source(dir, "src/deep/b1.ts");
@@ -52,7 +58,7 @@ describe("batch outline", () => {
 	});
 
 	it("gives every file a share of the row cap so one large file does not hide the rest", async () => {
-		await withTempDir("outline-share-", async (dir) => {
+		await withRepo("outline-share-", async (dir) => {
 			await source(dir, "src/a.ts", Array.from({ length: 399 }, (_, i) => `export const item${i} = ${i};`).join("\n") + "\n");
 			await source(dir, "src/b.ts", "export const first = 1;\nexport const second = 2;\n");
 			await source(dir, "src/c.ts");
@@ -67,7 +73,7 @@ describe("batch outline", () => {
 	});
 
 	it("shares the row cap and reports remaining files in a narrowing footer", async () => {
-		await withTempDir("outline-cap-", async (dir) => {
+		await withRepo("outline-cap-", async (dir) => {
 			const body = Array.from({ length: 30 }, (_, i) => `export const item${i} = ${i};`).join("\n") + "\n";
 			for (let i = 0; i < 30; i++) await source(dir, `src/f${String(i).padStart(2, "0")}.ts`, body);
 			const result = await codemodeTool().execute("o1", { path: "src", anchors: true }, undefined, undefined, { cwd: dir } as never);
@@ -80,7 +86,7 @@ describe("batch outline", () => {
 	});
 
 	it("serves anchors for edits in multiple files", async () => {
-		await withTempDir("outline-edit-", async (dir) => {
+		await withRepo("outline-edit-", async (dir) => {
 			await source(dir, "src/a.ts");
 			await source(dir, "src/b.ts", "export const other = 2;\n");
 			const { ctx, getTool } = setupIntegrationTest(dir);
@@ -93,7 +99,7 @@ describe("batch outline", () => {
 	});
 
 	it("skips a binary source file with a notice instead of failing the whole call", async () => {
-		await withTempDir("outline-binary-", async (dir) => {
+		await withRepo("outline-binary-", async (dir) => {
 			await source(dir, "src/a.ts");
 			await mkdir(join(dir, "src"), { recursive: true });
 			await writeFile(join(dir, "src/bin.ts"), Buffer.from([0x41, 0x00, 0x42]));
@@ -105,8 +111,81 @@ describe("batch outline", () => {
 		});
 	});
 
+	it("skips a file that git lists but the working tree no longer has", async () => {
+		await withRepo("outline-gone-", async (dir) => {
+			await source(dir, "src/a.ts");
+			await source(dir, "src/gone.ts");
+			execFileSync("git", ["add", "."], { cwd: dir });
+			await rm(join(dir, "src/gone.ts"));
+			const result = await codemodeTool().execute("o1", { path: "src", anchors: true }, undefined, undefined, { cwd: dir } as never);
+			expect(result.structuredContent.files.map((file: { path: string }) => file.path)).toEqual(["src/a.ts"]);
+			expect(getText(result)).not.toContain("gone.ts");
+		});
+	});
+
+	it("checks built-in exclusions against the cwd-relative path, whatever folder is named", async () => {
+		await withRepo("outline-exclude-", async (dir) => {
+			await source(dir, "src/vendor/lib.ts");
+			await source(dir, "src/node_modules/pkg.ts");
+			await source(dir, "resources/views/vendor/mail.blade.php", "@section('x')\n@endsection\n");
+			const tool = codemodeTool();
+			expect(await toolError(() => tool.execute("o1", { path: "src/vendor" }, undefined, undefined, { cwd: dir } as never))).toContain("[E_NOT_FOUND]");
+			expect(await toolError(() => tool.execute("o2", { path: "src/node_modules/*.ts" }, undefined, undefined, { cwd: dir } as never))).toContain("[E_NOT_FOUND]");
+			const views = await tool.execute("o3", { path: "resources/views", anchors: true }, undefined, undefined, { cwd: dir } as never);
+			expect(views.structuredContent.files.map((file: { path: string }) => file.path)).toEqual(["resources/views/vendor/mail.blade.php"]);
+		});
+	});
+
+	it("respects git ignores even when every file in the named folder is ignored", async () => {
+		await withRepo("outline-ignored-", async (dir) => {
+			await source(dir, ".gitignore", "secrets/\n");
+			await source(dir, "secrets/config.ts", "export const token = 'x';\n");
+			expect(await toolError(() => codemodeTool().execute("o1", { path: "secrets" }, undefined, undefined, { cwd: dir } as never))).toContain("[E_NOT_FOUND]");
+		});
+	});
+
+	it("treats brackets and braces as a glob unless the path exists, and rejects an invalid glob", async () => {
+		await withRepo("outline-brackets-", async (dir) => {
+			await source(dir, "src/a.ts");
+			await source(dir, "src/b.tsx");
+			await source(dir, "app/[id].ts", "export const page = 1;\n");
+			const tool = codemodeTool();
+			const braces = await tool.execute("o1", { path: "src/{a.ts,b.tsx}", anchors: true }, undefined, undefined, { cwd: dir } as never);
+			expect(braces.structuredContent.files.map((file: { path: string }) => file.path)).toEqual(["src/a.ts", "src/b.tsx"]);
+			const literal = await tool.execute("o2", { path: "app/[id].ts", anchors: true }, undefined, undefined, { cwd: dir } as never);
+			expect(literal.structuredContent).toHaveProperty("lines");
+			expect(await toolError(() => tool.execute("o3", { path: "src/[*.ts" }, undefined, undefined, { cwd: dir } as never))).toMatch(/\[E_(BAD_SHAPE|NOT_FOUND)\]/);
+		});
+	});
+
+	it("keeps the rows that fit when one file reaches the byte budget, and bounds skip notices", async () => {
+		await withRepo("outline-bytes-", async (dir) => {
+			const wide = Array.from({ length: 400 }, (_, i) => `export const item${i} = ${i};`.padEnd(130, " ")).join("\n") + "\n";
+			await source(dir, "src/a.ts", wide);
+			const result = await codemodeTool().execute("o1", { path: "src", anchors: true }, undefined, undefined, { cwd: dir } as never);
+			expect(result.structuredContent.files).toHaveLength(1);
+			expect(result.structuredContent.files[0].lines.length).toBeGreaterThan(300);
+			expect(Buffer.byteLength(getText(result), "utf-8")).toBeLessThanOrEqual(50 * 1024);
+			for (let i = 0; i < 600; i++) await writeFile(join(dir, `src/bin${String(i).padStart(3, "0")}.ts`), Buffer.from([0x41, 0x00]));
+			const skipped = await codemodeTool().execute("o2", { path: "src", anchors: true }, undefined, undefined, { cwd: dir } as never);
+			expect(Buffer.byteLength(getText(skipped), "utf-8")).toBeLessThanOrEqual(50 * 1024);
+			expect(getText(skipped)).toMatch(/\[Skipped \d+ more unreadable files\.\]/);
+			expect(skipped.structuredContent.complete).toBe(false);
+		});
+	});
+
+	it("does not start with a blank line when every matched file is skipped", async () => {
+		await withRepo("outline-allskip-", async (dir) => {
+			await mkdir(join(dir, "src"), { recursive: true });
+			await writeFile(join(dir, "src/bin.ts"), Buffer.from([0x41, 0x00, 0x42]));
+			const result = await codemodeTool().execute("o1", { path: "src", anchors: true }, undefined, undefined, { cwd: dir } as never);
+			expect(getText(result).startsWith("[Skipped src/bin.ts:")).toBe(true);
+			expect(result.structuredContent.complete).toBe(false);
+		});
+	});
+
 	it("returns a no-match error instead of an empty outline", async () => {
-		await withTempDir("outline-empty-", async (dir) => {
+		await withRepo("outline-empty-", async (dir) => {
 			await source(dir, "src/notes.txt", "notes\n");
 			const tool = codemodeTool();
 			expect(await toolError(() => tool.execute("o1", { path: "src" }, undefined, undefined, { cwd: dir } as never))).toContain("[E_NOT_FOUND] No supported source files match: src");
@@ -114,7 +193,7 @@ describe("batch outline", () => {
 	});
 
 	it("preserves the single-file text and structured shape", async () => {
-		await withTempDir("outline-single-", async (dir) => {
+		await withRepo("outline-single-", async (dir) => {
 			await source(dir, "src/a.ts");
 			const { normalized, fileHashes } = await readNormFile("src/a.ts", dir);
 			const expected = await buildFileOutline({ displayPath: "src/a.ts", content: normalized, hashes: fileHashes, maxDepth: 2 });

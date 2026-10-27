@@ -934,6 +934,22 @@ describe("buildFileOutline language coverage", () => {
 		]);
 	});
 
+	it("starts decorated TypeScript fields and classes at the declaration line", async () => {
+		const rows = await outlineRows("dec.ts", [
+			"@Dec()",
+			"class Z {",
+			"  @Input()",
+			"  private readonly y = 2;",
+			"}",
+		]);
+		expect(rows).toEqual(["2│class Z {", "[limit 4]", "4│  private readonly y = 2;"]);
+	});
+
+	it("lists Go type aliases, grouped or not", async () => {
+		const rows = await outlineRows("a.go", ["package p", "type (", "\tA = string", "\tB int", ")", "type C = int"]);
+		expect(rows).toEqual(["2│type (", "[limit 4]", "3│\tA = string", "4│\tB int", "6│type C = int"]);
+	});
+
 	it("reads Markdown headings outside code and front matter, including setext headings", async () => {
 		const rows = await outlineRows("doc.md", [
 			"---",
