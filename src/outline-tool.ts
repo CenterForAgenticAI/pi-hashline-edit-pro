@@ -223,9 +223,12 @@ export function regOutline(pi: ExtensionAPI, flags: EditToolFlags = DEFAULT_EDIT
 						const remainingRows = OUTLINE_MAX_ROWS - rows;
 						const fileRows = Math.min(remainingRows, Math.max(OUTLINE_MIN_FILE_ROWS, Math.ceil(remainingRows / (candidates.length - index))));
 						const separator = sections.length > 0 ? 2 : 0;
+						const utf8Notice = hadUtf8DecodeErrors ? `[${filePath}: Non-UTF-8 bytes shown as U+FFFD; editing rewrites the file as UTF-8.]` : undefined;
+						const worstNotices = [...outlineNotices({ preview: "unsupported", hasSyntaxErrors: true }, filePath), ...(utf8Notice === undefined ? [] : [utf8Notice])];
+						const noticeBytes = worstNotices.reduce((sum, notice) => sum + Buffer.byteLength(notice, "utf-8") + 2, 0);
 						const section = await buildFileOutline({
 							displayPath: filePath, content: normalized, hashes: fileHashes, maxDepth: depth,
-							maxRows: fileRows, maxBytes: DEFAULT_MAX_BYTES - bytes - reserve - separator,
+							maxRows: fileRows, maxBytes: DEFAULT_MAX_BYTES - bytes - reserve - separator - noticeBytes,
 							previewHeadLines: Math.min(20, fileRows), previewTailLines: Math.min(10, Math.max(0, fileRows - 20)),
 						});
 						if (section.rows.length === 0 && section.truncated) { stopped = true; break; }
@@ -238,8 +241,10 @@ export function regOutline(pi: ExtensionAPI, flags: EditToolFlags = DEFAULT_EDIT
 						rows += section.rows.length;
 						totalLines += normalized.length === 0 ? 0 : fileLines.length;
 						if (section.truncated) anyTruncated = true;
-						for (const notice of outlineNotices(section, filePath)) addNotice(notice);
-						if (hadUtf8DecodeErrors) addNotice(`[${filePath}: Non-UTF-8 bytes shown as U+FFFD; editing rewrites the file as UTF-8.]`);
+						for (const notice of [...outlineNotices(section, filePath), ...(utf8Notice === undefined ? [] : [utf8Notice])]) {
+							notices.push(notice);
+							bytes += Buffer.byteLength(notice, "utf-8") + 2;
+						}
 					}
 					for (const args of toServe) serveRows(...args);
 					if (unlistedSkips > 0) notices.push(`[Skipped ${unlistedSkips} more unreadable files.]`);

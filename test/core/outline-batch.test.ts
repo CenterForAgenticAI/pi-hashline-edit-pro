@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { buildFileOutline } from "../../src/outline";
@@ -154,7 +155,7 @@ describe("batch outline", () => {
 			expect(braces.structuredContent.files.map((file: { path: string }) => file.path)).toEqual(["src/a.ts", "src/b.tsx"]);
 			const literal = await tool.execute("o2", { path: "app/[id].ts", anchors: true }, undefined, undefined, { cwd: dir } as never);
 			expect(literal.structuredContent).toHaveProperty("lines");
-			expect(await toolError(() => tool.execute("o3", { path: "src/[*.ts" }, undefined, undefined, { cwd: dir } as never))).toMatch(/\[E_(BAD_SHAPE|NOT_FOUND)\]/);
+			expect(await toolError(() => tool.execute("o3", { path: "src/[z-a].ts" }, undefined, undefined, { cwd: dir } as never))).toContain("[E_BAD_SHAPE] Invalid glob");
 		});
 	});
 
@@ -182,6 +183,30 @@ describe("batch outline", () => {
 			expect(getText(result).startsWith("[Skipped src/bin.ts:")).toBe(true);
 			expect(result.structuredContent.complete).toBe(false);
 		});
+	});
+
+	it("keeps a file's UTF-8 rewrite note when the file fills the byte budget", async () => {
+		await withRepo("outline-latin1-", async (dir) => {
+			await mkdir(join(dir, "src"), { recursive: true });
+			const wide = Array.from({ length: 400 }, (_, i) => `export const item${i} = ${i}; // caf\xe9`.padEnd(130, " ")).join("\n") + "\n";
+			await writeFile(join(dir, "src/a.ts"), Buffer.from(wide, "latin1"));
+			const result = await codemodeTool().execute("o1", { path: "src", anchors: true }, undefined, undefined, { cwd: dir } as never);
+			expect(result.structuredContent.files[0].lines.length).toBeGreaterThan(300);
+			expect(result.structuredContent.notices).toContain("[src/a.ts: Non-UTF-8 bytes shown as U+FFFD; editing rewrites the file as UTF-8.]");
+			expect(Buffer.byteLength(getText(result), "utf-8")).toBeLessThanOrEqual(50 * 1024);
+		});
+	});
+
+	it("walks the folder outside a git work tree, with cwd-relative paths and exclusions", async () => {
+		const dir = await mkdtemp(join(tmpdir(), "outline-walk-"));
+		try {
+			await source(dir, "src/a.ts");
+			await source(dir, "src/vendor/lib.ts");
+			const result = await codemodeTool().execute("o1", { path: "src", anchors: true }, undefined, undefined, { cwd: dir } as never);
+			expect(result.structuredContent.files.map((file: { path: string }) => file.path)).toEqual(["src/a.ts"]);
+		} finally {
+			await rm(dir, { recursive: true, force: true });
+		}
 	});
 
 	it("returns a no-match error instead of an empty outline", async () => {
