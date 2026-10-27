@@ -8,7 +8,7 @@ import { setAutoReadAllIgnore } from "../../src/config";
 import { readNormFile } from "../../src/file-reader";
 import { DEFAULT_EDIT_FLAGS } from "../../src/edit-common";
 import { regOutline } from "../../src/outline-tool";
-import { getText, makeFakePiRegistry, setupIntegrationTest, toolError, withTempDir } from "../support/fixtures";
+import { getText, makeFakePiRegistry, setupIntegrationTest, toolError, withHome, withTempDir } from "../support/fixtures";
 
 async function source(dir: string, name: string, text = "export const value = 1;\n") {
 	await mkdir(join(dir, name, ".."), { recursive: true });
@@ -199,6 +199,7 @@ describe("batch outline", () => {
 
 	it("walks the folder outside a git work tree, with cwd-relative paths and exclusions", async () => {
 		const dir = await mkdtemp(join(tmpdir(), "outline-walk-"));
+		const restoreHome = withHome(dir);
 		try {
 			await source(dir, "src/a.ts");
 			await source(dir, "src/vendor/lib.ts");
@@ -206,6 +207,7 @@ describe("batch outline", () => {
 			expect(result.structuredContent.files.map((file: { path: string }) => file.path)).toEqual(["src/a.ts"]);
 		} finally {
 			await rm(dir, { recursive: true, force: true });
+			restoreHome();
 		}
 	});
 
