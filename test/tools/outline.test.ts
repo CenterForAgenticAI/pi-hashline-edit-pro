@@ -105,8 +105,14 @@ describe("outline tool", () => {
 			const row = text.split("\n").find((line) => line.includes("const value ="))!;
 			expect(row.endsWith("...")).toBe(true);
 			const anchor = row.match(/^([a-z]{5})/)![1]!;
-			expect(await toolError(() => getTool("replace").execute("e1", { remove_from: anchor, remove_to: anchor, text: "const value = 1;" }, undefined, undefined, ctx)))
+			const stale = await toolError(() => getTool("replace").execute("e1", { remove_from: anchor, remove_to: anchor, text: "const value = 1;" }, undefined, undefined, ctx));
+			expect(stale).toMatch(/E_RANGE_STALE/);
+			expect(stale).toContain("Line 1 is clipped above and not editable from here; call read()");
+			expect(stale).not.toContain("Retry with the fresh anchors above without a read.");
+			const retryAnchor = stale.match(/^([a-z]{5})│/m)![1]!;
+			expect(await toolError(() => getTool("replace").execute("e2", { remove_from: retryAnchor, remove_to: retryAnchor, text: "const value = 1;" }, undefined, undefined, ctx)))
 				.toMatch(/E_RANGE_STALE/);
+			expect(await readFile(join(cwd, "long.ts"), "utf8")).toBe(`${long}\n`);
 		});
 	});
 
