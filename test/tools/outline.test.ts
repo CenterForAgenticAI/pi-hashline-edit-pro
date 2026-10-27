@@ -2,10 +2,10 @@ import { mkdir, readFile, truncate, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { setupIntegrationTest, makeFakePiRegistry, withTempFile, withTempDir, getText, toolError } from "../support/fixtures";
-import { MAX_BYTES } from "../../src/constants";
+import { ANCHOR_POOL_EXHAUSTED_PREFIX, MAX_BYTES } from "../../src/constants";
 import { DEFAULT_EDIT_FLAGS } from "../../src/edit-common";
 import { regRead } from "../../src/read";
-import { outlineDepth, regOutline } from "../../src/outline-tool";
+import { isSkippableOutlineReadError, outlineDepth, regOutline } from "../../src/outline-tool";
 import register from "../../index";
 
 const TS_SOURCE = [
@@ -334,5 +334,19 @@ describe("outlineDepth", () => {
 		expect(() => outlineDepth("2")).toThrow("[E_BAD_SHAPE]");
 		expect(outlineDepth(10)).toBe(10);
 		expect(() => outlineDepth(11)).toThrow("[E_BAD_SHAPE]");
+	});
+});
+
+describe("outline directory read errors", () => {
+	it("skips only file-level failures and rethrows infrastructure errors", () => {
+		expect(isSkippableOutlineReadError(new Error("[E_NOT_TEXT] Path is a binary file: a.ts"))).toBe(true);
+		expect(isSkippableOutlineReadError(new Error("[E_FILE_TOO_LARGE] a.ts has 2000000 lines"))).toBe(true);
+		expect(isSkippableOutlineReadError(new Error("[E_NOT_FOUND] File not found: a.ts"))).toBe(true);
+		expect(isSkippableOutlineReadError(new Error("[E_ACCESS] File is not readable: a.ts"))).toBe(true);
+		expect(isSkippableOutlineReadError(Object.assign(new Error("gone"), { code: "ENOENT" }))).toBe(true);
+		expect(isSkippableOutlineReadError(new Error("[E_STORE_UNAVAILABLE] no sqlite runtime"))).toBe(false);
+		expect(isSkippableOutlineReadError(new Error("[E_REGISTRY] the session registry was released"))).toBe(false);
+		expect(isSkippableOutlineReadError(new Error(`${ANCHOR_POOL_EXHAUSTED_PREFIX}; use write for very large files.`))).toBe(false);
+		expect(isSkippableOutlineReadError(new Error("unexpected parser failure"))).toBe(false);
 	});
 });

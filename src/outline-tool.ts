@@ -7,13 +7,14 @@ import { buildFileOutline, loadOutlineParser } from "./outline";
 import { AUTO_READ_ALL_EXCLUDED_NAMES, globRegexFor, isExcludedByCustomIgnore, isExcludedByPattern, isExcludedBySegment, listFromGit, normalizeAutoReadAllIgnoreList, walkDir } from "./auto-read-all";
 import { readConfig } from "./config";
 import { MAX_HASH_LINES } from "./hashline";
+import { ANCHOR_POOL_EXHAUSTED_PREFIX } from "./constants";
 import { loadFileKindAndText } from "./file-kind";
 import { readNormFile, safeSnapId } from "./file-reader";
 import { serveRows } from "./served";
 import { toCwd, toDisplayPath } from "./paths";
 import { formatAnchorReclaimNotice, takeReclaimedPaths, withAnchorSession } from "./anchor-registry";
 import { valAccess, valKind } from "./validation";
-import { abortIf, isRec, makePrepareArguments, rejectUnknownFields, splitLines } from "./utils";
+import { abortIf, errCode, isRec, makePrepareArguments, rejectUnknownFields, splitLines } from "./utils";
 import { loadP, loadGuidelines } from "./prompts";
 import { DEFAULT_EDIT_FLAGS, type EditToolFlags } from "./edit-common";
 import { anchoredLine, anchoredLineSchema, outlineResultSchema, withStructuredErrors, type OutlineStructured } from "./structured";
@@ -139,6 +140,16 @@ function outlineNotices(section: { preview?: "unsupported" | "no-symbols"; hasSy
 	return notices;
 }
 
+const FILE_LEVEL_OUTLINE_READ_ERRORS = ["[E_NOT_TEXT]", "[E_FILE_TOO_LARGE]", "[E_NOT_FOUND]", "[E_ACCESS]"];
+
+export function isSkippableOutlineReadError(error: unknown): boolean {
+	const code = errCode(error);
+	if (code === "EACCES" || code === "EPERM" || code === "ENOENT" || code === "ELOOP") return true;
+	const message = error instanceof Error ? error.message : "";
+	if (message.startsWith(ANCHOR_POOL_EXHAUSTED_PREFIX)) return false;
+	return FILE_LEVEL_OUTLINE_READ_ERRORS.some((prefix) => message.startsWith(prefix));
+}
+
 export function regOutline(pi: ExtensionAPI, flags: EditToolFlags = DEFAULT_EDIT_FLAGS): void {
 	const prompted = {
 		description: loadP("../tool-prompts/outline.md"),
@@ -214,6 +225,7 @@ export function regOutline(pi: ExtensionAPI, flags: EditToolFlags = DEFAULT_EDIT
 							loaded = await readNormFile(filePath, ctx.cwd, { signal, maxLines: MAX_HASH_LINES });
 						} catch (error) {
 							if (signal?.aborted) throw error;
+							if (!isSkippableOutlineReadError(error)) throw error;
 							skipped += 1;
 							if (!addNotice(`[Skipped ${filePath}: ${error instanceof Error ? error.message : String(error)}]`)) unlistedSkips += 1;
 							continue;
